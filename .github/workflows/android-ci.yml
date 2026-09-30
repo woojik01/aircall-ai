@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -24,12 +28,19 @@ jobs:
           set +e
           gradle testDebugUnitTest --stacktrace > /tmp/tests.log 2>&1
           code=$?
-          {
-            echo '## Unit tests output'
-            echo '~~~'
-            tail -n 150 /tmp/tests.log
-            echo '~~~'
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ $code -ne 0 ]; then
+            {
+              echo '### ❌ testDebugUnitTest 실패 (마지막 120줄)'
+              echo '~~~'
+              tail -n 120 /tmp/tests.log
+              echo '~~~'
+            } > /tmp/comment.md
+            gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md
+          fi
           exit $code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
       - name: Build debug APK
         run: gradle assembleDebug
