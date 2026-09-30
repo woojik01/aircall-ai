@@ -48,13 +48,14 @@ class MutedSynthesizer(
  */
 class SessionController(private val scope: CoroutineScope) {
 
-    private val _status = MutableStateFlow(SessionStatus.Inactive)
+    private val _status: MutableStateFlow<SessionStatus> =
+        MutableStateFlow<SessionStatus>(SessionStatus.Inactive)
     val status: StateFlow<SessionStatus> = _status.asStateFlow()
 
-    private val _muted = MutableStateFlow(false)
+    private val _muted: MutableStateFlow<Boolean> = MutableStateFlow<Boolean>(false)
     val muted: StateFlow<Boolean> = _muted.asStateFlow()
 
-    private val paused = MutableStateFlow(false)
+    private val paused: MutableStateFlow<Boolean> = MutableStateFlow<Boolean>(false)
     private var job: Job? = null
 
     val isRunning: Boolean
