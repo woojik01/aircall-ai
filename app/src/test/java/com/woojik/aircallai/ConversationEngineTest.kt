@@ -9,20 +9,21 @@ import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.conversation.ConversationState
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConversationEngineTest {
 
     @Test
-    fun `initial state is Idle with empty transcript`() {
+    fun initial state is Idle with empty transcript() {
         val engine = ConversationEngine(NoopAIProvider())
         assertTrue(engine.state.value is ConversationState.Idle)
         assertTrue(engine.transcript.value.isEmpty())
     }
 
     @Test
-    fun `listening toggles on and off`() {
+    fun listening toggles on and off() {
         val engine = ConversationEngine(NoopAIProvider())
         engine.startListening()
         assertTrue(engine.state.value is ConversationState.Listening)
@@ -31,25 +32,29 @@ class ConversationEngineTest {
     }
 
     @Test
-    fun `submitUserMessage appends user and assistant turns and returns to Idle`() = runTest {
+    fun submitUserMessage appends turns and ends in Speaking (PRD-03: TTS follows)() = runTest {
         val engine = ConversationEngine(NoopAIProvider())
         engine.submitUserMessage("안녕")
         val transcript = engine.transcript.value
         assertEquals(2, transcript.size)
         assertEquals(ChatMessage.Role.USER, transcript[0].role)
         assertEquals(ChatMessage.Role.ASSISTANT, transcript[1].role)
+        assertTrue(engine.state.value is ConversationState.Speaking)
+        assertNotNull(engine.latestAssistantMessage())
+        // TTS 완료 시점에 Idle로 복귀 (VoiceSession이 호출)
+        engine.markIdle()
         assertTrue(engine.state.value is ConversationState.Idle)
     }
 
     @Test
-    fun `blank messages are ignored`() = runTest {
+    fun blank messages are ignored() = runTest {
         val engine = ConversationEngine(NoopAIProvider())
         engine.submitUserMessage("   ")
         assertTrue(engine.transcript.value.isEmpty())
     }
 
     @Test
-    fun `provider failure puts engine into Error state`() = runTest {
+    fun provider failure puts engine into Error state() = runTest {
         val failing = object : AIProvider {
             override val type = ProviderType.CLOUD
             override val displayName = "failing"
@@ -67,7 +72,7 @@ class ConversationEngineTest {
     }
 
     @Test
-    fun `reset clears transcript and state`() = runTest {
+    fun reset clears transcript and state() = runTest {
         val engine = ConversationEngine(NoopAIProvider())
         engine.submitUserMessage("hi")
         engine.reset()
