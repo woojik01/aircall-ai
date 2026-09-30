@@ -16,8 +16,11 @@ import com.woojik.aircallai.core.storage.CredentialManager
 class CloudAIProvider(
     private val credentials: CredentialManager,
     private val apiAdapter: CloudApiAdapter,
-    private val baseUrlProvider: () -> String,
+    private val endpointProvider: () -> Endpoint,
 ) : AIProvider {
+
+    /** 사용자가 설정한 클라우드 서비스 접속 정보. */
+    data class Endpoint(val baseUrl: String, val model: String)
 
     override val type = ProviderType.CLOUD
     override val displayName = "Cloud AI"
@@ -29,12 +32,12 @@ class CloudAIProvider(
         val apiKey = credentials.load(KEY_SERVICE)?.decodeToString()
             ?: throw AIProviderException(ProviderErrorKind.NO_KEY)
 
+        val endpoint = endpointProvider()
         val text = try {
-            apiAdapter.chat(apiKey, baseUrlProvider(), history)
+            apiAdapter.chat(apiKey, endpoint.baseUrl, endpoint.model, history)
         } catch (e: AIProviderException) {
             throw e
         } catch (t: Throwable) {
-            // 네트워크 계열 실패는 NETWORK로 분류 (상세 로그에 Key/응답 미포함).
             throw AIProviderException(ProviderErrorKind.NETWORK)
         }
         return AIResponse(
