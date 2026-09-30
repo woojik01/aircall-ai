@@ -1,0 +1,16 @@
+LINE01 val a1 = MutableStateFlow<SessionStatus>(SessionStatus.Inactive)
+LINE02 val a2: MutableStateFlow<SessionStatus> = MutableStateFlow(SessionStatus.Inactive)
+LINE03 val a3 = MutableStateFlow<ConversationState>(ConversationState.Idle)
+LINE04 val a4 = mutableListOf<String>()
+LINE05 val a5: Channel<String> = Channel(Channel.UNLIMITED)
+LINE06 val a6: StateFlow<SessionStatus> = flow.asStateFlow()
+LINE07 val a7 = paused.value = false
+LINE08 val a8 = muted.value = false
+LINE09 val a9 = flag.value = false
+LINE10 val a10 = paused.value = true
+LINE11 val a11: List<ChatMessage> = emptyList()
+LINE12 val a12 = Map<String, Int>()
+LINE13 val a13 = job?.isActive == true
+LINE14 val a14 = MutableStateFlow(false)
+LINE15 val a15 = MutableStateFlow<SessionStatus> (SessionStatus.Inactive)
+LINE16 val a16 = MutableStateFlow <SessionStatus> (SessionStatus.Inactive)
