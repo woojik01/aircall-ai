@@ -9,9 +9,12 @@ import com.woojik.aircallai.audio.SpeechSynthesizer
 import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.conversation.VoiceSession
 import com.woojik.aircallai.session.MutedSynthesizer
+import com.woojik.aircallai.session.SessionAudioHooks
 import com.woojik.aircallai.session.SessionController
 import com.woojik.aircallai.session.SessionRepository
 import com.woojik.aircallai.session.SessionStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
@@ -45,7 +48,7 @@ class BackgroundSessionTest {
 
     /** 음성 입력을 채널로 흉내낸다. 말이 없으면(채널 비었으면) 마이크 대기처럼 suspend 된다. */
     private class ChannelRecognizer : SpeechRecognizerInterface {
-        val utterances = Channel<String>(Channel.UNLIMITED)
+        val utterances: Channel<String> = Channel(Channel.UNLIMITED)
         var calls = 0
         override suspend fun recognizeOnce(): String? {
             calls++
@@ -54,7 +57,7 @@ class BackgroundSessionTest {
     }
 
     private class RecordingSynthesizer : SpeechSynthesizer {
-        val spoken = mutableListOf<String>()
+        val spoken: MutableList<String> = mutableListOf()
         var stopped = 0
         override suspend fun speak(text: String) { spoken.add(text) }
         override fun stop() { stopped++ }
@@ -146,7 +149,7 @@ class BackgroundSessionTest {
     @Test
     fun repositoryExposesSameStateToUiAndService() {
         val engine = ConversationEngine(MockProvider())
-        val controller = SessionController(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))
+        val controller = SessionController(CoroutineScope(Dispatchers.Unconfined))
         val repository = SessionRepository(engine, controller)
 
         assertSame(engine, repository.engine)
@@ -160,10 +163,10 @@ class BackgroundSessionTest {
     @Test
     fun uiStopSpeakingRoutesThroughRepositoryToServiceHooks() {
         val engine = ConversationEngine(MockProvider())
-        val controller = SessionController(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))
+        val controller = SessionController(CoroutineScope(Dispatchers.Unconfined))
         val repository = SessionRepository(engine, controller)
         var hookCalls = 0
-        repository.audioHooks = object : com.woojik.aircallai.session.SessionAudioHooks {
+        val hooks = object : SessionAudioHooks {
             override fun stopSpeaking() { hookCalls++ }
         }
 
@@ -172,9 +175,7 @@ class BackgroundSessionTest {
         repository.stopSpeaking()
         assertEquals(0, hookCalls)
 
-        repository.audioHooks = object : com.woojik.aircallai.session.SessionAudioHooks {
-            override fun stopSpeaking() { hookCalls++ }
-        }
+        repository.audioHooks = hooks
         repository.stopSpeaking()
         assertEquals(1, hookCalls)
     }
