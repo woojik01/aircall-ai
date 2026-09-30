@@ -29,7 +29,7 @@ fun MainScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Button(onClick = onOpenConversation) { Text("대화 시작") }
-            Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 16.dp())) { Text("설정") }
+            Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 16.dp)) { Text("설정") }
         }
     }
 }

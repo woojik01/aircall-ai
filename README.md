@@ -16,8 +16,10 @@ app/src/main/java/com/woojik/aircallai/
 
 ## 빌드
 ```bash
-gradle wrapper        # 최초 1회 (JDK 17)
-./gradlew assembleDebug
-./gradlew testDebugUnitTest
+gradle assembleDebug
+gradle testDebugUnitTest
 ```
+JDK 17 필요. 저장소에 wrapper가 없으므로 Gradle 8.7 이상을 로컬에 설치하거나
+CI처럼 gradle/actions/setup-gradle로 버전을 지정해 사용합니다.
+
 API Key는 절대 코드/빌드 설정에 넣지 않는다 (PRD-02 CredentialManager 사용 예정).
