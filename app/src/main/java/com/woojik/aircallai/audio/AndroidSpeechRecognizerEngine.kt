@@ -4,8 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
-import android.speech.SpeechRecognizer as AndroidSpeechRecognizerApi
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import com.woojik.aircallai.core.logging.SecureLog
+import kotlinx.coroutines.resume
+import kotlinx.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * Android SpeechRecognizer 기반 STT. 기기 내 온라인 엔진을 사용하므로
@@ -13,15 +17,14 @@ import com.woojik.aircallai.core.logging.SecureLog
  */
 class AndroidSpeechRecognizerEngine(
     private val context: Context,
-) : SpeechRecognizer {
+) : SpeechRecognizerInterface {
 
     override suspend fun recognizeOnce(): String? {
-        if (!AndroidSpeechRecognizerApi.isRecognitionAvailable(context)) {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             throw AudioError.SpeechRecognition(IllegalStateException("recognition unavailable"))
         }
-        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            val recognizer = AndroidSpeechRecognizerApi.createSpeechRecognizer(context)
-            var result: String? = null
+        return suspendCancellableCoroutine { cont ->
+            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
             var done = false
             fun finishOnce(value: String?, error: Throwable?) {
                 if (done) return
@@ -29,23 +32,22 @@ class AndroidSpeechRecognizerEngine(
                 recognizer.destroy()
                 when {
                     error != null -> cont.resumeWithException(error)
-                    else -> cont.resumeWith(value)
+                    else -> cont.resume(value)
                 }
             }
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle) {
                     val text = results
-                        .getStringArrayList(AndroidSpeechRecognizerApi.RESULTS_RECOGNITION)
+                        .getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         ?.firstOrNull { it.isNotBlank() }
-                    result = text
                     finishOnce(text, null)
                 }
                 override fun onError(error: Int) = finishOnce(
                     null,
                     when (error) {
-                        AndroidSpeechRecognizerApi.ERROR_NETWORK,
-                        AndroidSpeechRecognizerApi.ERROR_NETWORK_TIMEOUT -> AudioError.Network()
-                        AndroidSpeechRecognizerApi.ERROR_INSUFFICIENT_PERMISSIONS -> AudioError.Permission()
+                        SpeechRecognizer.ERROR_NETWORK,
+                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> AudioError.Network()
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> AudioError.Permission()
                         else -> AudioError.SpeechRecognition(IllegalStateException("STT error " + error))
                     },
                 )
@@ -58,9 +60,9 @@ class AndroidSpeechRecognizerEngine(
                 override fun onRmsChanged(rmsdB: Float) {}
             })
             recognizer.startListening(
-                Intent(AndroidSpeechRecognizerApi.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(AndroidSpeechRecognizerApi.EXTRA_LANGUAGE_MODEL,
-                        AndroidSpeechRecognizerApi.LANGUAGE_MODEL_FREE_FORM)
+                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 }
             )
             SecureLog.d(TAG, "STT listening started")
