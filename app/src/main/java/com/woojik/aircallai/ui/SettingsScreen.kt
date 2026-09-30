@@ -11,6 +11,7 @@ import com.woojik.aircallai.ai.provider.ProviderType
 /**
  * Settings skeleton. AI mode selection persists locally; credentials UI arrives in PRD-02/04.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
     var mode by remember { mutableStateOf(ProviderType.LOCAL) }
