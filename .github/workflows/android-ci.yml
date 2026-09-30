@@ -1,0 +1,46 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+      - name: Unit tests
+        run: |
+          set +e
+          gradle testDebugUnitTest --stacktrace > /tmp/tests.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            {
+              echo '### ❌ testDebugUnitTest 실패'
+              echo '~~~'
+              grep -nE '^e:|error:|warning:|FAILED|Caused by' /tmp/tests.log | head -n 80
+              echo '~~~'
+            } > /tmp/comment.md
+            gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md
+          fi
+          exit $code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+      - name: Build debug APK
+        run: gradle assembleDebug
