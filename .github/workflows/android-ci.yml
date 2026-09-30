@@ -30,9 +30,9 @@ jobs:
           code=$?
           if [ $code -ne 0 ]; then
             {
-              echo '### ❌ testDebugUnitTest 실패 (마지막 120줄)'
+              echo '### ❌ testDebugUnitTest 실패'
               echo '~~~'
-              tail -n 120 /tmp/tests.log
+              grep -nE '^e:|error:|warning:|FAILED|Caused by' /tmp/tests.log | head -n 80
               echo '~~~'
             } > /tmp/comment.md
             gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md
