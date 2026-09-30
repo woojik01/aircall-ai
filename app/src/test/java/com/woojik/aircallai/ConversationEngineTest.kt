@@ -16,14 +16,14 @@ import org.junit.Test
 class ConversationEngineTest {
 
     @Test
-    fun initial state is Idle with empty transcript() {
+    fun initialStateIsIdleWithEmptyTranscript() {
         val engine = ConversationEngine(NoopAIProvider())
         assertTrue(engine.state.value is ConversationState.Idle)
         assertTrue(engine.transcript.value.isEmpty())
     }
 
     @Test
-    fun listening toggles on and off() {
+    fun listeningTogglesOnAndOff() {
         val engine = ConversationEngine(NoopAIProvider())
         engine.startListening()
         assertTrue(engine.state.value is ConversationState.Listening)
@@ -32,7 +32,7 @@ class ConversationEngineTest {
     }
 
     @Test
-    fun submitUserMessage appends turns and ends in Speaking (PRD-03: TTS follows)() = runTest {
+    fun submitUserMessageEndsInSpeakingUntilTtsCompletes() = runTest {
         val engine = ConversationEngine(NoopAIProvider())
         engine.submitUserMessage("안녕")
         val transcript = engine.transcript.value
@@ -47,14 +47,14 @@ class ConversationEngineTest {
     }
 
     @Test
-    fun blank messages are ignored() = runTest {
+    fun blankMessagesAreIgnored() = runTest {
         val engine = ConversationEngine(NoopAIProvider())
         engine.submitUserMessage("   ")
         assertTrue(engine.transcript.value.isEmpty())
     }
 
     @Test
-    fun provider failure puts engine into Error state() = runTest {
+    fun providerFailurePutsEngineIntoErrorState() = runTest {
         val failing = object : AIProvider {
             override val type = ProviderType.CLOUD
             override val displayName = "failing"
@@ -72,7 +72,7 @@ class ConversationEngineTest {
     }
 
     @Test
-    fun reset clears transcript and state() = runTest {
+    fun resetClearsTranscriptAndState() = runTest {
         val engine = ConversationEngine(NoopAIProvider())
         engine.submitUserMessage("hi")
         engine.reset()
