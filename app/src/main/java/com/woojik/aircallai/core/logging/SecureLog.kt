@@ -20,5 +20,5 @@ object SecureLog {
 
     /** Masks anything that looks like a key or token before it reaches logcat. */
     fun mask(message: String): String =
-        message.replace(Regex("(?i)(key|token|secret|password)=[^\\s]+"), "$1=***")
+        message.replace(Regex("(?i)(key|token|secret|password|credential)=[^\\s]+"), "$1=***")
 }
