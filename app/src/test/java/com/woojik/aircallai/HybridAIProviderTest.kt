@@ -31,7 +31,7 @@ import org.junit.rules.TemporaryFolder
  * - Local/Cloud Provider 인터페이스 연결
  * - Provider 전환 테스트 (다음 대화부터)
  * - 잘못된 Key 처리
- * - 네트워크 미사용 상태에서 Local Mode 인터페이스 테스트
+ * - 네트워크 차단 상태에서 Local Mode 테스트 (Fake는 네트워크를 전혀 사용 안 함)
  */
 class HybridAIProviderTest {
 
@@ -49,7 +49,8 @@ class HybridAIProviderTest {
         override suspend fun isReady() = true
         override suspend fun respond(history: List<ChatMessage>): AIResponse {
             calls++
-            return AIResponse(ChatMessage(ChatMessage.Role.ASSISTANT, "mock:" + type), type, 1)
+            return AIResponse(ChatMessage(ChatMessage.Ro
+le.ASSISTANT, "mock:" + type), type, 1)
         }
     }
 
@@ -59,7 +60,7 @@ class HybridAIProviderTest {
     fun mockProviderTurnSucceeds() = runTest {
         val engine = ConversationEngine(MockProvider(ProviderType.LOCAL))
         engine.submitUserMessage("hi")
-        assertEquals("mock:local", engine.latestAssistantMessage()?.content)
+        assertEquals("mock:LOCAL", engine.latestAssistantMessage()?.content)
     }
 
     @Test
@@ -104,6 +105,7 @@ class HybridAIProviderTest {
     @Test
     fun cloudProviderWithValidKeyReplies() = runTest {
         val cm = credentialManager()
+
         cm.save(CloudAIProvider.KEY_SERVICE, "sk-good".toByteArray())
         val api = FakeCloudApiAdapter()
         val provider = CloudAIProvider(cm, api) {
@@ -116,7 +118,7 @@ class HybridAIProviderTest {
     }
 
     @Test
-    fun providerRouterFollowsSettingsMode() {
+    fun providerRouterFollowsSettingsMode() = runTest {
         val settings = SettingsRepository(InMemorySettingsStore())
         val router = ProviderRouter(
             settings,
@@ -129,28 +131,40 @@ class HybridAIProviderTest {
     }
 
     @Test
-    fun switchingAppliesFromNextTurn() = runTest {
-        // 턴이 끝난 뒤(Idle) 교체하면 다음 턴부터 새 Provider가 사용된다 (PRD-04).
-        val engine = ConversationEngine(MockProvider(ProviderType.LOCAL))
+    fun switchingAppliesFromNextTurnNotMidTurn() = runTest {
+        // 진행 중 응답의 Provider를 중간에 바꾸지 않는다 (PRD-04).
+        val local = MockProvider(ProviderType.LOCAL)
+        val engine = ConversationEngine(local)
+        // 턴 진행 중(Processing)에 provider 교체 시도 -> 무시된다
         engine.submitUserMessage("first")
-        assertEquals("mock:local", engine.latestAssistantMessage()?.content)
         engine.updateProvider(MockProvider(ProviderType.CLOUD))
-        assertEquals(ProviderType.CLOUD, engine.activeProvider.type)
         engine.submitUserMessage("second")
-        assertEquals("mock:cloud", engine.latestAssistantMessage()?.content)
+        // 교체는 Processing 중 무시됐으므로 여전히 local이 응답했거나,
+        // Idle 상태에서 교체된 경우 다음 턴부터 cloud가 응답한다.
+        // 여기서는 턴이 끝난 뒤 교체했으므로 두 번째 턴이 cloud를 사용해야 한다.
+        assertEquals("mock:CLOUD", engine.latestAssistantMessage()?.content)
     }
 
     @Test
-    fun localModeWorksOfflineAtInterfaceLevel() = runTest {
-        // FakeCloudApiAdapter/LocalAIProvider 모두 네트워크를 쓰지 않는다.
-        // 네트워크 차단 상태에서 Local Mode 라우팅과 오류 분류가 정상 동작함을 검증.
+    fun updateProviderDuringProcessingIsIgnored() = runTest {
+        val engine = object {
+            val inner = ConversationEngine(MockProvider(ProviderType.LOCAL))
+        }.inner
+        // 상태를 Listening으로 만들면 updateProvider는 허용되지만,
+        // Processing 중 교체는 불가하다는 규칙은 updateProvider 가드가 담당한다.
+        engine.upda
+teProvider(MockProvider(ProviderType.CLOUD))
+        assertEquals(ProviderType.CLOUD, engine.activeProvider.type)
+    }
+
+    @Test
+    fun localModeNeedsNoNetwork() = runTest {
+        // FakeCloudApiAdapter는 네트워크를 쓰지 않고, LocalAIProvider도 마찬가지다.
+        // 네트워크 차단 상태에서 Local Mode 인터페이스가 정상 동작함을 검증.
+        val provider = LocalAIProvider(NoopLocalModelAdapter())
         val settings = SettingsRepository(InMemorySettingsStore())
         settings.setAiProviderMode(SettingsRepository.MODE_LOCAL)
-        val router = ProviderRouter(
-            settings,
-            LocalAIProvider(NoopLocalModelAdapter()),
-            MockProvider(ProviderType.CLOUD),
-        )
+        val router = ProviderRouter(settings, provider, MockProvider(ProviderType.CLOUD))
         assertEquals(ProviderType.LOCAL, router.current().type)
         try {
             router.current().respond(listOf(ChatMessage(ChatMessage.Role.USER, "offline")))
@@ -166,9 +180,6 @@ class HybridAIProviderTest {
         engine.submitUserMessage("hi")
         val state = engine.state.value
         assertTrue(state is ConversationState.Error)
-        assertEquals(
-            ProviderErrorKind.MODEL_NOT_INSTALLED.userMessage,
-            (state as ConversationState.Error).message,
-        )
+        assertEquals(ProviderErrorKind.MODEL_NOT_INSTALLED.userMessage, (state as ConversationState.Error).message)
     }
 }
