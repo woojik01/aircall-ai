@@ -1,12 +1,8 @@
 package com.woojik.aircallai
 
-import com.woojik.aircallai.ai.provider.AIProvider
-import com.woojik.aircallai.ai.provider.AIResponse
-import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.ai.provider.NoopAIProvider
-import com.woojik.aircallai.ai.provider.ProviderType
 import com.woojik.aircallai.audio.AudioError
-import com.woojik.aircallai.audio.SpeechRecognizer
+import com.woojik.aircallai.audio.SpeechRecognizerInterface
 import com.woojik.aircallai.audio.SpeechSynthesizer
 import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.conversation.ConversationState
@@ -18,7 +14,7 @@ import org.junit.Test
 
 class VoiceSessionTest {
 
-    private class FakeRecognizer(val result: suspend () -> String?) : SpeechRecognizer {
+    private class FakeRecognizer(val result: suspend () -> String?) : SpeechRecognizerInterface {
         override suspend fun recognizeOnce(): String? = result()
     }
 
@@ -94,7 +90,8 @@ class VoiceSessionTest {
     fun tenConsecutiveTurnsSucceed() = runTest {
         val engine = ConversationEngine(NoopAIProvider())
         val tts = FakeSynthesizer()
-        val session = VoiceSession(FakeRecognizer { "turn " + it }, tts, engine)
+        var n = 0
+        val session = VoiceSession(FakeRecognizer { n++; "turn " + n }, tts, engine)
         for (i in 1..10) session.runOneTurn()
         assertEquals(10, engine.transcript.value.size)
         assertEquals(10, tts.spoken.size)

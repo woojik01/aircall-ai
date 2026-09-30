@@ -1,10 +1,9 @@
 package com.woojik.aircallai.conversation
 
 import com.woojik.aircallai.audio.AudioError
-import com.woojik.aircallai.audio.SpeechRecognizer
+import com.woojik.aircallai.audio.SpeechRecognizerInterface
 import com.woojik.aircallai.audio.SpeechSynthesizer
 import com.woojik.aircallai.core.logging.SecureLog
-import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * 개인정보/음성 원문은 로그에 남기지 않는다.
  */
 class VoiceSession(
-    private val recognizer: SpeechRecognizer,
+    private val recognizer: SpeechRecognizerInterface,
     private val synthesizer: SpeechSynthesizer,
     private val engine: ConversationEngine,
 ) {
