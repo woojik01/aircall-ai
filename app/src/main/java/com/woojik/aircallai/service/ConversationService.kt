@@ -72,7 +72,8 @@ class ConversationService : Service() {
             ACTION_START -> {
                 if (!hasMicPermission()) {
                     // 마이크 FGS는 권한이 없으면 시작할 수 없다 (호출부에서 이미 확인하지만 방어).
-                    SecureLog.w(TAG, "mic permission missing; not starting session")
+                    SecureLog.d(TAG, "mic permission missing; not starting session")
+                    repository.controller.end()
                     stopSelf()
                     return START_STICKY
                 }
@@ -88,7 +89,7 @@ class ConversationService : Service() {
             ACTION_END -> endSession()
             else -> {
                 // 시스템이 재시작한 경우(null intent): 죽은 세션을 되살리지 않고 정리한다.
-                SecureLog.w(TAG, "service restarted by system; ending stale session")
+                SecureLog.d(TAG, "service restarted by system; ending stale session")
                 repository.controller.end()
                 stopSelf()
             }
