@@ -10,14 +10,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.conversation.ConversationState
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationScreen(vm: MainViewModel) {
     val state by vm.state.collectAsState()
     val transcript by vm.transcript.collectAsState()
-    val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
 
     Scaffold(
@@ -60,12 +58,13 @@ fun ConversationScreen(vm: MainViewModel) {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // PRD-03: 음성 입력 시작 버튼
+                // PRD-03: 음성 입력 시작 버튼 (권한은 필요한 시점에 요청)
                 Button(
                     onClick = { vm.onMicTap() },
                     enabled = state is ConversationState.Idle || state is ConversationState.Error,
                 ) { Text("🎤 말하기") }
                 if (state is ConversationState.Speaking) {
+                    // PRD-03: TTS 재생 중 중지 가능
                     Button(
                         onClick = { vm.onStopSpeaking() },
                         modifier = Modifier.padding(start = 8.dp),
@@ -90,7 +89,7 @@ fun ConversationScreen(vm: MainViewModel) {
                     onClick = {
                         val text = input
                         input = ""
-                        scope.launch { vm.engine.submitUserMessage(text) }
+                        vm.sendText(text)
                     },
                     enabled = input.isNotBlank() && state !is ConversationState.Processing,
                     modifier = Modifier.padding(start = 8.dp),
