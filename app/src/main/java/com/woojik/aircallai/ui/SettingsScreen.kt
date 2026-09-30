@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 /**
  * PRD-04: 설정에서 AI Mode(Local/Cloud)를 고르면 다음 대화부터 적용된다.
  * API Key는 여기서 입력받아 PRD-02 CredentialManager(Keystore 암호화)에만 저장된다.
+ * Cloud API 주소/모델명은 일반 설정에 저장되며 실제 호출은 앱이 직접 수행한다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,6 +23,8 @@ fun SettingsScreen(
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
     var apiKeyInput by remember { mutableStateOf("") }
+    var baseUrlInput by remember { mutableStateOf(settings.cloudBaseUrl()) }
+    var modelInput by remember { mutableStateOf(settings.cloudModel()) }
     var status by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -92,6 +95,45 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = 8.dp),
                 ) { Text("삭제") }
             }
+            Text(
+                "Key는 기기의 Android Keystore로 암호화되어 저장되며 서버로 전송되지 않습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            Text("Cloud API 연결", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = baseUrlInput,
+                onValueChange = { baseUrlInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text("API 주소") },
+                placeholder = { Text("https://api.openai.com/v1/chat/completions") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = modelInput,
+                onValueChange = { modelInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text("모델명") },
+                placeholder = { Text("gpt-4o-mini") },
+                singleLine = true,
+            )
+            Button(
+                onClick = {
+                    settings.setCloudBaseUrl(baseUrlInput)
+                    settings.setCloudModel(modelInput)
+                    status = "Cloud API 연결 정보가 저장되었습니다."
+                },
+                modifier = Modifier.padding(top = 8.dp),
+                enabled = baseUrlInput.isNotBlank() && modelInput.isNotBlank(),
+            ) { Text("연결 저장") }
+
             status?.let {
                 Text(
                     it,
@@ -99,11 +141,6 @@ fun SettingsScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            Text(
-                "Key는 기기의 Android Keystore로 암호화되어 저장되며 서버로 전송되지 않습니다.",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 16.dp),
-            )
         }
     }
 }
