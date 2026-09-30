@@ -7,8 +7,6 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import com.woojik.aircallai.core.logging.SecureLog
-import kotlinx.coroutines.resume
-import kotlinx.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
@@ -30,9 +28,10 @@ class AndroidSpeechRecognizerEngine(
                 if (done) return
                 done = true
                 recognizer.destroy()
-                when {
-                    error != null -> cont.resumeWithException(error)
-                    else -> cont.resume(value)
+                if (error != null) {
+                    cont.cancel(error)
+                } else {
+                    cont.resume(value, null)
                 }
             }
             recognizer.setRecognitionListener(object : RecognitionListener {

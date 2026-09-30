@@ -37,19 +37,19 @@ class AndroidSpeechSynthesizerEngine(
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {}
                 override fun onDone(utteranceId: String?) {
-                    if (utteranceId == id) cont.resumeWith(kotlin.Result.success(Unit))
+                    if (utteranceId == id) cont.resume(Unit, null)
                 }
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
-                    if (utteranceId == id) cont.resumeWith(kotlin.Result.failure(AudioError.Unknown(IllegalStateException("TTS error"))))
+                    if (utteranceId == id) cont.cancel(AudioError.Unknown(IllegalStateException("TTS error")))
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    if (utteranceId == id) cont.resumeWith(kotlin.Result.failure(AudioError.Unknown(IllegalStateException("TTS error " + errorCode))))
+                    if (utteranceId == id) cont.cancel(AudioError.Unknown(IllegalStateException("TTS error " + errorCode)))
                 }
             })
             val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
             if (result != TextToSpeech.SUCCESS) {
-                cont.resumeWith(kotlin.Result.failure(AudioError.Unknown(IllegalStateException("speak() failed"))))
+                cont.cancel(AudioError.Unknown(IllegalStateException("speak() failed")))
             }
             cont.invokeOnCancellation { stop() }
         }
