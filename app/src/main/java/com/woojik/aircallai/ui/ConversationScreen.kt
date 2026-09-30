@@ -3,7 +3,6 @@ package com.woojik.aircallai.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,7 +35,7 @@ fun ConversationScreen(vm: MainViewModel) {
             )
             if (state is ConversationState.Error) {
                 Text(
-                    text = "오류: ${(state as ConversationState.Error).message}",
+                    text = "오류: " + (state as ConversationState.Error).message,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
@@ -51,7 +50,7 @@ fun ConversationScreen(vm: MainViewModel) {
             ) {
                 items(transcript) { message ->
                     Text(
-                        text = if (message.role == ChatMessage.Role.USER) "나: ${message.content}" else "AI: ${message.content}",
+                        text = if (message.role == ChatMessage.Role.USER) "나: " + message.content else "AI: " + message.content,
                     )
                 }
             }
@@ -61,11 +60,30 @@ fun ConversationScreen(vm: MainViewModel) {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // PRD-03: 음성 입력 시작 버튼
+                Button(
+                    onClick = { vm.onMicTap() },
+                    enabled = state is ConversationState.Idle || state is ConversationState.Error,
+                ) { Text("🎤 말하기") }
+                if (state is ConversationState.Speaking) {
+                    Button(
+                        onClick = { vm.onStopSpeaking() },
+                        modifier = Modifier.padding(start = 8.dp),
+                    ) { Text("■ 중지") }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("메시지 입력 (PRD-03에서 음성 연결)") },
+                    placeholder = { Text("메시지 입력") },
                     singleLine = true,
                 )
                 Button(
