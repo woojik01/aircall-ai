@@ -20,6 +20,16 @@ jobs:
         with:
           gradle-version: '8.7'
       - name: Unit tests
-        run: gradle testDebugUnitTest --stacktrace
+        run: |
+          set +e
+          gradle testDebugUnitTest --stacktrace > /tmp/tests.log 2>&1
+          code=$?
+          {
+            echo '## Unit tests output'
+            echo '~~~'
+            tail -n 150 /tmp/tests.log
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
       - name: Build debug APK
         run: gradle assembleDebug
