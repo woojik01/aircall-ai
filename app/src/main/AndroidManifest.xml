@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- PRD-03: 마이크 권한. 필요한 시점에 최소 범위로 요청한다. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- PRD-03: Android SpeechRecognizer 서비스 바인딩 (manifest 직속) -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:name=".AirCallApp"
         android:label="AirCall AI"
-        
         android:allowBackup="false"
         android:supportsRtl="true"
         android:theme="@style/Theme.AirCallAI">

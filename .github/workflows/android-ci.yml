@@ -35,7 +35,7 @@ jobs:
               grep -nE '^e:|error:|warning:|FAILED|Caused by' /tmp/tests.log | head -n 80
               echo '~~~'
             } > /tmp/comment.md
-            gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md
+            gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md || true
           fi
           exit $code
         env:
@@ -44,3 +44,9 @@ jobs:
           REPO: ${{ github.repository }}
       - name: Build debug APK
         run: gradle assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aircall-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
