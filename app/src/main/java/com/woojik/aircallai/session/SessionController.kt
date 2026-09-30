@@ -48,7 +48,6 @@ class MutedSynthesizer(
  */
 class SessionController(private val scope: CoroutineScope) {
 
-    // 상태 흐름: 명시적 타입 선언으로 SessionStatus 슈퍼타입을 고정한다.
     private val _status: MutableStateFlow<SessionStatus> = MutableStateFlow(SessionStatus.Inactive)
     val status: StateFlow<SessionStatus> = _status.asStateFlow()
 
