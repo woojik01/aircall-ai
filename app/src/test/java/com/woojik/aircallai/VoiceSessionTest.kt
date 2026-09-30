@@ -1,5 +1,6 @@
 package com.woojik.aircallai
 
+import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.ai.provider.NoopAIProvider
 import com.woojik.aircallai.audio.AudioError
 import com.woojik.aircallai.audio.SpeechRecognizerInterface
@@ -35,7 +36,10 @@ class VoiceSessionTest {
         val tts = FakeSynthesizer()
         val session = VoiceSession(FakeRecognizer { "안녕" }, tts, engine)
         session.runOneTurn()
-        assertEquals(listOf("안녕"), engine.transcript.value.map { it.content }.filter { it == "안녕" })
+        // 한 턴 = USER 1개 + ASSISTANT 1개
+        assertEquals(2, engine.transcript.value.size)
+        assertEquals(1, engine.transcript.value.count { it.role == ChatMessage.Role.USER })
+        assertEquals(1, engine.transcript.value.count { it.role == ChatMessage.Role.ASSISTANT })
         assertEquals(1, tts.spoken.size)
         assertTrue(engine.state.value is ConversationState.Idle)
         assertEquals(1, session.metrics.value.size)
@@ -93,7 +97,10 @@ class VoiceSessionTest {
         var n = 0
         val session = VoiceSession(FakeRecognizer { n++; "turn " + n }, tts, engine)
         for (i in 1..10) session.runOneTurn()
-        assertEquals(10, engine.transcript.value.size)
+        // 턴당 USER 1 + ASSISTANT 1 = 2 메시지이므로 10턴 = 20개 (PRD-03: 대화 10회 이상 연속)
+        assertEquals(10, engine.transcript.value.count { it.role == ChatMessage.Role.USER })
+        assertEquals(10, engine.transcript.value.count { it.role == ChatMessage.Role.ASSISTANT })
+        assertEquals(20, engine.transcript.value.size)
         assertEquals(10, tts.spoken.size)
         assertEquals(10, session.metrics.value.size)
         assertTrue(engine.state.value is ConversationState.Idle)
