@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- PRD-03: Android SpeechRecognizer 서비스 바인딩 (manifest 직속) -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:name=".AirCallApp"
         android:label="AirCall AI"
@@ -20,12 +27,5 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- PRD-03: Android SpeechRecognizer 서비스 바인딩 -->
-        <queries>
-            <intent>
-                <action android:name="android.speech.RecognitionService" />
-            </intent>
-        </queries>
     </application>
 </manifest>
