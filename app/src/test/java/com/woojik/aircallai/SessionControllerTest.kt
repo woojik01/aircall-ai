@@ -1,3 +1,4 @@
+// PRD-05 세션 로직 검증 (JVM)
 package com.woojik.aircallai
 
 import com.woojik.aircallai.ai.provider.AIProvider
