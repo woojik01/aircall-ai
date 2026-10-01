@@ -1,6 +1,8 @@
 package com.woojik.aircallai.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,6 +15,7 @@ import kotlinx.coroutines.launch
  * PRD-04: 설정에서 AI Mode(Local/Cloud)를 고르면 다음 대화부터 적용된다.
  * API Key는 여기서 입력받아 PRD-02 CredentialManager(Keystore 암호화)에만 저장된다.
  * Cloud API 주소/모델명은 일반 설정에 저장되며 실제 호출은 앱이 직접 수행한다.
+ * 로컬 기능 증분: Local 모델 관리(갤러리) 화면으로 이동한다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +24,7 @@ fun SettingsScreen(
     onModeChanged: () -> Unit = {},
     onSaveApiKey: suspend (String) -> Unit,
     onDeleteApiKey: suspend () -> Unit,
+    onOpenLocalModels: () -> Unit = {},
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
     var apiKeyInput by remember { mutableStateOf("") }
@@ -35,6 +39,7 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(padding)
                 .padding(16.dp),
         ) {
@@ -67,6 +72,19 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            Text("Local 모델", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "로컬 모델을 다운로드하고 적용하면 인터넷 없이 기기에서만 대화할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedButton(
+                onClick = onOpenLocalModels,
+                modifier = Modifier.padding(top = 8.dp),
+            ) { Text("로컬 모델 관리 (다운로드/적용)") }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 

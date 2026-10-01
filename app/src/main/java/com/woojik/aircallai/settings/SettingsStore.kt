@@ -67,6 +67,22 @@ class SettingsRepository(private val store: SettingsStore) {
         store.putString(KEY_CLOUD_MODEL, model.trim())
     }
 
+    /**
+     * 로컬 모델 갤러리(로컬 기능 증분): 사용자가 선택·적용한 로컬 모델 id.
+     * 모델 id는 카탈로그(LocalModelRegistry)에 속한 비민감 값이므로 일반 설정에 저장한다.
+     * 빈 문자열/blank는 미선택(null)으로 정규화한다.
+     */
+    fun localModelId(): String? = store.getString(KEY_LOCAL_MODEL)?.trim()?.ifEmpty { null }
+
+    fun setLocalModelId(id: String?) {
+        val normalized = id?.trim()
+        if (normalized.isNullOrEmpty()) {
+            store.putString(KEY_LOCAL_MODEL, "")
+        } else {
+            store.putString(KEY_LOCAL_MODEL, normalized)
+        }
+    }
+
     companion object {
         const val MODE_LOCAL = "local"
         const val MODE_CLOUD = "cloud"
@@ -78,5 +94,6 @@ class SettingsRepository(private val store: SettingsStore) {
         private const val KEY_AI_MODE = "ai_provider_mode"
         private const val KEY_CLOUD_BASE_URL = "cloud_base_url"
         private const val KEY_CLOUD_MODEL = "cloud_model"
+        private const val KEY_LOCAL_MODEL = "local_model_id"
     }
 }

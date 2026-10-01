@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
@@ -21,11 +22,12 @@ import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
 
 /**
- * Single-Activity app. Navigation: main -> call / conversation -> settings.
+ * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models.
  * PRD-03: 마이크 권한은 필요한 시점에 최소 범위로 요청한다.
  * PRD-04: ProviderRouter가 설정에 따라 Local/Cloud를 고른다.
  * PRD-05: 대화 세션은 Foreground Service가 소유하고 Activity는 상태 통로로만 접근한다.
  * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
+ * 로컬 기능 증분: 설정에서 로컬 모델 갤러리(다운로드/적용)로 이동한다.
  */
 class MainActivity : ComponentActivity() {
 
@@ -92,11 +94,13 @@ private object Routes {
     const val CALL = "call"
     const val CONVERSATION = "conversation"
     const val SETTINGS = "settings"
+    const val LOCAL_MODELS = "local-models"
 }
 
 @Composable
 private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
     val navController = rememberNavController()
+    val modelScope = rememberCoroutineScope()
     NavHost(navController = navController, startDestination = Routes.MAIN) {
         composable(Routes.MAIN) {
             MainScreen(
@@ -129,6 +133,16 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                     graph.credentials.delete(CloudAIProvider.KEY_SERVICE)
                     vm.refreshProviderReadiness()
                 },
+                onOpenLocalModels = { navController.navigate(Routes.LOCAL_MODELS) },
+            )
+        }
+        composable(Routes.LOCAL_MODELS) {
+            // 로컬 모델 갤러리: 다운로드/적용 후 통화 화면의 Offline 상태가 해소된다.
+            LocalModelScreen(
+                settings = graph.settings,
+                adapter = graph.localModelAdapter,
+                downloadManager = graph.modelDownloadManager,
+                scope = modelScope,
             )
         }
     }
