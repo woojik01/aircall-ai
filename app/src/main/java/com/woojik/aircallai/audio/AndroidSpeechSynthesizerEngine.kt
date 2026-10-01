@@ -6,16 +6,22 @@ import android.speech.tts.UtteranceProgressListener
 import com.woojik.aircallai.core.logging.SecureLog
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 
 /**
- * Android TextToSpeech 기반 TTS. stop() 시 즉시 재생이 중단된다 (PRD-03: 재생 중 중지 가능).
+ * Android TextToSpeech 기반 TTS.
+ * stop()은 현재 speak()을 정상 종료시켜 다음 음성 턴이 계속될 수 있게 한다.
  */
 class AndroidSpeechSynthesizerEngine(
     context: Context,
 ) : SpeechSynthesizer {
 
     private val ready = AtomicBoolean(false)
+    private val activeContinuation =
+        AtomicReference<kotlinx.coroutines.CancellableContinuation<Unit>?>(null)
     private var engine: TextToSpeech? = null
 
     init {
@@ -27,42 +33,75 @@ class AndroidSpeechSynthesizerEngine(
         }
     }
 
-    override suspend fun speak(text: String) {
+    override suspend fun speak(text: String) = withContext(Dispatchers.Main.immediate) {
         val tts = engine
         if (tts == null || !ready.get()) {
             throw AudioError.Unknown(IllegalStateException("TTS not ready"))
         }
+
         suspendCancellableCoroutine { cont ->
             val id = "aircall-" + System.nanoTime()
+            activeContinuation.set(cont)
+
+            fun finishSuccess() {
+                if (activeContinuation.compareAndSet(cont, null)) {
+                    cont.resume(Unit, null)
+                }
+            }
+
+            fun finishError(error: Throwable) {
+                if (activeContinuation.compareAndSet(cont, null)) {
+                    cont.resumeWith(Result.failure(error))
+                }
+            }
+
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {}
+
                 override fun onDone(utteranceId: String?) {
-                    if (utteranceId == id) cont.resume(Unit, null)
+                    if (utteranceId == id) finishSuccess()
                 }
+
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
-                    if (utteranceId == id) cont.cancel(AudioError.Unknown(IllegalStateException("TTS error")))
+                    if (utteranceId == id) {
+                        finishError(AudioError.Unknown(IllegalStateException("TTS error")))
+                    }
                 }
+
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    if (utteranceId == id) cont.cancel(AudioError.Unknown(IllegalStateException("TTS error " + errorCode)))
+                    if (utteranceId == id) {
+                        finishError(
+                            AudioError.Unknown(
+                                IllegalStateException("TTS error $errorCode"),
+                            ),
+                        )
+                    }
                 }
             })
+
             val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
             if (result != TextToSpeech.SUCCESS) {
-                cont.cancel(AudioError.Unknown(IllegalStateException("speak() failed")))
+                finishError(AudioError.Unknown(IllegalStateException("speak() failed")))
             }
-            cont.invokeOnCancellation { stop() }
+
+            cont.invokeOnCancellation {
+                activeContinuation.compareAndSet(cont, null)
+                tts.stop()
+            }
         }
     }
 
     override fun stop() {
         engine?.stop()
+        activeContinuation.getAndSet(null)?.resume(Unit, null)
         SecureLog.d(TAG, "TTS stopped (barge-in)")
     }
 
     fun shutdown() {
         engine?.shutdown()
         engine = null
+        activeContinuation.getAndSet(null)?.resume(Unit, null)
     }
 
     companion object {
