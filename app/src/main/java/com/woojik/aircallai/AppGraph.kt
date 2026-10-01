@@ -23,7 +23,6 @@ import kotlinx.coroutines.SupervisorJob
  * 의존성 구성 (PRD-04).
  * PRD-05: 대화 엔진과 세션 상태 통로가 여기서 만들어지며
  * UI(Activity)와 Foreground Service가 동일한 인스턴스를 공유한다.
- * 전역 Singleton 남용이 아니라 App 범위의 단일 구성 루트다 (PRD-01 req.4).
  */
 class AppGraph(context: Context) {
     val settings = SettingsRepository(SharedPrefsStore(context))
@@ -42,8 +41,15 @@ class AppGraph(context: Context) {
     )
     val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)
 
-    /** PRD-05: 세션 상태는 Activity 밖(백그라운드 포함)에서 유지된다. */
     val engine = ConversationEngine(providerRouter.current())
-    val sessionController = SessionController(CoroutineScope(SupervisorJob() + Dispatchers.Default))
+
+    /**
+     * Android 음성 API(SpeechRecognizer/TTS)는 메인 스레드에서 호출한다.
+     * 네트워크 요청은 HttpCloudApiAdapter가 Dispatchers.IO로 이동시킨다.
+     * 따라서 세션 루프 자체는 Main에서 실행해 Android 오디오 API의 스레드 제약을 지킨다.
+     */
+    val sessionController = SessionController(
+        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    )
     val sessionRepository = SessionRepository(engine, sessionController)
 }

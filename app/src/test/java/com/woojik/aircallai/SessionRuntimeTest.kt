@@ -76,7 +76,7 @@ class SessionStatusTest {
         recognizer.utterances.send("b")
         engine.transcript.first { it.size >= 4 }
 
-        assertEquals(listOf("echo: a", "echo: b"), synthesizer.spoken)
+        assertEquals(listOf("echo a", "echo b"), synthesizer.spoken)
         controller.end()
         assertEquals(SessionStatus.Ended, controller.status.value)
     }
