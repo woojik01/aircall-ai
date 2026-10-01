@@ -21,10 +21,11 @@ import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
 
 /**
- * Single-Activity app. Navigation: main -> conversation -> settings (PRD-01).
+ * Single-Activity app. Navigation: main -> call / conversation -> settings.
  * PRD-03: 마이크 권한은 필요한 시점에 최소 범위로 요청한다.
  * PRD-04: ProviderRouter가 설정에 따라 Local/Cloud를 고른다.
  * PRD-05: 대화 세션은 Foreground Service가 소유하고 Activity는 상태 통로로만 접근한다.
+ * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
  */
 class MainActivity : ComponentActivity() {
 
@@ -46,8 +47,9 @@ class MainActivity : ComponentActivity() {
             requestMicPermission = { requestMicPermission() },
             startSession = { startConversationService() },
             stopSession = { sendServiceAction(ConversationService.ACTION_END) },
+            isProviderReady = { graph.providerRouter.current().isReady() },
         )
-        setContent {                      
+        setContent {
             AirCallUi(vm, graph)
         }
     }
@@ -87,6 +89,7 @@ class MainActivity : ComponentActivity() {
 
 private object Routes {
     const val MAIN = "main"
+    const val CALL = "call"
     const val CONVERSATION = "conversation"
     const val SETTINGS = "settings"
 }
@@ -97,26 +100,34 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
     NavHost(navController = navController, startDestination = Routes.MAIN) {
         composable(Routes.MAIN) {
             MainScreen(
+                onOpenCall = { navController.navigate(Routes.CALL) },
                 onOpenConversation = { navController.navigate(Routes.CONVERSATION) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }
+        composable(Routes.CALL) {
+            // PRD-07 통화 화면: 종료 시 메인으로 돌아간다.
+            CallScreen(vm, onExit = { navController.popBackStack() })
+        }
         composable(Routes.CONVERSATION) {
             ConversationScreen(vm)
         }
-        composable(Routes.SETTINGS) {                                                      
+        composable(Routes.SETTINGS) {
             // PRD-04/05: 모드 변경 시에도 다음 턴부터 갱신된 provider가 적용된다.
             SettingsScreen(
                 settings = graph.settings,
                 onModeChanged = {
                     vm.engine.updateProvider(graph.providerRouter.current())
+                    vm.refreshProviderReadiness()
                 },
                 onSaveApiKey = { key ->
                     graph.credentials.save(CloudAIProvider.KEY_SERVICE, key.toByteArray())
                     vm.engine.updateProvider(graph.providerRouter.current())
+                    vm.refreshProviderReadiness()
                 },
                 onDeleteApiKey = {
                     graph.credentials.delete(CloudAIProvider.KEY_SERVICE)
+                    vm.refreshProviderReadiness()
                 },
             )
         }
@@ -126,5 +137,5 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
 @Preview
 @Composable
 private fun AirCallAppPreview() {
-    MainScreen(onOpenConversation = {}, onOpenSettings = {})
+    MainScreen(onOpenCall = {}, onOpenConversation = {}, onOpenSettings = {})
 }

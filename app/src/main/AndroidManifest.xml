@@ -11,6 +11,9 @@
     <!-- Android 13+: 세션 알림 표시 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- PRD-07: 플로팅 컨트롤(선택). 권한이 없으면 시스템 알림으로만 제어한다. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- PRD-03: Android SpeechRecognizer 서비스 바인딩 (manifest 직속) -->
     <queries>
         <intent>
