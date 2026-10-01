@@ -74,6 +74,8 @@ class SessionController(private val scope: CoroutineScope) {
                 if (!isActive) break
                 _status.value = SessionStatus.Running
                 loop()
+                // Prevent a fast/synthetic turn from creating a busy loop and provide the PRD-05 cooldown.
+                delay(TURN_COOLDOWN_MS)
             }
         }
     }
@@ -99,5 +101,6 @@ class SessionController(private val scope: CoroutineScope) {
 
     companion object {
         private const val PAUSE_POLL_MS = 200L
+        private const val TURN_COOLDOWN_MS = 50L
     }
 }
