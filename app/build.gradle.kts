@@ -11,13 +11,20 @@ android {
         applicationId = "com.woojik.aircallai"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // PRD-08: Release 빌드에 R8 축소/난독화 적용. MediaPipe JNI 유지 규칙은
+            // proguard-rules.pro 참조.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
     compileOptions {
