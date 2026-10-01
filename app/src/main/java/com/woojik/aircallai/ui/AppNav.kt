@@ -22,12 +22,13 @@ import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
 
 /**
- * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models.
+ * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models / privacy.
  * PRD-03: 마이크 권한은 필요한 시점에 최소 범위로 요청한다.
  * PRD-04: ProviderRouter가 설정에 따라 Local/Cloud를 고른다.
  * PRD-05: 대화 세션은 Foreground Service가 소유하고 Activity는 상태 통로로만 접근한다.
  * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
  * 로컬 기능 증분: 설정에서 로컬 모델 갤러리(다운로드/적용)로 이동한다.
+ * PRD-08: 설정에서 개인정보(데이터 흐름) 화면으로 이동한다.
  */
 class MainActivity : ComponentActivity() {
 
@@ -95,6 +96,7 @@ private object Routes {
     const val CONVERSATION = "conversation"
     const val SETTINGS = "settings"
     const val LOCAL_MODELS = "local-models"
+    const val PRIVACY = "privacy"
 }
 
 @Composable
@@ -134,6 +136,7 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                     vm.refreshProviderReadiness()
                 },
                 onOpenLocalModels = { navController.navigate(Routes.LOCAL_MODELS) },
+                onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
             )
         }
         composable(Routes.LOCAL_MODELS) {
@@ -144,6 +147,10 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                 downloadManager = graph.modelDownloadManager,
                 scope = modelScope,
             )
+        }
+        composable(Routes.PRIVACY) {
+            // PRD-08 개인정보 화면: 모드별/Tool별 데이터 흐름을 표시한다.
+            PrivacyScreen()
         }
     }
 }

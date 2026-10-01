@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
  * API Key는 여기서 입력받아 PRD-02 CredentialManager(Keystore 암호화)에만 저장된다.
  * Cloud API 주소/모델명은 일반 설정에 저장되며 실제 호출은 앱이 직접 수행한다.
  * 로컬 기능 증분: Local 모델 관리(갤러리) 화면으로 이동한다.
+ * PRD-08: 개인정보(데이터 흐름) 화면으로 이동한다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,6 +26,7 @@ fun SettingsScreen(
     onSaveApiKey: suspend (String) -> Unit,
     onDeleteApiKey: suspend () -> Unit,
     onOpenLocalModels: () -> Unit = {},
+    onOpenPrivacy: () -> Unit = {},
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
     var apiKeyInput by remember { mutableStateOf("") }
@@ -155,6 +157,20 @@ fun SettingsScreen(
                 modifier = Modifier.padding(top = 8.dp),
                 enabled = baseUrlInput.isNotBlank() && modelInput.isNotBlank(),
             ) { Text("연결 저장") }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // PRD-08: 개인정보(데이터 흐름) 안내 화면으로 이동한다.
+            Text("개인정보", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "모드별로 어떤 데이터가 어디로 전송되는지 확인할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedButton(
+                onClick = onOpenPrivacy,
+                modifier = Modifier.padding(top = 8.dp),
+            ) { Text("개인정보 · 데이터 흐름") }
 
             status?.let {
                 Text(
