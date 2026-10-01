@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 
 /**
@@ -105,13 +106,21 @@ class ModelDownloadManager(private val context: Context) {
                 if (location.isNullOrBlank() || redirects >= MAX_REDIRECTS) {
                     throw IOException("리다이렉트 실패 (HTTP $code)")
                 }
-                url = if (location.startsWith("http")) location else URL(url, location).toString()
+                url = resolveAgainst(url, location)
                 redirects++
                 continue
             }
             return connection
         }
     }
+
+    /** 상대 경로 Location을 기준 URL에 대해 절대 URL로 변환한다. */
+    private fun resolveAgainst(baseUrl: String, location: String): String =
+        if (location.startsWith("http")) {
+            location
+        } else {
+            URI(baseUrl).resolve(location).toString()
+        }
 
     /** HTTP 오류를 사용자가 원인을 알 수 있는 문구로 변환한다. */
     private fun httpErrorMessage(code: Int): String = when (code) {
