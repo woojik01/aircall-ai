@@ -50,7 +50,7 @@ fun SettingsScreen(
                     },
                 )
                 Text("Local")
-            }      
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
                     selected = mode == SettingsRepository.MODE_CLOUD,
@@ -100,7 +100,7 @@ fun SettingsScreen(
                 ) { Text("삭제") }
             }
             Text(
-                "Key는 기기의 Android Keystore로 암호화되어 저장되며 서버로 전송되지 않습니다.",     
+                "Key는 기기의 Android Keystore로 암호화되어 저장되며 서버로 전송되지 않습니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 16.dp),
             )
@@ -125,7 +125,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(top = 8.dp),
                 label = { Text("모델명") },
-                placeholder = { Text("llama-3.3-70b-versatile") },
+                placeholder = { Text(SettingsRepository.DEFAULT_CLOUD_MODEL) },
                 singleLine = true,
             )
             Button(
