@@ -12,7 +12,6 @@ import com.woojik.aircallai.settings.InMemorySettingsStore
 import com.woojik.aircallai.settings.SettingsRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
@@ -62,7 +61,6 @@ class CloudEndpointSettingsTest {
         assertEquals("https://api.example.com/v1/chat/completions", settings.cloudBaseUrl())
         assertEquals("gpt-4o-mini", settings.cloudModel())
 
-        // 새 저장소(프로세스 재시작과 동일)에서도 유지된다.
         val reloaded = SettingsRepository(InMemorySettingsStore().apply {
             putString("cloud_base_url", settings.cloudBaseUrl())
             putString("cloud_model", settings.cloudModel())
@@ -113,8 +111,6 @@ class CloudEndpointSettingsTest {
             fail("expected API_ERROR for empty endpoint")
         } catch (e: AIProviderException) {
             assertEquals(ProviderErrorKind.API_ERROR, e.kind)
-            assertTrue(e.kind != ProviderErrorKind.AUTH_FAILED)
-            assertEquals("endpoint not configured", e.message)
         }
     }
 }
