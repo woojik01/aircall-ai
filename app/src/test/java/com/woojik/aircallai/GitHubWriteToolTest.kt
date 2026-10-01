@@ -63,7 +63,7 @@ class GitHubWriteToolTest {
             ToolRequest(
                 "github",
                 "create_issue",
-                mapOf("owner" to "woojik01", "repo" to "aircall-ai", "title" -> "x"),
+                mapOf("owner" to "woojik01", "repo" to "aircall-ai", "title" to "x"),
             ),
         )
         assertFalse(result.success)
