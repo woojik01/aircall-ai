@@ -8,6 +8,6 @@ data class ToolResult(val success: Boolean, val message: String)
 interface Tool {
     val name: String
     val description: String
-    val risk: ToolRisk
+    fun riskFor(action: String): ToolRisk
     suspend fun execute(request: ToolRequest): ToolResult
 }
