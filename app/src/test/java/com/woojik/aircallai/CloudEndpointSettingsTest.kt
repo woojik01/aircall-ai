@@ -19,11 +19,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 /**
- * PRD-04: Cloud Mode에서 앱이 사용자가 등록한 API를 직접 호출하려면
- * endpoint(baseUrl/model)가 일반 설정에서 공급되어야 한다.
- * - endpoint 설정 저장/조회 (PRD-02 일반 설정 분류)
- * - CloudAIProvider가 설정된 endpoint를 어댑터에 전달
- * - endpoint 미설정 시 API 오류로 구분 (Key 오류와 혼동 없음)
+ * PRD-04/05 Cloud Mode endpoint tests.
  */
 class CloudEndpointSettingsTest {
 
@@ -48,9 +44,17 @@ class CloudEndpointSettingsTest {
     }
 
     @Test
+    fun freshSettingsUseGroqDefaults() {
+        val settings = SettingsRepository(InMemorySettingsStore())
+
+        assertEquals(SettingsRepository.DEFAULT_CLOUD_BASE_URL, settings.cloudBaseUrl())
+        assertEquals(SettingsRepository.DEFAULT_CLOUD_MODEL, settings.cloudModel())
+    }
+
+    @Test
     fun cloudEndpointSettingsPersist() {
         val settings = SettingsRepository(InMemorySettingsStore())
-        assertEquals("", settings.cloudBaseUrl())
+        assertEquals(SettingsRepository.DEFAULT_CLOUD_BASE_URL, settings.cloudBaseUrl())
         assertEquals(SettingsRepository.DEFAULT_CLOUD_MODEL, settings.cloudModel())
 
         settings.setCloudBaseUrl("  https://api.example.com/v1/chat/completions  ")
@@ -58,7 +62,7 @@ class CloudEndpointSettingsTest {
         assertEquals("https://api.example.com/v1/chat/completions", settings.cloudBaseUrl())
         assertEquals("gpt-4o-mini", settings.cloudModel())
 
-        // 새 저장소(프로세스 재시작과 동일)에서도 유지된다
+        // 새 저장소(프로세스 재시작과 동일)에서도 유지된다.
         val reloaded = SettingsRepository(InMemorySettingsStore().apply {
             putString("cloud_base_url", settings.cloudBaseUrl())
             putString("cloud_model", settings.cloudModel())
@@ -98,19 +102,19 @@ class CloudEndpointSettingsTest {
     }
 
     @Test
-    fun unconfiguredEndpointSurfacesAsApiErrorNotAuthFailure() = runTest {
+    fun explicitlyEmptyEndpointStillSurfacesAsApiError() = runTest {
         val cm = FileCredentialManager(tmp.newFolder(), NoopCrypto())
         cm.save(CloudAIProvider.KEY_SERVICE, "bad-key".toByteArray())
-        val settings = SettingsRepository(InMemorySettingsStore()) // endpoint 미설치
         val provider = CloudAIProvider(cm, HttpCloudApiAdapter()) {
-            CloudAIProvider.Endpoint(settings.cloudBaseUrl(), settings.cloudModel())
+            CloudAIProvider.Endpoint("", SettingsRepository.DEFAULT_CLOUD_MODEL)
         }
         try {
             provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "hi")))
-            fail("expected API_ERROR for unconfigured endpoint")
+            fail("expected API_ERROR for empty endpoint")
         } catch (e: AIProviderException) {
             assertEquals(ProviderErrorKind.API_ERROR, e.kind)
             assertTrue(e.kind != ProviderErrorKind.AUTH_FAILED)
+            assertEquals("endpoint not configured", e.message)
         }
     }
 }
