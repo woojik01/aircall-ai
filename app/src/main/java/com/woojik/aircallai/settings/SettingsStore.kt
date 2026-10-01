@@ -27,18 +27,29 @@ class SettingsRepository(private val store: SettingsStore) {
     }
 
     /**
-     * PRD-04 Cloud Mode: 사용자가 등록한 OpenAI 호환 chat completions 엔드포인트.
-     * 민감정보가 아니므로 일반 설정에 저장한다 (Key는 CredentialManager에만 보관).
+     * PRD-04 Cloud Mode: OpenAI-compatible chat completions endpoint.
+     * The endpoint is non-sensitive and is stored in general settings.
+     *
+     * Fresh installations and older installations that never configured an endpoint
+     * use Groq's current OpenAI-compatible endpoint by default, so Cloud mode cannot
+     * fail with "endpoint not configured" merely because the endpoint was never saved.
      */
-    fun cloudBaseUrl(): String = store.getString(KEY_CLOUD_BASE_URL) ?: ""
+    fun cloudBaseUrl(): String {
+        val stored = store.getString(KEY_CLOUD_BASE_URL)?.trim()
+        return if (stored.isNullOrEmpty()) {
+            DEFAULT_CLOUD_BASE_URL
+        } else {
+            stored
+        }
+    }
 
     fun setCloudBaseUrl(url: String) {
         store.putString(KEY_CLOUD_BASE_URL, url.trim())
     }
 
     /**
-     * Groq의 구형 Llama 3.3 모델을 이미 저장한 설치본은 자동으로 현재 권장 모델로
-     * 마이그레이션한다. 사용자가 직접 다른 모델을 저장한 경우에는 그대로 유지한다.
+     * Groq의 구형 Llama 3.3 모델을 이미 저장한 설치본은 자동으로 현재 기본 모델로
+     * 마이그레이션한다. 사용자가 다른 모델을 저장한 경우에는 그대로 유지한다.
      */
     fun cloudModel(): String {
         val stored = store.getString(KEY_CLOUD_MODEL)?.trim()
@@ -60,6 +71,7 @@ class SettingsRepository(private val store: SettingsStore) {
         const val MODE_LOCAL = "local"
         const val MODE_CLOUD = "cloud"
 
+        const val DEFAULT_CLOUD_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
         const val DEFAULT_CLOUD_MODEL = "openai/gpt-oss-120b"
         private const val DEPRECATED_LLAMA_33_MODEL = "llama-3.3-70b-versatile"
 
