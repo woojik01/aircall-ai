@@ -13,6 +13,20 @@ class ToolExecutorTest {
         assertTrue(result.success)
     }
 
+    @Test fun writeToolRequiresApproval() = runTest {
+        val result = ToolExecutor(listOf(MockGitHubTool()), InMemoryToolPermissionStore())
+            .execute(ToolRequest("github", "create_pull_request"))
+        assertFalse(result.success)
+    }
+
+    @Test fun approvedWriteToolRuns() = runTest {
+        val permissions = InMemoryToolPermissionStore()
+        permissions.setAllowed("github", "create_issue", true)
+        val result = ToolExecutor(listOf(MockGitHubTool()), permissions)
+            .execute(ToolRequest("github", "create_issue"))
+        assertTrue(result.success)
+    }
+
     @Test fun unknownToolFailsSafely() = runTest {
         val result = ToolExecutor(listOf(MockGitHubTool()), InMemoryToolPermissionStore())
             .execute(ToolRequest("calendar", "read"))
