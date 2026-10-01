@@ -3,15 +3,26 @@
 로컬 우선 Android AI 음성 비서. 요구사항은 [docs/prd](docs/prd) 참조.
 
 ## 현재 단계
-- **PRD-01 완료 대기 (리뷰 중)** — Android 기반 구조, 메인/대화/설정 화면, ConversationEngine + AIProvider 추상화, 단위 테스트, GitHub Actions CI.
+- **완료 (main)**: PRD-01 Android 기반, PRD-02 로컬 저장소/자격증명, PRD-03 음성 대화 MVP,
+  PRD-04 하이브리드 AI Provider(Local/Cloud·Groq), PRD-05 백그라운드 음성 대화(Foreground Service·지속 알림)
+- **진행 중**: PRD-06 Tool 연동 — Tool 실행/권한 계층, GitHub 저장소 조회 Adapter 완료.
+  인증 UI, Issue/PR 생성, Calendar/Gmail/Notes, 승인 UI는 다음 증분
+- **예정**: PRD-07 통화형 UI, PRD-08 안정화/릴리스
+- 기기 테스트(다른 앱 전환/화면 OFF/알림 제어/배터리)는 아직 미확인
 
 ## 구조
 ```
 app/src/main/java/com/woojik/aircallai/
-  core/       logging, (security/storage/network: PRD-02 이후)
-  ai/provider AIProvider, NoopAIProvider (Local/Cloud는 PRD-04)
-  conversation ConversationEngine, ConversationState (IDLE/LISTENING/PROCESSING/SPEAKING/ERROR)
-  ui/         MainActivity, Main/Conversation/Settings Screen
+  core/          logging, security(Keystore), storage(CredentialManager)
+  ai/            provider(AIProvider, ProviderRouter), local, cloud
+  cloud/         GroqChatAdapter.kt (HttpCloudApiAdapter)
+  audio/         STT/TTS 엔진 (AndroidSpeechRecognizerEngine, AndroidTtsEngine)
+  conversation/  ChatTurnEngine(ConversationEngine), VoiceSession, VoiceTextCleaner(VoiceResponseSanitizer)
+  session/       SessionController, SessionRepository
+  service/       ConversationService (Foreground Service)
+  tools/         Tool, ToolExecutor, ToolPermissionStore, GitHubTool, GitHubApiClient
+  settings/      SettingsRepository
+  ui/            MainActivity, Main/Conversation/Settings Screen
 ```
 
 ## 빌드
