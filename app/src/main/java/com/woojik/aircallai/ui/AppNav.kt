@@ -20,6 +20,7 @@ import com.woojik.aircallai.AppGraph
 import com.woojik.aircallai.ai.cloud.CloudAIProvider
 import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
+import com.woojik.aircallai.tools.GitHubApiClient
 
 /**
  * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models / privacy.
@@ -29,6 +30,7 @@ import com.woojik.aircallai.service.ConversationService
  * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
  * 로컬 기능 증분: 설정에서 로컬 모델 갤러리(다운로드/적용)로 이동한다.
  * PRD-08: 설정에서 개인정보(데이터 흐름) 화면으로 이동한다.
+ * PRD-06: 설정에서 GitHub 토큰(PAT)을 등록/삭제한다.
  */
 class MainActivity : ComponentActivity() {
 
@@ -137,6 +139,13 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                 },
                 onOpenLocalModels = { navController.navigate(Routes.LOCAL_MODELS) },
                 onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+                // PRD-06: GitHub 토큰은 Cloud Key와 동일한 CredentialManager 계층에 보관한다.
+                onSaveGitHubToken = { token ->
+                    graph.credentials.save(GitHubApiClient.CREDENTIAL_SERVICE, token.toByteArray())
+                },
+                onDeleteGitHubToken = {
+                    graph.credentials.delete(GitHubApiClient.CREDENTIAL_SERVICE)
+                },
             )
         }
         composable(Routes.LOCAL_MODELS) {
