@@ -2,15 +2,24 @@ package com.woojik.aircallai.conversation
 
 import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.AIProviderException
+import com.woojik.aircallai.ai.provider.AIResponse
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.audio.AudioError
+import com.woojik.aircallai.tools.ToolCallProtocol
+import com.woojik.aircallai.tools.ToolExecutor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+/**
+ * PRD-06: toolExecutor가 있으면 사용 가능한 Tool을 시스템 프롬프트로 알리고,
+ * AI 응답이 [ToolCallProtocol] 형식이면 Tool을 실행해 결과를 다시 AI에게 전달한다.
+ * Tool 호출문과 결과는 화면/음성에 노출하지 않고 최종 답변만 transcript에 남긴다.
+ */
 class ConversationEngine(
     private var provider: AIProvider,
+    private val toolExecutor: ToolExecutor? = null,
 ) {
     private val _state = MutableStateFlow<ConversationState>(ConversationState.Idle)
     val state: StateFlow<ConversationState> = _state.asStateFlow()
@@ -55,12 +64,11 @@ class ConversationEngine(
         _state.value = ConversationState.Processing(userMessage)
 
         try {
-            val requestHistory = if (voiceMode) {
-                listOf(ChatMessage(ChatMessage.Role.SYSTEM, VOICE_SYSTEM_PROMPT)) + _transcript.value
-            } else {
-                _transcript.value
+            val systemPrompts = buildList {
+                if (voiceMode) add(ChatMessage(ChatMessage.Role.SYSTEM, VOICE_SYSTEM_PROMPT))
+                toolExecutor?.let { add(ChatMessage(ChatMessage.Role.SYSTEM, ToolCallProtocol.systemPrompt(it.tools))) }
             }
-            val response = active.respond(requestHistory)
+            val response = respondWithTools(active, systemPrompts + _transcript.value)
             val responseText = if (voiceMode) {
                 VoiceResponseSanitizer.sanitize(response.message.content)
             } else {
@@ -80,6 +88,23 @@ class ConversationEngine(
                 t.message ?: "AI 응답 생성 실패",
             )
         }
+    }
+
+    private suspend fun respondWithTools(active: AIProvider, history: List<ChatMessage>): AIResponse {
+        var context = history
+        var response = active.respond(context)
+        val executor = toolExecutor ?: return response
+        repeat(MAX_TOOL_CALLS_PER_TURN) {
+            val call = ToolCallProtocol.parse(response.message.content) ?: return response
+            val result = executor.execute(call)
+            context = context +
+                ChatMessage(ChatMessage.Role.ASSISTANT, response.message.content) +
+                ChatMessage(ChatMessage.Role.SYSTEM, ToolCallProtocol.resultMessage(call, result))
+            response = active.respond(context)
+        }
+        return if (ToolCallProtocol.parse(response.message.content) != null) {
+            response.copy(message = response.message.copy(content = "요청을 처리하지 못했어요. 다시 말씀해 주세요"))
+        } else response
     }
 
     fun markSpeaking() {
@@ -105,6 +130,7 @@ class ConversationEngine(
     }
 
     companion object {
+        private const val MAX_TOOL_CALLS_PER_TURN = 3
         private const val VOICE_SYSTEM_PROMPT = """
 너는 자연스러운 음성 대화를 하는 AI다.
 실제 사람과 대화하듯 짧고 자연스럽게 답한다.

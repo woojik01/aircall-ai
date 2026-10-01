@@ -67,7 +67,14 @@ class HttpCloudApiAdapter : CloudApiAdapter {
         history.forEach { m ->
             messages.put(
                 JSONObject()
-                    .put("role", if (m.role == ChatMessage.Role.USER) "user" else "assistant")
+                    .put(
+                        "role",
+                        when (m.role) {
+                            ChatMessage.Role.USER -> "user"
+                            ChatMessage.Role.ASSISTANT -> "assistant"
+                            ChatMessage.Role.SYSTEM -> "system"
+                        },
+                    )
                     .put("content", m.content)
             )
         }

@@ -34,6 +34,11 @@ ToolRequest
 - `SettingsToolPermissionStore`: 작업별 승인 여부를 일반 설정에 영구 저장(앱 재시작 후에도 유지)
 - 설정 화면: GitHub Personal Access Token 저장/삭제(CredentialManager, 화면에 마스킹), 작업별 승인 스위치
 - AppGraph에서 `ToolExecutor` + `GitHubTool` 구성
+- 대화 연결(`ToolCallProtocol` + `ConversationEngine`): 사용 가능한 Tool 목록을 시스템 프롬프트로 알리고,
+  AI가 `TOOL: github.<작업>` + `인자: 값` 형식으로 답하면 ToolExecutor로 실행한 뒤 결과를 다시 AI에게 전달한다.
+  Tool 호출문과 결과는 화면/음성에 노출하지 않고 최종 답변만 남긴다. 한 턴에 최대 3회 호출.
+  텍스트 규약이라 OpenAI 호환 Cloud 모델과 Local 모델 모두에서 동작한다.
+- 저장소 조회/로그인 사용자(`get_user`)/Issue·PR 생성 결과를 AI가 말할 수 있는 요약(설명, 스타, 이슈 수, 생성된 URL 등)으로 반환
 
 ## 권한 정책
 
@@ -53,7 +58,7 @@ GitHub 예시:
 
 - OAuth 연결 (현재는 Personal Access Token)
 - Calendar/Gmail/Notes Adapter
-- Tool 선택과 AI 응답 연결 (대화 중 Tool 호출)
+- 모델 네이티브 function calling 지원 (현재는 텍스트 규약)
 - 대화 중 실행 직전 1회성 승인 UI (현재는 설정의 작업별 상시 승인)
 - 실행 메타데이터 로깅
 

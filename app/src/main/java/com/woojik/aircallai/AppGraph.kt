@@ -46,7 +46,11 @@ class AppGraph(context: Context) {
     )
     val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)
 
-    val engine = ConversationEngine(providerRouter.current())
+    /** PRD-06: Tool 실행 계층. WRITE 작업은 설정 화면에서 승인한 경우에만 실행된다. */
+    val toolPermissions = SettingsToolPermissionStore(settingsStore)
+    val toolExecutor = ToolExecutor(listOf(GitHubTool(GitHubApiClient(credentials))), toolPermissions)
+
+    val engine = ConversationEngine(providerRouter.current(), toolExecutor)
 
     /**
      * Android 음성 API(SpeechRecognizer/TTS)는 메인 스레드에서 호출한다.
@@ -57,8 +61,4 @@ class AppGraph(context: Context) {
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
     val sessionRepository = SessionRepository(engine, sessionController)
-
-    /** PRD-06: Tool 실행 계층. WRITE 작업은 설정 화면에서 승인한 경우에만 실행된다. */
-    val toolPermissions = SettingsToolPermissionStore(settingsStore)
-    val toolExecutor = ToolExecutor(listOf(GitHubTool(GitHubApiClient(credentials))), toolPermissions)
 }

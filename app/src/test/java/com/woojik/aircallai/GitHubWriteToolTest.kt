@@ -3,6 +3,7 @@ package com.woojik.aircallai
 import com.woojik.aircallai.core.storage.CredentialManager
 import com.woojik.aircallai.settings.InMemorySettingsStore
 import com.woojik.aircallai.tools.GitHubApiClient
+import com.woojik.aircallai.tools.GitHubHttpResponse
 import com.woojik.aircallai.tools.GitHubTool
 import com.woojik.aircallai.tools.GitHubTransport
 import com.woojik.aircallai.tools.SettingsToolPermissionStore
@@ -24,12 +25,16 @@ class GitHubWriteToolTest {
         override suspend fun clearAll() {}
     }
 
-    private class RecordingTransport(private val code: Int = 201, private val fail: Boolean = false) : GitHubTransport {
+    private class RecordingTransport(
+        private val code: Int = 201,
+        private val fail: Boolean = false,
+        private val body: String = "{\"number\":7,\"html_url\":\"https://github.com/woojik01/aircall-ai/issues/7\"}",
+    ) : GitHubTransport {
         val calls = mutableListOf<List<String?>>()
-        override fun send(method: String, url: String, token: String, jsonBody: String?): Int {
+        override fun send(method: String, url: String, token: String, jsonBody: String?): GitHubHttpResponse {
             calls += listOf(method, url, token, jsonBody)
             if (fail) throw IOException("boom $token")
-            return code
+            return GitHubHttpResponse(code, body)
         }
     }
 
@@ -43,6 +48,7 @@ class GitHubWriteToolTest {
         val transport = RecordingTransport()
         val result = tool(transport).execute(ToolRequest("github", "create_issue", issueArgs))
         assertTrue(result.success)
+        assertEquals("Issue #7가 생성되었습니다: https://github.com/woojik01/aircall-ai/issues/7", result.message)
         val (method, url, sentToken, body) = transport.calls.single()
         assertEquals("POST", method)
         assertEquals("https://api.github.com/repos/woojik01/aircall-ai/issues", url)
@@ -75,8 +81,8 @@ class GitHubWriteToolTest {
 
     @Test fun statusCodesAreMappedWithoutLeakingToken() = runTest {
         val expected = mapOf(
-            401 to "GitHub 인증에 실패했습니다",
-            403 to "GitHub 인증에 실패했습니다",
+            401 to "GitHub 인증에 실패했습니다. 토큰을 확인해야 합니다",
+            403 to "GitHub 권한이 없습니다. 토큰 권한을 확인해야 합니다",
             404 to "GitHub 저장소를 찾을 수 없습니다",
             422 to "GitHub 요청 내용이 올바르지 않습니다",
             500 to "GitHub 요청에 실패했습니다",
@@ -89,6 +95,25 @@ class GitHubWriteToolTest {
         val network = tool(RecordingTransport(fail = true)).execute(ToolRequest("github", "create_issue", issueArgs))
         assertEquals("GitHub 연결에 실패했습니다", network.message)
         assertFalse(network.message.contains(token))
+    }
+
+    @Test fun readRepositoryReturnsSummaryForAi() = runTest {
+        val json = "{\"full_name\":\"woojik01/aircall-ai\",\"private\":false,\"description\":null," +
+            "\"language\":\"Kotlin\",\"default_branch\":\"main\",\"stargazers_count\":3,\"open_issues_count\":1}"
+        val result = tool(RecordingTransport(200, body = json))
+            .execute(ToolRequest("github", "read_repository", mapOf("owner" to "woojik01", "repo" to "aircall-ai")))
+        assertTrue(result.success)
+        assertEquals(
+            "저장소 woojik01/aircall-ai (공개), 언어: Kotlin, 기본 브랜치: main, 스타 3개, 열린 이슈 1개",
+            result.message,
+        )
+    }
+
+    @Test fun getUserNeedsNoArguments() = runTest {
+        val transport = RecordingTransport(200, body = "{\"login\":\"woojik01\"}")
+        val result = tool(transport).execute(ToolRequest("github", "get_user"))
+        assertEquals("GitHub 로그인 사용자: woojik01", result.message)
+        assertEquals("https://api.github.com/user", transport.calls.single()[1])
     }
 
     @Test fun riskLevels() {
