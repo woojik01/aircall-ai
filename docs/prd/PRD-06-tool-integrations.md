@@ -28,6 +28,12 @@ ToolRequest
 - GitHub API Adapter(`GitHubApiClient`): CredentialManager의 `github` 자격증명 사용, 저장소 조회(READ),
   저장소 이름 검증, 네트워크 timeout, IO 스레드 실행, 인증 실패(401/403)/미존재(404)/네트워크 실패 구분,
   토큰을 로그·ToolResult에 노출하지 않음
+- GitHub Issue 생성(`create_issue`)·Pull Request 생성(`create_pull_request`) API: WRITE 위험도, 사용자 승인 필요,
+  입력 검증(제목·브랜치 이름), 422 요청 오류 구분, JSON 본문 이스케이프, `GitHubTransport`로 HTTP 계층 분리(테스트용 fake)
+- `delete*` 작업은 DESTRUCTIVE로 분류
+- `SettingsToolPermissionStore`: 작업별 승인 여부를 일반 설정에 영구 저장(앱 재시작 후에도 유지)
+- 설정 화면: GitHub Personal Access Token 저장/삭제(CredentialManager, 화면에 마스킹), 작업별 승인 스위치
+- AppGraph에서 `ToolExecutor` + `GitHubTool` 구성
 
 ## 권한 정책
 
@@ -45,11 +51,10 @@ GitHub 예시:
 
 ## 다음 증분
 
-- GitHub Issue/PR 생성 API (WRITE, 승인 필요)
-- OAuth 또는 Personal Access Token 연결 UI
+- OAuth 연결 (현재는 Personal Access Token)
 - Calendar/Gmail/Notes Adapter
-- Tool 선택과 AI 응답 연결
-- 사용자 승인 UI
+- Tool 선택과 AI 응답 연결 (대화 중 Tool 호출)
+- 대화 중 실행 직전 1회성 승인 UI (현재는 설정의 작업별 상시 승인)
 - 실행 메타데이터 로깅
 
 ## 완료 조건

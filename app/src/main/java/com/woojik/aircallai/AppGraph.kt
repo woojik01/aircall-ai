@@ -15,6 +15,10 @@ import com.woojik.aircallai.session.SessionController
 import com.woojik.aircallai.session.SessionRepository
 import com.woojik.aircallai.settings.SettingsRepository
 import com.woojik.aircallai.settings.SharedPrefsStore
+import com.woojik.aircallai.tools.GitHubApiClient
+import com.woojik.aircallai.tools.GitHubTool
+import com.woojik.aircallai.tools.SettingsToolPermissionStore
+import com.woojik.aircallai.tools.ToolExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,7 +29,8 @@ import kotlinx.coroutines.SupervisorJob
  * UI(Activity)와 Foreground Service가 동일한 인스턴스를 공유한다.
  */
 class AppGraph(context: Context) {
-    val settings = SettingsRepository(SharedPrefsStore(context))
+    private val settingsStore = SharedPrefsStore(context)
+    val settings = SettingsRepository(settingsStore)
     val credentials = FileCredentialManager(AppStorage.credentialsDir(context), AndroidKeystoreCrypto())
 
     val localProvider: AIProvider = LocalAIProvider(NoopLocalModelAdapter())
@@ -52,4 +57,8 @@ class AppGraph(context: Context) {
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
     val sessionRepository = SessionRepository(engine, sessionController)
+
+    /** PRD-06: Tool 실행 계층. WRITE 작업은 설정 화면에서 승인한 경우에만 실행된다. */
+    val toolPermissions = SettingsToolPermissionStore(settingsStore)
+    val toolExecutor = ToolExecutor(listOf(GitHubTool(GitHubApiClient(credentials))), toolPermissions)
 }

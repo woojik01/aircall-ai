@@ -19,6 +19,8 @@ import com.woojik.aircallai.AppGraph
 import com.woojik.aircallai.ai.cloud.CloudAIProvider
 import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
+import com.woojik.aircallai.tools.GitHubApiClient
+import com.woojik.aircallai.tools.GitHubTool
 
 /**
  * Single-Activity app. Navigation: main -> conversation -> settings (PRD-01).
@@ -117,6 +119,17 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                 },
                 onDeleteApiKey = {
                     graph.credentials.delete(CloudAIProvider.KEY_SERVICE)
+                },
+                onSaveGitHubToken = { token ->
+                    graph.credentials.save(GitHubApiClient.CREDENTIAL_SERVICE, token.trim().toByteArray())
+                },
+                onDeleteGitHubToken = {
+                    graph.credentials.delete(GitHubApiClient.CREDENTIAL_SERVICE)
+                },
+                toolApprovals = GitHubTool.APPROVABLE_ACTIONS,
+                isToolApproved = { action -> graph.toolPermissions.isApproved("github", action) },
+                onToolApprovalChanged = { action, allowed ->
+                    graph.toolPermissions.setAllowed("github", action, allowed)
                 },
             )
         }
