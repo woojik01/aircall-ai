@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     settings: SettingsRepository,
+    onModeChanged: () -> Unit = {},
     onSaveApiKey: suspend (String) -> Unit,
     onDeleteApiKey: suspend () -> Unit,
 ) {
@@ -44,6 +45,8 @@ fun SettingsScreen(
                     onClick = {
                         settings.setAiProviderMode(SettingsRepository.MODE_LOCAL)
                         mode = SettingsRepository.MODE_LOCAL
+                        // PRD-05 hotfix: 모드 변경 즉시 라우터가 다시 적용되도록 알린다.
+                        onModeChanged()
                     },
                 )
                 Text("Local")
@@ -54,6 +57,7 @@ fun SettingsScreen(
                     onClick = {
                         settings.setAiProviderMode(SettingsRepository.MODE_CLOUD)
                         mode = SettingsRepository.MODE_CLOUD
+                        onModeChanged()
                     },
                 )
                 Text("Cloud")
@@ -111,7 +115,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(top = 8.dp),
                 label = { Text("API 주소") },
-                placeholder = { Text("https://api.openai.com/v1/chat/completions") },
+                placeholder = { Text("https://api.groq.com/openai/v1/chat/completions") },
                 singleLine = true,
             )
             OutlinedTextField(
@@ -121,7 +125,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(top = 8.dp),
                 label = { Text("모델명") },
-                placeholder = { Text("gpt-4o-mini") },
+                placeholder = { Text(SettingsRepository.DEFAULT_CLOUD_MODEL) },
                 singleLine = true,
             )
             Button(

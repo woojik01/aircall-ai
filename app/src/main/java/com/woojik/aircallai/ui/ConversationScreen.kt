@@ -10,13 +10,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.conversation.ConversationState
+import com.woojik.aircallai.session.SessionStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationScreen(vm: MainViewModel) {
     val state by vm.state.collectAsState()
     val transcript by vm.transcript.collectAsState()
+    val sessionStatus by vm.sessionStatus.collectAsState()
+    val muted by vm.sessionMuted.collectAsState()
     var input by remember { mutableStateOf("") }
+    val sessionActive = sessionStatus == SessionStatus.Running || sessionStatus == SessionStatus.Paused
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("대화") }) },
@@ -52,17 +56,44 @@ fun ConversationScreen(vm: MainViewModel) {
                     )
                 }
             }
+
+            // PRD-05: 세션 제어 (알림의 일시정지/음소거/종료와 동일한 동작).
+            if (sessionActive) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (sessionStatus == SessionStatus.Paused) {
+                        Button(onClick = { vm.resumeSession() }) { Text("재개") }
+                    } else {
+                        OutlinedButton(onClick = { vm.pauseSession() }) { Text("일시정지") }
+                    }
+                    OutlinedButton(onClick = { vm.toggleMute() }) {
+                        Text(if (muted) "음소거 해제" else "음소거")
+                    }
+                    OutlinedButton(onClick = { vm.endSession() }) { Text("세션 종료") }
+                }
+                Text(
+                    text = "백그라운드 대화 진행 중 — 다른 앱 사용 중이나 화면이 꺼져도 대화가 유지됩니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // PRD-03: 음성 입력 시작 버튼 (권한은 필요한 시점에 요청)
+                // PRD-05: 말하기 = 백그라운드 음성 세션 시작 (권한은 필요한 시점에 요청)
                 Button(
                     onClick = { vm.onMicTap() },
-                    enabled = state is ConversationState.Idle || state is ConversationState.Error,
-                ) { Text("🎤 말하기") }
+                    enabled = !sessionActive &&
+                        (state is ConversationState.Idle || state is ConversationState.Error),
+                ) { Text(if (sessionStatus == SessionStatus.Ended) "🎤 다시 시작" else "🎤 말하기") }
                 if (state is ConversationState.Speaking) {
                     // PRD-03: TTS 재생 중 중지 가능
                     Button(

@@ -9,23 +9,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-/**
- * PRD-01/03/04:
- * 대화 상태는 Activity/Composable 밖에 살아있고 (회전/프로세스 재생성 대응),
- * Provider는 턴 시작 시점에 캡처해 진행 중 응답의 Provider를 중간에 바꾸지 않는다 (PRD-04).
- */
 class ConversationEngine(
     private var provider: AIProvider,
 ) {
     private val _state = MutableStateFlow<ConversationState>(ConversationState.Idle)
     val state: StateFlow<ConversationState> = _state.asStateFlow()
-
     private val _transcript = MutableStateFlow<List<ChatMessage>>(emptyList())
     val transcript: StateFlow<List<ChatMessage>> = _transcript.asStateFlow()
-
     val activeProvider: AIProvider get() = provider
 
-    /** PRD-04: 사용자가 모드를 바꾸면 다음 대화부터 적용된다. */
     fun updateProvider(next: AIProvider) {
         if (_state.value is ConversationState.Processing) return
         provider = next
@@ -39,7 +31,6 @@ class ConversationEngine(
         _state.update { if (it is ConversationState.Listening) ConversationState.Idle else it }
     }
 
-    /** PRD-03: STT/TTS 오류를 네트워크/음성 인식 오류로 구분해 표시한다. */
     fun reportAudioError(error: AudioError) {
         _state.value = ConversationState.Error(
             kind = when (error) {
@@ -56,26 +47,49 @@ class ConversationEngine(
         _state.update { if (it is ConversationState.Error) ConversationState.Idle else it }
     }
 
-    suspend fun submitUserMessage(text: String) {
+    suspend fun submitUserMessage(text: String, voiceMode: Boolean = false) {
         if (text.isBlank()) return
         val active = provider
         val userMessage = ChatMessage(ChatMessage.Role.USER, text)
         _transcript.update { it + userMessage }
         _state.value = ConversationState.Processing(userMessage)
+
         try {
-            val response = active.respond(_transcript.value)
-            _transcript.update { it + response.message }
-            _state.value = ConversationState.Speaking(response.message)
+            val requestHistory = if (voiceMode) {
+                listOf(ChatMessage(ChatMessage.Role.SYSTEM, VOICE_SYSTEM_PROMPT)) + _transcript.value
+            } else {
+                _transcript.value
+            }
+            val response = active.respond(requestHistory)
+            val responseText = if (voiceMode) {
+                VoiceResponseSanitizer.sanitize(response.message.content)
+            } else {
+                response.message.content
+            }
+            val assistantMessage = response.message.copy(content = responseText)
+            _transcript.update { it + assistantMessage }
+            _state.value = ConversationState.Speaking(assistantMessage)
         } catch (e: AIProviderException) {
-            _state.value = ConversationState.Error(ConversationState.ErrorKind.AI_PROVIDER, e.kind.userMessage)
+            _state.value = ConversationState.Error(
+                ConversationState.ErrorKind.AI_PROVIDER,
+                e.message ?: e.kind.userMessage,
+            )
         } catch (t: Throwable) {
-            _state.value = ConversationState.Error(ConversationState.ErrorKind.AI_PROVIDER, t.message ?: "AI 응답 생성 실패")
+            _state.value = ConversationState.Error(
+                ConversationState.ErrorKind.AI_PROVIDER,
+                t.message ?: "AI 응답 생성 실패",
+            )
         }
     }
 
-    /** PRD-03: TTS 시작 직전 호출 — VoiceSession이 재생 완료를 알린다. */
     fun markSpeaking() {
-        _state.update { if (it is ConversationState.Processing || it is ConversationState.Idle) ConversationState.Speaking(latestAssistantMessage() ?: ChatMessage(ChatMessage.Role.ASSISTANT, "")) else it }
+        _state.update {
+            if (it is ConversationState.Processing || it is ConversationState.Idle) {
+                ConversationState.Speaking(
+                    latestAssistantMessage() ?: ChatMessage(ChatMessage.Role.ASSISTANT, ""),
+                )
+            } else it
+        }
     }
 
     fun markIdle() {
@@ -88,5 +102,18 @@ class ConversationEngine(
     fun reset() {
         _transcript.value = emptyList()
         _state.value = ConversationState.Idle
+    }
+
+    companion object {
+        private const val VOICE_SYSTEM_PROMPT = """
+너는 자연스러운 음성 대화를 하는 AI다.
+실제 사람과 대화하듯 짧고 자연스럽게 답한다.
+대부분 한두 문장으로 답하고 꼭 필요한 경우에만 더 길게 설명한다.
+사용자의 말을 불필요하게 반복하지 않는다.
+문어체보다 자연스러운 구어체를 사용한다.
+목록 제목 마크다운 코드 인용문 표를 사용하지 않는다.
+이모지와 특수 기호를 사용하지 않는다.
+대화 상대가 바로 들을 내용만 답한다.
+"""
     }
 }

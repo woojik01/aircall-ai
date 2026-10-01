@@ -1,48 +1,67 @@
 package com.woojik.aircallai.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.woojik.aircallai.AirCallApp
 import com.woojik.aircallai.AppGraph
 import com.woojik.aircallai.ai.cloud.CloudAIProvider
-import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.core.logging.SecureLog
+import com.woojik.aircallai.service.ConversationService
 
 /**
  * Single-Activity app. Navigation: main -> conversation -> settings (PRD-01).
  * PRD-03: 마이크 권한은 필요한 시점에 최소 범위로 요청한다.
  * PRD-04: ProviderRouter가 설정에 따라 Local/Cloud를 고른다.
+ * PRD-05: 대화 세션은 Foreground Service가 소유하고 Activity는 상태 통로로만 접근한다.
  */
 class MainActivity : ComponentActivity() {
 
+    private val requestMicPermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+            if (grants[Manifest.permission.RECORD_AUDIO] == true) {
+                startConversationService()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val graph = AppGraph(application)
+        val graph = (application as AirCallApp).graph
 
-        val engine = ConversationEngine(graph.providerRouter.current())
-        val session = com.woojik.aircallai.conversation.VoiceSession(
-            recognizer = com.woojik.aircallai.audio.AndroidSpeechRecognizerEngine(application),
-            synthesizer = com.woojik.aircallai.audio.AndroidSpeechSynthesizerEngine(application),
-            engine = engine,
-        )
         val vm = MainViewModel(
             app = application,
-            engine = engine,
-            voiceSession = session,
+            repository = graph.sessionRepository,
             isMicPermissionGranted = { hasMicPermission() },
             requestMicPermission = { requestMicPermission() },
+            startSession = { startConversationService() },
+            stopSession = { sendServiceAction(ConversationService.ACTION_END) },
         )
-        setContent {
-            AirCallApp(vm, graph)
+        setContent {                      
+            AirCallUi(vm, graph)
+        }
+    }
+
+    private fun startConversationService() {
+        sendServiceAction(ConversationService.ACTION_START, foreground = true)
+    }
+
+    private fun sendServiceAction(action: String, foreground: Boolean = false) {
+        val intent = Intent(this, ConversationService::class.java).setAction(action)
+        if (foreground) {
+            ContextCompat.startForegroundService(this, intent)
+        } else {
+            startService(intent)
         }
     }
 
@@ -50,11 +69,13 @@ class MainActivity : ComponentActivity() {
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
-    private val requestPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-
+    /** PRD-05: 마이크 + (Android 13+) 알림 권한을 세션 시작 시점에 함께 요청한다. */
     private fun requestMicPermission() {
-        requestPermission.launch(Manifest.permission.RECORD_AUDIO)
+        val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        requestMicPermissions.launch(permissions.toTypedArray())
     }
 
     override fun onStart() {
@@ -71,7 +92,7 @@ private object Routes {
 }
 
 @Composable
-private fun AirCallApp(vm: MainViewModel, graph: AppGraph) {
+private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = Routes.MAIN) {
         composable(Routes.MAIN) {
@@ -83,13 +104,15 @@ private fun AirCallApp(vm: MainViewModel, graph: AppGraph) {
         composable(Routes.CONVERSATION) {
             ConversationScreen(vm)
         }
-        composable(Routes.SETTINGS) {
-            // PRD-04: 모드 변경 시 다음 대화부터 ProviderRouter가 반영한다.
+        composable(Routes.SETTINGS) {                                                      
+            // PRD-04/05: 모드 변경 시에도 다음 턴부터 갱신된 provider가 적용된다.
             SettingsScreen(
                 settings = graph.settings,
+                onModeChanged = {
+                    vm.engine.updateProvider(graph.providerRouter.current())
+                },
                 onSaveApiKey = { key ->
                     graph.credentials.save(CloudAIProvider.KEY_SERVICE, key.toByteArray())
-                    // 저장 후 다음 턴부터 갱신된 provider가 사용되도록 라우터 재적용
                     vm.engine.updateProvider(graph.providerRouter.current())
                 },
                 onDeleteApiKey = {

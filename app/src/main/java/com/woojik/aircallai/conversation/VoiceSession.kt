@@ -8,13 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * PRD-03 음성 대화 루프:
- * Microphone -> Audio Capture -> STT -> ConversationEngine -> AI -> TTS -> Speaker
- *
- * 각 단계 latency를 timestamp로 기록한다 (PRD-03 지연시간 측정).
- * 개인정보/음성 원문은 로그에 남기지 않는다.
- */
 class VoiceSession(
     private val recognizer: SpeechRecognizerInterface,
     private val synthesizer: SpeechSynthesizer,
@@ -30,7 +23,6 @@ class VoiceSession(
     private val _metrics = MutableStateFlow<List<TurnMetrics>>(emptyList())
     val metrics: StateFlow<List<TurnMetrics>> = _metrics.asStateFlow()
 
-    /** STT 1회 -> AI 응답 -> TTS 재생까지의 한 턴을 수행한다. */
     suspend fun runOneTurn() {
         engine.startListening()
         val text = try {
@@ -41,11 +33,12 @@ class VoiceSession(
         } finally {
             engine.stopListening()
         }
-        if (text == null) return
+        if (text.isNullOrBlank()) return
 
         val recognitionEnd = System.currentTimeMillis()
-        engine.submitUserMessage(text)
+        engine.submitUserMessage(text, voiceMode = true)
         val response = engine.latestAssistantMessage() ?: return
+        val aiResponseEnd = System.currentTimeMillis()
 
         val ttsStart = System.currentTimeMillis()
         engine.markSpeaking()
@@ -56,11 +49,16 @@ class VoiceSession(
         }
         val ttsEnd = System.currentTimeMillis()
         engine.markIdle()
-        _metrics.value = _metrics.value + TurnMetrics(recognitionEnd, recognitionEnd, ttsStart, ttsEnd)
-        SecureLog.d(TAG, "turn complete, ttsMs=" + (ttsEnd - ttsStart))
+
+        _metrics.value = _metrics.value + TurnMetrics(
+            recognitionEnd,
+            aiResponseEnd,
+            ttsStart,
+            ttsEnd,
+        )
+        SecureLog.d(TAG, "turn complete, aiMs=" + (aiResponseEnd - recognitionEnd) + ", ttsMs=" + (ttsEnd - ttsStart))
     }
 
-    /** PRD-03: TTS 재생을 즉시 중단한다 (재생 중 중지 가능). */
     fun stopSpeaking() {
         synthesizer.stop()
         engine.markIdle()
