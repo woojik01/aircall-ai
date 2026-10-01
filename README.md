@@ -8,14 +8,16 @@
   PRD-07 통화형 UI(통화 화면·상태 표시·오버레이 컨트롤)
 - **진행 중**: PRD-06 Tool 연동 — Tool 실행/권한 계층, GitHub 저장소 조회 Adapter 완료.
   인증 UI, Issue/PR 생성, Calendar/Gmail/Notes, 승인 UI는 다음 증분
+- **로컬 기능 증분**: 로컬 모델 갤러리(다운로드/적용) + MediaPipe LLM Inference 어댑터.
+  모델 카탈로그: Gemma 3n E2B/E4B (.task). MLC(NPU) 어댑터는 후속 증분
 - **예정**: PRD-08 안정화/릴리스
-- 기기 테스트(화면 회전/복귀, 다른 앱 전환/화면 OFF/알림·오버레이 제어/배터리)는 아직 미확인
+- 기기 테스트(화면 회전/복귀, 다른 앱 전환/화면 OFF/알림·오버레이 제어/배터리, 로컬 모델 실추론)는 아직 미확인
 
 ## 구조
 ```
 app/src/main/java/com/woojik/aircallai/
   core/          logging, security(Keystore), storage(CredentialManager)
-  ai/            provider(AIProvider, ProviderRouter), local, cloud
+  ai/            provider(AIProvider, ProviderRouter), local(모델 갤러리·MediaPipe 어댑터), cloud
   cloud/         GroqChatAdapter.kt (HttpCloudApiAdapter)
   audio/         STT/TTS 엔진 (AndroidSpeechRecognizerEngine, AndroidTtsEngine)
   call/          CallStatus/CallControls — 통화 화면 상태 도출(순수 로직)
@@ -24,9 +26,14 @@ app/src/main/java/com/woojik/aircallai/
   service/       ConversationService (Foreground Service)
   overlay/       CallOverlayController — PRD-07 플로팅 컨트롤(권한 거부 시 알림으로 대체)
   tools/         Tool, ToolExecutor, ToolPermissionStore, GitHubTool, GitHubApiClient
-  settings/      SettingsRepository
-  ui/            MainActivity, Main/Call/Conversation/Settings Screen
+  settings/      SettingsRepository (로컬 모델 선택 포함)
+  ui/            MainActivity, Main/Call/Conversation/Settings/LocalModel Screen
 ```
+
+## 로컬 모델 사용법
+1. 설정 → Local 모델 관리 → 모델 선택 → 다운로드 (Wi-Fi 권장, 2~4GB)
+2. 다운로드 완료 후 "적용" → AI Mode를 Local로 선택
+3. 통화 화면에서 통화 시작 (인터넷 없이 기기에서만 추론)
 
 ## 빌드
 ```bash
