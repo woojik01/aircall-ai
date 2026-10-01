@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
  * Cloud API 주소/모델명은 일반 설정에 저장되며 실제 호출은 앱이 직접 수행한다.
  * 로컬 기능 증분: Local 모델 관리(갤러리) 화면으로 이동한다.
  * PRD-08: 개인정보(데이터 흐름) 화면으로 이동한다.
+ * PRD-06: GitHub 토큰(PAT)을 CredentialManager에 저장/삭제한다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,9 +28,12 @@ fun SettingsScreen(
     onDeleteApiKey: suspend () -> Unit,
     onOpenLocalModels: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
+    onSaveGitHubToken: suspend (String) -> Unit = {},
+    onDeleteGitHubToken: suspend () -> Unit = {},
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
     var apiKeyInput by remember { mutableStateOf("") }
+    var gitHubTokenInput by remember { mutableStateOf("") }
     var baseUrlInput by remember { mutableStateOf(settings.cloudBaseUrl()) }
     var modelInput by remember { mutableStateOf(settings.cloudModel()) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -157,6 +161,53 @@ fun SettingsScreen(
                 modifier = Modifier.padding(top = 8.dp),
                 enabled = baseUrlInput.isNotBlank() && modelInput.isNotBlank(),
             ) { Text("연결 저장") }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // PRD-06: GitHub 토큰(PAT) 연결. 저장소 조회(READ)와 승인된 생성 작업(WRITE)에 사용된다.
+            Text("GitHub 연동", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Tool 연동에 사용할 GitHub 토큰(PAT)을 등록합니다. 조회는 기본 허용, " +
+                    "Issue/PR 생성은 사용 시 승인이 필요합니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedTextField(
+                value = gitHubTokenInput,
+                onValueChange = { gitHubTokenInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text("GitHub 토큰 (PAT)") },
+                placeholder = { Text("ghp_... / github_pat_...") },
+                singleLine = true,
+            )
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            onSaveGitHubToken(gitHubTokenInput)
+                            gitHubTokenInput = ""
+                            status = "GitHub 토큰이 안전하게 저장되었습니다 (기기 암호화)."
+                        }
+                    },
+                    enabled = gitHubTokenInput.isNotBlank(),
+                ) { Text("저장") }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            onDeleteGitHubToken()
+                            status = "GitHub 토큰이 삭제되었습니다."
+                        }
+                    },
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { Text("삭제") }
+            }
+            Text(
+                "토큰은 기기의 Android Keystore로 암호화되어 저장되며 로그에 노출되지 않습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 16.dp),
+            )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
