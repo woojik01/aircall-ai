@@ -10,7 +10,6 @@ import com.woojik.aircallai.tools.ToolRisk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -88,9 +87,11 @@ class GitHubWriteToolTest {
 
     @Test
     fun jsonStringEscapesSpecialCharacters() {
-        assertEquals(
-            "\"a\\b\"c\\nd\"",
-            GitHubApiClient.json("a\\b\"c\\nd"),
-        )
+        // 인용부호 이스케이프 리터럴 혼동을 피하기 위해 기대값을 문자 배열로 구성한다.
+        val input = "a" + '\\' + 'b' + '"' + 'c' + '\n' + 'd'
+        val expected = charArrayOf(
+            '"', 'a', '\\', '\\', 'b', '\\', '"', 'c', '\\', 'n', 'd', '"',
+        ).concatToString()
+        assertEquals(expected, GitHubApiClient.json(input))
     }
 }
