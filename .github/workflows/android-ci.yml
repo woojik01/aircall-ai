@@ -12,6 +12,7 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 17
@@ -24,18 +25,21 @@ jobs:
         with:
           gradle-version: '8.7'
       - name: Unit tests
+        timeout-minutes: 10
         run: |
           set +e
-          gradle testDebugUnitTest --stacktrace > /tmp/tests.log 2>&1
+          timeout --signal=TERM --kill-after=30s 8m gradle --no-daemon --console=plain testDebugUnitTest --stacktrace > /tmp/tests.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
             {
-              echo '### ❌ testDebugUnitTest 실패'
+              echo '### ❌ testDebugUnitTest 실패 또는 시간 초과'
               echo '~~~'
-              grep -nE '^e:|error:|warning:|FAILED|Caused by' /tmp/tests.log | head -n 80
+              tail -n 200 /tmp/tests.log
               echo '~~~'
             } > /tmp/comment.md
-            gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md || true
+            if [ -n "$NUMBER" ]; then
+              gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md || true
+            fi
           fi
           exit $code
         env:
@@ -43,7 +47,8 @@ jobs:
           NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
       - name: Build debug APK
-        run: gradle assembleDebug
+        timeout-minutes: 5
+        run: gradle --no-daemon --console=plain assembleDebug
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
