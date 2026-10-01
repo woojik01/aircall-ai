@@ -11,7 +11,7 @@ object VoiceResponseSanitizer {
             .replace(Regex("https?://\\S+"), " ")
             .replace(Regex("[;:][\\-o^]?[)(DPpOoSs3*]"), " ")
             .replace(Regex("[*_~#>\\[\\]{}|+^@$/<>=]"), " ")
-            .replace(Regex("[^\\p{L}\\p{M}\\p{N}\\s.,!?…:;'()\\"-]"), " ")
+            .replace(Regex("[^\\p{L}\\p{M}\\p{N}\\s.,!?…:;'()\"\\-]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
         val hasContent = cleaned.any { it.isLetterOrDigit() }
