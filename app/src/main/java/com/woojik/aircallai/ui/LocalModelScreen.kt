@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 /**
  * 로컬 모델 갤러리 (Edge AI Gallery 방식).
  * 사용자가 모델을 선택해 다운로드하고 적용한다. 다운로드는 Wi-Fi 환경에서 수행을 권장.
+ * 다운로드 상태는 모델별(id)로 관리되므로 한 모델의 진행률이 다른 카드에 표시되지 않는다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +51,7 @@ fun LocalModelScreen(
     downloadManager: ModelDownloadManager,
     scope: CoroutineScope,
 ) {
-    val downloadState by downloadManager.state.collectAsState()
+    val states by downloadManager.states.collectAsState()
     var selectedId by remember { mutableStateOf(settings.localModelId()) }
 
     Scaffold(
@@ -75,7 +76,8 @@ fun LocalModelScreen(
                     model = model,
                     downloaded = downloadManager.isDownloaded(model),
                     selected = selectedId == model.id,
-                    downloadState = downloadState,
+                    // 모델별 상태만 이 카드에 전달한다.
+                    downloadState = states[model.id] ?: ModelDownloadState.Idle,
                     onDownload = {
                         scope.launch { downloadManager.download(model) }
                     },
@@ -141,8 +143,7 @@ private fun ModelCard(
 
             when (downloadState) {
                 is ModelDownloadState.Downloading -> {
-                    val progress = downloadState as ModelDownloadState.Downloading
-                    val percent = downloadPercent(progress.downloadedBytes, progress.totalBytes)
+                    val percent = downloadPercent(downloadState.downloadedBytes, downloadState.totalBytes)
                     LinearProgressIndicator(
                         progress = percent / 100f,
                         modifier = Modifier
@@ -157,7 +158,7 @@ private fun ModelCard(
                 }
                 is ModelDownloadState.Failed -> {
                     Text(
-                        (downloadState as ModelDownloadState.Failed).message,
+                        downloadState.message,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 8.dp),
@@ -171,7 +172,10 @@ private fun ModelCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (!downloaded) {
-                    Button(onClick = onDownload, enabled = downloadState !is ModelDownloadState.Downloading) {
+                    Button(
+                        onClick = onDownload,
+                        enabled = downloadState !is ModelDownloadState.Downloading,
+                    ) {
                         Text("다운로드")
                     }
                 } else {
