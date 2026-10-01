@@ -50,6 +50,7 @@ class MediaPipeModelAdapter(
 
     override suspend fun generate(history: List<ChatMessage>): String {
         val model = selectedModel()
+
             ?: throw AIProviderException(ProviderErrorKind.MODEL_NOT_INSTALLED)
         val path = File(modelsDir(), model.fileName)
         if (!path.exists()) {
@@ -59,7 +60,7 @@ class MediaPipeModelAdapter(
             try {
                 val engine = obtainInference(path.absolutePath)
                 val prompt = buildLocalPrompt(history)
-                engine.generate(prompt).ifEmpty {
+                engine.generateResponse(prompt).ifEmpty {
                     throw AIProviderException(ProviderErrorKind.LOAD_FAILED)
                 }
             } catch (e: AIProviderException) {
