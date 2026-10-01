@@ -51,7 +51,7 @@ class CloudEndpointSettingsTest {
     fun cloudEndpointSettingsPersist() {
         val settings = SettingsRepository(InMemorySettingsStore())
         assertEquals("", settings.cloudBaseUrl())
-        assertEquals("", settings.cloudModel())
+        assertEquals(SettingsRepository.DEFAULT_CLOUD_MODEL, settings.cloudModel())
 
         settings.setCloudBaseUrl("  https://api.example.com/v1/chat/completions  ")
         settings.setCloudModel("  gpt-4o-mini  ")
@@ -65,6 +65,17 @@ class CloudEndpointSettingsTest {
         })
         assertEquals("https://api.example.com/v1/chat/completions", reloaded.cloudBaseUrl())
         assertEquals("gpt-4o-mini", reloaded.cloudModel())
+    }
+
+    @Test
+    fun deprecatedLlamaModelIsMigrated() {
+        val store = InMemorySettingsStore().apply {
+            putString("cloud_model", "llama-3.3-70b-versatile")
+        }
+        val settings = SettingsRepository(store)
+
+        assertEquals(SettingsRepository.DEFAULT_CLOUD_MODEL, settings.cloudModel())
+        assertEquals(SettingsRepository.DEFAULT_CLOUD_MODEL, store.getString("cloud_model"))
     }
 
     @Test
