@@ -19,6 +19,7 @@ import com.woojik.aircallai.audio.AndroidSpeechSynthesizerEngine
 import com.woojik.aircallai.conversation.ConversationState
 import com.woojik.aircallai.conversation.VoiceSession
 import com.woojik.aircallai.core.logging.SecureLog
+import com.woojik.aircallai.overlay.CallOverlayController
 import com.woojik.aircallai.session.MutedSynthesizer
 import com.woojik.aircallai.session.SessionAudioHooks
 import com.woojik.aircallai.session.SessionRepository
@@ -37,6 +38,7 @@ import kotlinx.coroutines.launch
  * - 지속 알림: 대화 상태 / 음소거 / 일시정지-재개 / 종료
  * - 화면이 꺼지거나 다른 앱을 사용해도 세션이 유지된다.
  * - UI는 Service 내부 로직에 직접 의존하지 않고 SessionRepository를 통해 통신한다.
+ * - PRD-07: 오버레이 권한이 있는 경우 작은 플로팅 컨트롤도 함께 제공한다.
  */
 class ConversationService : Service() {
 
@@ -47,6 +49,20 @@ class ConversationService : Service() {
 
     private lateinit var ttsEngine: AndroidSpeechSynthesizerEngine
     private lateinit var session: VoiceSession
+
+    /** PRD-07 플로팅 컨트롤: 권한이 없으면 알림만으로 정상 동작한다. */
+    private val overlay: CallOverlayController by lazy {
+        CallOverlayController(
+            this,
+            CallOverlayController.OverlayActions(
+                mute = ACTION_MUTE,
+                unmute = ACTION_UNMUTE,
+                pause = ACTION_PAUSE,
+                resume = ACTION_RESUME,
+                end = ACTION_END,
+            ),
+        ) { action -> sendAction(action) }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -61,10 +77,27 @@ class ConversationService : Service() {
         repository.audioHooks = object : SessionAudioHooks {
             override fun stopSpeaking() = session.stopSpeaking()
         }
-        // 상태 변화를 지속 알림에 반영한다.
+        // 상태 변화를 지속 알림과 오버레이에 반영한다.
         serviceScope.launch { repository.status.collect { updateNotification() } }
         serviceScope.launch { repository.engine.state.collect { updateNotification() } }
         serviceScope.launch { repository.muted.collect { updateNotification() } }
+        serviceScope.launch {
+            repository.status.collect { status ->
+                overlay.sync(status == SessionStatus.Running || status == SessionStatus.Paused)
+                overlay.refresh(
+                    paused = status == SessionStatus.Paused,
+                    muted = repository.muted.value,
+                )
+            }
+        }
+        serviceScope.launch {
+            repository.muted.collect { muted ->
+                overlay.refresh(
+                    paused = repository.status.value == SessionStatus.Paused,
+                    muted = muted,
+                )
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -106,7 +139,13 @@ class ConversationService : Service() {
     private fun endSession() {
         session.stopSpeaking()
         repository.controller.end()
+        overlay.hide()
         stopSelf()
+    }
+
+    /** PRD-07: 오버레이 버튼 -> Service 액션 전달. */
+    private fun sendAction(action: String) {
+        startService(Intent(this, ConversationService::class.java).setAction(action))
     }
 
     private fun startInForeground() {
@@ -193,6 +232,7 @@ class ConversationService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        overlay.hide()
         repository.audioHooks = null
         repository.controller.end()
         ttsEngine.shutdown()

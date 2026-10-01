@@ -11,7 +11,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -26,6 +28,8 @@ class MainViewModel(
     private val requestMicPermission: () -> Unit,
     private val startSession: () -> Unit,
     private val stopSession: () -> Unit,
+    /** PRD-07: 현재 Provider가 통화를 시작할 수 있는지 (Cloud 키 등록 여부 / 로컬 모델 준비 여부). */
+    private val isProviderReady: suspend () -> Boolean = { true },
 ) : AndroidViewModel(app) {
 
     val state: StateFlow<ConversationState> = repository.engine.state
@@ -37,6 +41,19 @@ class MainViewModel(
     val engine: ConversationEngine get() = repository.engine
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    /** PRD-07: Provider 준비 여부 — 준비되지 않으면 통화 화면이 오프라인 상태를 표시한다. */
+    private val _providerReady = MutableStateFlow(true)
+    val providerReady: StateFlow<Boolean> = _providerReady.asStateFlow()
+
+    init {
+        refreshProviderReadiness()
+    }
+
+    /** 설정에서 모드/API 키가 바뀌면 다시 계산한다. */
+    fun refreshProviderReadiness() {
+        scope.launch { _providerReady.value = isProviderReady() }
+    }
 
     /** PRD-05: 음성 대화 시작 = Foreground Service 세션 시작. 권한은 최소 범위 요청. */
     fun onMicTap() {
