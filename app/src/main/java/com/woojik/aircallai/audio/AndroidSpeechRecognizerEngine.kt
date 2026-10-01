@@ -7,33 +7,42 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import com.woojik.aircallai.core.logging.SecureLog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
 /**
- * Android SpeechRecognizer 기반 STT. 기기 내 온라인 엔진을 사용하므로
- * 네트워크 오류와 인식 오류를 구분해 AudioError로 전달한다 (PRD-03).
+ * Android SpeechRecognizer 기반 STT.
+ *
+ * SpeechRecognizer의 생성/리스닝 제어는 메인 스레드에서 수행한다.
+ * 오류는 continuation을 취소시키지 않고 정상적인 예외 결과로 전달해
+ * SessionController 전체가 취소되는 것을 방지한다.
  */
 class AndroidSpeechRecognizerEngine(
     private val context: Context,
 ) : SpeechRecognizerInterface {
 
-    override suspend fun recognizeOnce(): String? {
+    override suspend fun recognizeOnce(): String? = withContext(Dispatchers.Main.immediate) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             throw AudioError.SpeechRecognition(IllegalStateException("recognition unavailable"))
         }
-        return suspendCancellableCoroutine { cont ->
+
+        suspendCancellableCoroutine { cont ->
             val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
             var done = false
+
             fun finishOnce(value: String?, error: Throwable?) {
                 if (done) return
                 done = true
                 recognizer.destroy()
                 if (error != null) {
-                    cont.cancel(error)
+                    cont.resumeWith(Result.failure(error))
                 } else {
                     cont.resume(value, null)
                 }
             }
+
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle) {
                     val text = results
@@ -41,15 +50,19 @@ class AndroidSpeechRecognizerEngine(
                         ?.firstOrNull { it.isNotBlank() }
                     finishOnce(text, null)
                 }
+
                 override fun onError(error: Int) = finishOnce(
                     null,
                     when (error) {
                         SpeechRecognizer.ERROR_NETWORK,
                         SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> AudioError.Network()
                         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> AudioError.Permission()
-                        else -> AudioError.SpeechRecognition(IllegalStateException("STT error " + error))
+                        else -> AudioError.SpeechRecognition(
+                            IllegalStateException("STT error $error"),
+                        )
                     },
                 )
+
                 override fun onBeginningOfSpeech() {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
@@ -58,14 +71,21 @@ class AndroidSpeechRecognizerEngine(
                 override fun onReadyForSpeech(params: Bundle?) {}
                 override fun onRmsChanged(rmsdB: Float) {}
             })
+
             recognizer.startListening(
                 Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                }
+                    putExtra(
+                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                    )
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                },
             )
             SecureLog.d(TAG, "STT listening started")
-            cont.invokeOnCancellation { recognizer.destroy() }
+
+            cont.invokeOnCancellation {
+                recognizer.destroy()
+            }
         }
     }
 
