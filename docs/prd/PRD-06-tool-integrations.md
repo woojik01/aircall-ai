@@ -25,6 +25,9 @@ ToolRequest
 - 알 수 없는 Tool의 안전한 실패
 - 예외 발생 시 민감정보를 포함하지 않는 일반 오류 반환
 - 단위 테스트
+- GitHub API Adapter(`GitHubApiClient`): CredentialManager의 `github` 자격증명 사용, 저장소 조회(READ),
+  저장소 이름 검증, 네트워크 timeout, IO 스레드 실행, 인증 실패(401/403)/미존재(404)/네트워크 실패 구분,
+  토큰을 로그·ToolResult에 노출하지 않음
 
 ## 권한 정책
 
@@ -42,7 +45,7 @@ GitHub 예시:
 
 ## 다음 증분
 
-- 실제 GitHub API Adapter
+- GitHub Issue/PR 생성 API (WRITE, 승인 필요)
 - OAuth 또는 Personal Access Token 연결 UI
 - Calendar/Gmail/Notes Adapter
 - Tool 선택과 AI 응답 연결

@@ -3,6 +3,8 @@ package com.woojik.aircallai.tools
 import com.woojik.aircallai.core.storage.CredentialManager
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * PRD-06: CredentialManager에 보관된 GitHub 토큰으로 REST API를 호출하는 어댑터.
@@ -22,6 +24,10 @@ open class GitHubApiClient(
     private suspend fun request(method: String, path: String): ToolResult {
         val token = credentials.load(CREDENTIAL_SERVICE)?.toString(Charsets.UTF_8)
             ?: return ToolResult(false, "GitHub 인증이 설정되지 않았습니다")
+        return withContext(Dispatchers.IO) { send(method, path, token) }
+    }
+
+    private fun send(method: String, path: String, token: String): ToolResult {
         return runCatching {
             val connection = URL("https://api.github.com$path").openConnection() as HttpURLConnection
             connection.requestMethod = method
@@ -32,8 +38,12 @@ open class GitHubApiClient(
             connection.setRequestProperty("Authorization", "Bearer $token")
             val code = connection.responseCode
             connection.disconnect()
-            if (code in 200..299) ToolResult(true, "GitHub 요청이 완료되었습니다")
-            else ToolResult(false, "GitHub 요청에 실패했습니다")
+            when (code) {
+                in 200..299 -> ToolResult(true, "GitHub 요청이 완료되었습니다")
+                401, 403 -> ToolResult(false, "GitHub 인증에 실패했습니다")
+                404 -> ToolResult(false, "GitHub 저장소를 찾을 수 없습니다")
+                else -> ToolResult(false, "GitHub 요청에 실패했습니다")
+            }
         }.getOrElse { ToolResult(false, "GitHub 연결에 실패했습니다") }
     }
 
