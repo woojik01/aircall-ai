@@ -36,6 +36,9 @@ class MainViewModel(
     /** 기존 화면 재사용 (clearError 등). 실제 소유자는 SessionRepository다. */
     val engine: ConversationEngine get() = repository.engine
 
+    /** PRD-07: 통화 상대로 표시할 AI 이름 (현재 Provider 기준). */
+    fun aiName(): String = "AirCall AI · " + repository.engine.activeProvider.displayName
+
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     /** PRD-05: 음성 대화 시작 = Foreground Service 세션 시작. 권한은 최소 범위 요청. */

@@ -22,6 +22,7 @@ import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.session.MutedSynthesizer
 import com.woojik.aircallai.session.SessionAudioHooks
 import com.woojik.aircallai.session.SessionRepository
+import com.woojik.aircallai.session.CallStatus
 import com.woojik.aircallai.session.SessionStatus
 import com.woojik.aircallai.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -160,17 +161,9 @@ class ConversationService : Service() {
             .build()
     }
 
-    /** 마이크 사용 중임을 알림 텍스트로 표시한다 (PRD-05: 명확한 마이크 사용 표시). */
-    private fun conversationLabel(status: SessionStatus): String {
-        if (status == SessionStatus.Paused) return "일시정지됨"
-        return when (repository.engine.state.value) {
-            ConversationState.Idle -> "듣고 있습니다"
-            ConversationState.Listening -> "듣고 있습니다"
-            is ConversationState.Processing -> "생각 중..."
-            is ConversationState.Speaking -> "말하는 중..."
-            is ConversationState.Error -> "오류"
-        }
-    }
+    /** 마이크 사용 중임을 알림 텍스트로 표시한다 (PRD-05). PRD-07: 통화 화면과 같은 상태 라벨을 쓴다. */
+    private fun conversationLabel(status: SessionStatus): String =
+        CallStatus.from(repository.engine.state.value, status).label
 
     private fun action(label: String, action: String): NotificationCompat.Action =
         NotificationCompat.Action.Builder(0, label, servicePendingIntent(action)).build()

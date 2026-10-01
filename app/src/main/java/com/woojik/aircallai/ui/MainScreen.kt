@@ -30,7 +30,7 @@ fun MainScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Button(onClick = onOpenConversation) { Text("대화 시작") }
+            Button(onClick = onOpenConversation) { Text("통화 화면 열기") }
             Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 16.dp)) { Text("설정") }
         }
     }
