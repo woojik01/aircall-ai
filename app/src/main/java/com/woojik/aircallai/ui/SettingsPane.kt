@@ -1,6 +1,8 @@
 package com.woojik.aircallai.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(padding)
                 .padding(16.dp),
         ) {
@@ -49,7 +52,8 @@ fun SettingsScreen(
                         mode = SettingsRepository.MODE_LOCAL
                         // PRD-05 hotfix: 모드 변경 즉시 라우터가 다시 적용되도록 알린다.
                         onModeChanged()
-                    },
+          
+          },
                 )
                 Text("Local")
             }
@@ -99,7 +103,8 @@ fun SettingsScreen(
                         scope.launch {
                             onSaveApiKey(apiKeyInput)
                             apiKeyInput = ""
-                            status = "Key가 안전하게 저장되었습니다 (기기 암호화)."
+                            status = "Key가 안
+전하게 저장되었습니다 (기기 암호화)."
                         }
                     },
                     enabled = apiKeyInput.isNotBlank(),
@@ -149,7 +154,8 @@ fun SettingsScreen(
                     settings.setCloudModel(modelInput)
                     status = "Cloud API 연결 정보가 저장되었습니다."
                 },
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier
+.padding(top = 8.dp),
                 enabled = baseUrlInput.isNotBlank() && modelInput.isNotBlank(),
             ) { Text("연결 저장") }
 
