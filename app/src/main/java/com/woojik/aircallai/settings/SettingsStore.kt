@@ -36,7 +36,21 @@ class SettingsRepository(private val store: SettingsStore) {
         store.putString(KEY_CLOUD_BASE_URL, url.trim())
     }
 
-    fun cloudModel(): String = store.getString(KEY_CLOUD_MODEL) ?: ""
+    /**
+     * Groq의 구형 Llama 3.3 모델을 이미 저장한 설치본은 자동으로 현재 권장 모델로
+     * 마이그레이션한다. 사용자가 직접 다른 모델을 저장한 경우에는 그대로 유지한다.
+     */
+    fun cloudModel(): String {
+        val stored = store.getString(KEY_CLOUD_MODEL)?.trim()
+        return when {
+            stored.isNullOrEmpty() -> DEFAULT_CLOUD_MODEL
+            stored == DEPRECATED_LLAMA_33_MODEL -> {
+                store.putString(KEY_CLOUD_MODEL, DEFAULT_CLOUD_MODEL)
+                DEFAULT_CLOUD_MODEL
+            }
+            else -> stored
+        }
+    }
 
     fun setCloudModel(model: String) {
         store.putString(KEY_CLOUD_MODEL, model.trim())
@@ -45,6 +59,10 @@ class SettingsRepository(private val store: SettingsStore) {
     companion object {
         const val MODE_LOCAL = "local"
         const val MODE_CLOUD = "cloud"
+
+        const val DEFAULT_CLOUD_MODEL = "openai/gpt-oss-120b"
+        private const val DEPRECATED_LLAMA_33_MODEL = "llama-3.3-70b-versatile"
+
         private const val KEY_AI_MODE = "ai_provider_mode"
         private const val KEY_CLOUD_BASE_URL = "cloud_base_url"
         private const val KEY_CLOUD_MODEL = "cloud_model"
