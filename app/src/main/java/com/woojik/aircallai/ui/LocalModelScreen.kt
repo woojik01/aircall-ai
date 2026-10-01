@@ -21,6 +21,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -48,9 +51,7 @@ fun LocalModelScreen(
     scope: CoroutineScope,
 ) {
     val downloadState by downloadManager.state.collectAsState()
-    var selectedId by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf(settings.localModelId())
-    }
+    var selectedId by remember { mutableStateOf(settings.localModelId()) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("로컬 모델") }) },
@@ -141,17 +142,15 @@ private fun ModelCard(
             when (downloadState) {
                 is ModelDownloadState.Downloading -> {
                     val progress = downloadState as ModelDownloadState.Downloading
+                    val percent = downloadPercent(progress.downloadedBytes, progress.totalBytes)
                     LinearProgressIndicator(
-                        progress = {
-                            downloadPercent(progress.downloadedBytes, progress.totalBytes) / 100f
-                        },
+                        progress = percent / 100f,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 12.dp),
                     )
                     Text(
-                        "다운로드 중 " +
-                            downloadPercent(progress.downloadedBytes, progress.totalBytes) + "%",
+                        "다운로드 중 " + percent + "%",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp),
                     )

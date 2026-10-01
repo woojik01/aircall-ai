@@ -33,8 +33,15 @@ jobs:
           if [ $code -ne 0 ]; then
             {
               echo '### ❌ testDebugUnitTest 실패 또는 시간 초과'
+              echo ''
+              echo '#### 컴파일/테스트 에러 라인'
               echo '~~~'
-              tail -n 200 /tmp/tests.log
+              grep -E '^e: |error: | FAILED|Unresolved|Could not (find|resolve)' /tmp/tests.log | head -n 80
+              echo '~~~'
+              echo ''
+              echo '#### 로그 마지막 120줄'
+              echo '~~~'
+              tail -n 120 /tmp/tests.log
               echo '~~~'
             } > /tmp/comment.md
             if [ -n "$NUMBER" ]; then
