@@ -18,7 +18,8 @@ import java.net.URL
  *
  * - 진행률은 StateFlow로 노출 (UI가 폴링하지 않는다)
  * - 완전히 받은 뒤에만 .part 임시 파일을 최종 이름으로 바꾼다 (끊긴 파일 방지)
- * - 실패 시 임시 파일을 정리하고 Failed 상태로 전이한다
+ * - HTTP 상태 코드별로 사람이 이해할 수 있는 오류 메시지를 제공한다 (404/401/403 구분)
+ * - HuggingFace resolve URL은 Xet CDN으로 리다이렉트되므로 수동으로 따라간다
  */
 class ModelDownloadManager(private val context: Context) {
 
@@ -39,11 +40,14 @@ class ModelDownloadManager(private val context: Context) {
         }
         val temp = File(target.parentFile, target.name + ".part")
         try {
-            val connection = URL(model.downloadUrl).openConnection() as HttpURLConnection
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.instanceFollowRedirects = true
-            connection.connect()
+            val connection = openFollowingRedirects(model.downloadUrl)
+            val code = connection.responseCode
+            if (code != HTTP_OK) {
+                connection.disconnect()
+                temp.delete()
+                _state.value = ModelDownloadState.Failed(httpErrorMessage(code))
+                return@withContext Result.failure(IOException("HTTP " + code))
+            }
             val total = connection.contentLengthLong.takeIf { it > 0 }
             connection.inputStream.use { input ->
                 temp.outputStream().use { output ->
@@ -58,6 +62,7 @@ class ModelDownloadManager(private val context: Context) {
                     }
                 }
             }
+            connection.disconnect()
             if (!temp.renameTo(target)) {
                 temp.copyTo(target, overwrite = true)
                 temp.delete()
@@ -66,13 +71,55 @@ class ModelDownloadManager(private val context: Context) {
             Result.success(target)
         } catch (e: IOException) {
             temp.delete()
-            _state.value = ModelDownloadState.Failed("다운로드 실패: 네트워크를 확인하세요")
+            _state.value = ModelDownloadState.Failed(
+                "다운로드 실패: " + (e.message ?: e.javaClass.simpleName),
+            )
             Result.failure(e)
         } catch (e: Exception) {
             temp.delete()
-            _state.value = ModelDownloadState.Failed("다운로드 실패: " + (e.message ?: "알 수 없는 오류"))
+            _state.value = ModelDownloadState.Failed(
+                "다운로드 실패: " + (e.message ?: e.javaClass.simpleName),
+            )
             Result.failure(e)
         }
+    }
+
+    /**
+     * 리다이렉트(최대 5회)를 수동으로 따라간다. HuggingFace의 resolve URL은
+     * 302로 Xet CDN(별도 호스트)을 가리키며, HttpURLConnection의 자동 리다이렉트는
+     * 신뢰할 수 없어 직접 Location 헤더를 따른다.
+     */
+    private fun openFollowingRedirects(startUrl: String): HttpURLConnection {
+        var url = startUrl
+        var redirects = 0
+        while (true) {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+            val code = connection.responseCode
+            if (code in 300..399) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (location.isNullOrBlank() || redirects >= MAX_REDIRECTS) {
+                    throw IOException("리다이렉트 실패 (HTTP $code)")
+                }
+                url = if (location.startsWith("http")) location else URL(url, location).toString()
+                redirects++
+                continue
+            }
+            return connection
+        }
+    }
+
+    /** HTTP 오류를 사용자가 원인을 알 수 있는 문구로 변환한다. */
+    private fun httpErrorMessage(code: Int): String = when (code) {
+        404 -> "다운로드 실패: 모델 파일을 찾을 수 없습니다 (HTTP 404)"
+        401, 403 -> "다운로드 실패: 접근이 거부되었습니다 (라이선스 동의 필요, HTTP $code)"
+        429 -> "다운로드 실패: 요청이 너무 많습니다. 잠시 후 다시 시도하세요 (HTTP 429)"
+        in 500..599 -> "다운로드 실패: 서버 오류 (HTTP $code). 잠시 후 다시 시도하세요"
+        else -> "다운로드 실패: HTTP $code"
     }
 
     fun delete(model: LocalModelInfo): Boolean = targetFile(model).delete()
@@ -85,5 +132,8 @@ class ModelDownloadManager(private val context: Context) {
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val READ_TIMEOUT_MS = 30_000
         private const val BUFFER_SIZE = 64 * 1024
+        private const val HTTP_OK = 200
+        private const val MAX_REDIRECTS = 5
+        private const val USER_AGENT = "AirCallAI/0.1 (Android)"
     }
 }

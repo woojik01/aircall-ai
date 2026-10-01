@@ -8,6 +8,7 @@ import com.woojik.aircallai.ai.provider.ChatMessage
  * 앱에 내장하지 않고 설정 시점에 내려받아 PRD-02 modelsDir에 보관한다.
  *
  * MediaPipe LLM Inference 호환 .task 모델만 등록한다 (1단계 백엔드).
+ * URL은 라이선스 동의 없이 공개 다운로드되는 litert-community 저장소만 사용한다.
  */
 data class LocalModelInfo(
     val id: String,
@@ -23,23 +24,23 @@ data class LocalModelInfo(
 
 object LocalModelRegistry {
 
-    /** MediaPipe 사전 변환(.task) 모델 — LiteRT Community HuggingFace. */
+    /** MediaPipe 사전 변환(.task) 모델 — LiteRT Community HuggingFace (공개 다운로드). */
     val models: List<LocalModelInfo> = listOf(
         LocalModelInfo(
-            id = "gemma-3n-e2b",
-            displayName = "Gemma 3n E2B",
-            fileName = "gemma-3n-e2b.task",
-            downloadUrl = "https://huggingface.co/litert-community/Gemma3n-E2B-it/resolve/main/Gemma3n-E2B-it.task",
-            sizeBytes = 2_300_000_000L,
+            id = "gemma-4-e2b",
+            displayName = "Gemma 4 E2B",
+            fileName = "gemma-4-e2b-it-web.task",
+            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.task",
+            sizeBytes = 2_000_000_000L,
             minRamMb = 4096,
             description = "가장 가벼운 기본 모델. 중급 기기에 적합.",
         ),
         LocalModelInfo(
-            id = "gemma-3n-e4b",
-            displayName = "Gemma 3n E4B",
-            fileName = "gemma-3n-e4b.task",
-            downloadUrl = "https://huggingface.co/litert-community/Gemma3n-E4B-it/resolve/main/Gemma3n-E4B-it.task",
-            sizeBytes = 4_200_000_000L,
+            id = "gemma-4-e4b",
+            displayName = "Gemma 4 E4B",
+            fileName = "gemma-4-e4b-it-web.task",
+            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.task",
+            sizeBytes = 2_960_000_000L,
             minRamMb = 8192,
             description = "더 높은 품질. 플래그십(8GB RAM 이상) 권장.",
         ),
