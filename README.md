@@ -48,8 +48,7 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 - 설정 → GitHub 연동에서 PAT 등록 (기기 Keystore 암호화 저장)
 - `github` Tool: `read_repository`는 기본 허용, `create_issue`/`create_pull_request`는 승인 필요
 - **Tool-AI 연결**: AI가 `TOOL: github.read_repository owner=... repo=...` 지시어를 응답하면
-  실행 결과를 대화에 반영해 최종 답
-변한다 (최대 2회 라운드)
+  실행 결과를 대화에 반영해 최종 답변한다 (최대 2회 라운드)
 - 승인 요청·다이얼로그·실행 계층이 대화 엔진에 연결되어 있으며,
   WRITE 작업은 승인 다이얼로그를 통한 사용자 승인이 필요하다
 - 승인은 **도구·작업 단위**로 저장된다. 승인 후에는 다른 인자로 같은 작업을 요청해도

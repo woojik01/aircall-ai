@@ -52,8 +52,7 @@ object ToolCallParser {
             }
             i++
         }
-     
-   return ToolCall(toolName, action, arguments)
+        return ToolCall(toolName, action, arguments)
     }
 
     private fun tokenize(body: String): List<String> {

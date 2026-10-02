@@ -41,8 +41,7 @@ class AppGraph(context: Context) {
     val settings = SettingsRepository(settingsStore)
     val credentials = FileCredentialManager(AppStorage.credentialsDir(context), AndroidKeystoreCrypto())
 
-    /** 로컬 모델:
- LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */
+    /** 로컬 모델: LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */
     val localModelAdapter = LiteRtModelAdapter(context, settings)
     val modelDownloadManager = ModelDownloadManager(context)
 
@@ -86,8 +85,7 @@ class AppGraph(context: Context) {
         executor = toolExecutor,
         logger = toolLogger,
         toolsDescription = toolCatalog,
-        approvalRequester = { request -> toolAppro
-val.submit(request) },
+        approvalRequester = { request -> toolApproval.submit(request) },
     )
 
     val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)

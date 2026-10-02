@@ -47,8 +47,7 @@ class ToolBridgedAIProvider(
             val result = executor.execute(request)
             val blocked = result.message == BLOCKED_MESSAGE
             logger.record(
-                ToolExe
-cutionLogger.Entry(
+                ToolExecutionLogger.Entry(
                     toolName = call.toolName,
                     action = call.action,
                     risk = risk,
@@ -96,8 +95,7 @@ cutionLogger.Entry(
     private fun toolResultPrompt(call: ToolCallParser.ToolCall, result: ToolResult): String =
         "TOOL_RESULT " + call.toolName + "." + call.action + " " +
             (if (result.success) "성공: " else "실패: ") + result.message +
-  
-          ". 이 결과를 반영해 사용자에게 자연스럽게 답한다."
+            ". 이 결과를 반영해 사용자에게 자연스럽게 답한다."
 
     companion object {
         private const val MAX_TOOL_ROUNDS = 2

@@ -45,8 +45,7 @@ class ToolBridgedAIProviderTest {
             base = fake,
             executor = ToolExecutor(listOf(MockGitHubTool()), PersistedToolPermissionStore(InMemorySettingsStore())),
             logger = logger,
-            toolsDescription
- = "desc",
+            toolsDescription = "desc",
             tools = listOf(MockGitHubTool()),
         )
         return Pair(provider, fake)
@@ -96,8 +95,7 @@ class ToolBridgedAIProviderTest {
         assertEquals(1, logger.entries.value.size)
         val entry = logger.entries.value[0]
         assertEquals("github", entry.toolName)
-        asse
-rtEquals("read_repository", entry.action)
+        assertEquals("read_repository", entry.action)
         assertEquals(false, entry.blocked)
         assertTrue(entry.success)
     }
