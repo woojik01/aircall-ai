@@ -9,8 +9,9 @@
   로컬 모델 갤러리(다운로드/적용) + MediaPipe LLM Inference 어댑터,
   PRD-08 1차(개인정보 데이터 흐름 표시 + Release R8 빌드 구성, versionCode 2 / 0.2.0)
 - **진행 중**: PRD-06 Tool 연동 — Tool 실행/권한 계층, GitHub 조회(READ)와 Issue/PR 생성(WRITE) API,
-  GitHub 토큰(PAT) 연결 UI, **WRITE 작업 승인 다이얼로그 + 승인 상태 영속화** 완료.
-  Calendar/Gmail/Notes Adapter, Tool-AI 응답 연결, 실행 메타데이터 로깅은 다음 증분
+  GitHub 토큰(PAT) 연결 UI, WRITE 작업 승인 다이얼로그 + 승인 상태 영속화,
+  **Tool-AI 응답 연결 + 실행 메타데이터 로깅** 완료.
+  Calendar/Gmail/Notes Adapter는 다음 증분
 - 기기 테스트(화면 회전/복귀, 다른 앱 전환/화면 OFF/알림·오버레이 제어/배터리, 로컬 모델 실추론,
   Release 빌드 실기 설치)는 아직 미확인
 
@@ -27,7 +28,9 @@ app/src/main/java/com/woojik/aircallai/
   service/       ConversationService (Foreground Service)
   overlay/       CallOverlayController — PRD-07 플로팅 컨트롤(권한 거부 시 알림으로 대체)
   tools/         Tool, ToolExecutor, ToolPermissionStore, GitHubTool, GitHubApiClient(READ/WRITE),
-                 PersistedToolPermissionStore(승인 영속화), ToolApprovalCoordinator(승인 흐름)
+                 PersistedToolPermissionStore(승인 영속화), ToolApprovalCoordinator(승인 흐름),
+                 ToolCallParser(TOOL 지시어 파싱), ToolBridgedAIProvider(AI-Tool 연결),
+                 ToolExecutionLogger(실행 메타데이터)
   settings/      SettingsRepository (로컬 모델 선택 포함)
   privacy/       PrivacyNotices — 모드별/Tool별 데이터 흐름 설명 단일 소스 (PRD-08)
   ui/            MainActivity, Main/Call/Conversation/Settings/LocalModel/Privacy Screen, ToolApprovalDialog
@@ -41,9 +44,13 @@ app/src/main/java/com/woojik/aircallai/
 ## Tool 연동 (PRD-06)
 - 설정 → GitHub 연동에서 토큰(PAT) 등록 (기기 Keystore 암호화, 로그 미노출)
 - `github` Tool: `read_repository`(READ, 기본 허용), `create_issue`/`create_pull_request`(WRITE, 승인 필요)
+- **Tool-AI 연결**: AI가 `TOOL: github.read_repository owner=... repo=...` 지시어를 응답하면
+  실행 결과를 대화에 반영해 최종 답변한다 (최대 2회 라운드)
 - **승인 흐름**: WRITE 작업 요청 시 승인 다이얼로그(도구/액션/인자 표시) → 승인하면 이후 재요청 없이 실행
 - **승인 영속화**: 승인 상태는 일반 설정에 저장되어 앱 재시작 후에도 유지.
   설정 → Tool 작업 승인에서 목록 확인/개별 해제 가능
+- **실행 메타데이터**: 도구/액션/위험도/차단 여부/성공/지연(ms)을 기록(인자 값 미기록,
+  최근 100건 메모리 + 디버그 로그 요약)
 - 승인되지 않은 WRITE 작업은 ToolExecutor가 실행 전에 차단한다
 
 ## 개인정보 (PRD-08)
