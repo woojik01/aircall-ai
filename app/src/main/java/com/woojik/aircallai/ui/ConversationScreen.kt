@@ -93,8 +93,7 @@ fun ConversationScreen(vm: MainViewModel) {
                     onClick = { vm.onMicTap() },
                     enabled = !sessionActive &&
                         (state is ConversationState.Idle || state is ConversationState.Error),
-                ) { Text(if (sessionStatus == SessionStatus.Ended) "🎤 다
-시 시작" else "🎤 말하기") }
+                ) { Text(if (sessionStatus == SessionStatus.Ended) "🎤 다시 시작" else "🎤 말하기") }
                 if (state is ConversationState.Speaking) {
                     // PRD-03: TTS 재생 중 중지 가능
                     Button(
