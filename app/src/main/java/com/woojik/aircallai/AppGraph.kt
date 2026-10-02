@@ -4,7 +4,7 @@ import android.content.Context
 import com.woojik.aircallai.ai.cloud.CloudAIProvider
 import com.woojik.aircallai.ai.cloud.HttpCloudApiAdapter
 import com.woojik.aircallai.ai.local.LocalAIProvider
-import com.woojik.aircallai.ai.local.MediaPipeModelAdapter
+import com.woojik.aircallai.ai.local.LiteRtModelAdapter
 import com.woojik.aircallai.ai.local.ModelDownloadManager
 import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.ProviderRouter
@@ -31,7 +31,7 @@ import kotlinx.coroutines.SupervisorJob
  * 의존성 구성 (PRD-04).
  * PRD-05: 대화 엔진과 세션 상태 통로가 여기서 만들어지며
  * UI(Activity)와 Foreground Service가 동일한 인스턴스를 공유한다.
- * 로컬 기능 증분: 로컬 모델은 MediaPipe 어댑터 + 다운로드 갤러리로 구성한다.
+ * 로컬 기능 증분: 로컬 모델은 LiteRT-LM 어댑터 + 다운로드 갤러리로 구성한다.
  * PRD-06: GitHub Tool(READ/WRITE)과 승인 계층을 그래프에 연결한다.
  * WRITE 승인 상태는 일반 설정에 영속화되어 앱 재시작 후에도 유지된다.
  * Tool-AI 연결: 모든 provider를 ToolBridgedAIProvider로 감싸 Tool 지시어를 처리한다.
@@ -41,8 +41,8 @@ class AppGraph(context: Context) {
     val settings = SettingsRepository(settingsStore)
     val credentials = FileCredentialManager(AppStorage.credentialsDir(context), AndroidKeystoreCrypto())
 
-    /** 로컬 모델: MediaPipe LLM Inference (갤러리에서 선택/다운로드한 .task 모델). */
-    val localModelAdapter = MediaPipeModelAdapter(context, settings)
+    /** 로컬 모델: LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */
+    val localModelAdapter = LiteRtModelAdapter(context, settings)
     val modelDownloadManager = ModelDownloadManager(context)
 
     /** PRD-06: GitHub Tool 실행 계층. 토큰은 CredentialManager(github)에서만 읽는다. */
