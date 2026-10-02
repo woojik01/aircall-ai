@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  * Cloud API 주소/모델명은 일반 설정에 저장되며 실제 호출은 앱이 직접 수행한다.
  * 로컬 기능 증분: Local 모델 관리(갤러리) 화면으로 이동한다.
  * PRD-08: 개인정보(데이터 흐름) 화면으로 이동한다.
- * PRD-06: GitHub 토큰(PAT)을 CredentialManager에 저장/삭제한다.
+ * PRD-06: GitHub 토큰(PAT) 저장/삭제, 승인된 WRITE 작업 목록 표시/해제.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +30,8 @@ fun SettingsScreen(
     onOpenPrivacy: () -> Unit = {},
     onSaveGitHubToken: suspend (String) -> Unit = {},
     onDeleteGitHubToken: suspend () -> Unit = {},
+    toolApprovals: List<String> = emptyList(),
+    onRevokeToolApproval: suspend (String) -> Unit = {},
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
     var apiKeyInput by remember { mutableStateOf("") }
@@ -208,6 +210,42 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 16.dp),
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // PRD-06 승인 증분: 승인된 WRITE 작업은 재시작 후에도 유지되며 여기서 해제할 수 있다.
+            Text("Tool 작업 승인", style = MaterialTheme.typography.titleMedium)
+            if (toolApprovals.isEmpty()) {
+                Text(
+                    "승인된 WRITE 작업이 없습니다. Tool이 WRITE 작업을 요청하면 승인 다이얼로그가 표시됩니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            } else {
+                var approvals by remember(toolApprovals) { mutableStateOf(toolApprovals) }
+                Text(
+                    "다음 WRITE 작업이 승인되어 있습니다. 해제하면 다시 승인이 필요합니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                approvals.forEach { key ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        Text(key, modifier = Modifier.weight(1f))
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    onRevokeToolApproval(key)
+                                    approvals = approvals - key
+                                    status = "승인이 해제되었습니다: " + key
+                                }
+                            },
+                        ) { Text("해제") }
+                    }
+                }
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
