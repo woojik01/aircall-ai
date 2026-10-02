@@ -48,7 +48,7 @@ class AccountConnectionRepositoryTest {
     @Test
     fun initialStatusIsNotConnected() = runTest {
         val repository = repo()
-        repository.refresh(1_000)
+        repository.refresh(nowEpochMs = 1_000)
         assertEquals(ConnectionStatus.NOT_CONNECTED, repository.connections.value["github"]!!.status)
         assertEquals(ConnectionStatus.NOT_CONNECTED, repository.connections.value["gmail"]!!.status)
     }
@@ -56,7 +56,7 @@ class AccountConnectionRepositoryTest {
     @Test
     fun connectMarksConnectedWithDisplayName() = runTest {
         val repository = repo()
-        repository.connect("gmail", OAuthTokens("acc", null, expires = 9_999_999_999_999), "user@example.com", 1_000)
+        repository.connect("gmail", OAuthTokens("acc", null, expiresAtEpochMs = 9_999_999_999_999), "user@example.com", nowEpochMs = 1_000)
         val account = repository.connections.value["gmail"]!!
         assertEquals(ConnectionStatus.CONNECTED, account.status)
         assertEquals("user@example.com", account.displayName)
@@ -65,26 +65,26 @@ class AccountConnectionRepositoryTest {
     @Test
     fun expiredWithoutRefreshBecomesReauthRequired() = runTest {
         val repository = repo()
-        repository.connect("gmail", OAuthTokens("acc", null, expires = 1_000), null, 500)
-        repository.refresh(2_000)
+        repository.connect("gmail", OAuthTokens("acc", null, expiresAtEpochMs = 1_000), null, nowEpochMs = 500)
+        repository.refresh(nowEpochMs = 2_000)
         assertEquals(ConnectionStatus.REAUTH_REQUIRED, repository.connections.value["gmail"]!!.status)
     }
 
     @Test
     fun expiredWithRefreshBecomesExpired() = runTest {
         val repository = repo()
-        repository.connect("gmail", OAuthTokens("acc", "rt", expires = 1_000), null, 500)
-        repository.refresh(2_000)
+        repository.connect("gmail", OAuthTokens("acc", "rt", expiresAtEpochMs = 1_000), null, nowEpochMs = 500)
+        repository.refresh(nowEpochMs = 2_000)
         assertEquals(ConnectionStatus.EXPIRED, repository.connections.value["gmail"]!!.status)
     }
 
     @Test
     fun restoreAfterRestart() = runTest {
         val repository = repo()
-        repository.connect("github", OAuthTokens("acc", null, expires = 9_999_999_999_999), "octocat", 1_000)
+        repository.connect("github", OAuthTokens("acc", null, expiresAtEpochMs = 9_999_999_999_999), "octocat", nowEpochMs = 1_000)
         // 앱 재시작 상황: 상태는 저장된 자격증명에서 다시 복원된다.
         repository.mark("github", ConnectionStatus.CONNECTING)
-        repository.refresh(1_100)
+        repository.refresh(nowEpochMs = 1_100)
         val account = repository.connections.value["github"]!!
         assertEquals(ConnectionStatus.CONNECTED, account.status)
         assertEquals("octocat", account.displayName)
@@ -93,8 +93,8 @@ class AccountConnectionRepositoryTest {
     @Test
     fun disconnectIsIndependentPerService() = runTest {
         val repository = repo()
-        repository.connect("github", OAuthTokens("gh", null, expires = 9_999_999_999_999), "octocat", 1_000)
-        repository.connect("gmail", OAuthTokens("gm", null, expires = 9_999_999_999_999), "user@example.com", 1_000)
+        repository.connect("github", OAuthTokens("gh", null, expiresAtEpochMs = 9_999_999_999_999), "octocat", nowEpochMs = 1_000)
+        repository.connect("gmail", OAuthTokens("gm", null, expiresAtEpochMs = 9_999_999_999_999), "user@example.com", nowEpochMs = 1_000)
         repository.disconnect("github")
         assertEquals(ConnectionStatus.NOT_CONNECTED, repository.connections.value["github"]!!.status)
         assertEquals(ConnectionStatus.CONNECTED, repository.connections.value["gmail"]!!.status)

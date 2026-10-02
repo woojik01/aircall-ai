@@ -46,8 +46,8 @@ class OAuthCredentialStoreTest {
         }
     }
 
-    private fun tokens(access: String = "acc", refresh: String? = "ref", expires: Long? = null) =
-        OAuthTokens(access, refresh, expires)
+    private fun tokens(access: String = "acc", refresh: String? = "ref", expiresAtEpochMs: Long? = null) =
+        OAuthTokens(access, refresh, expiresAtEpochMs)
 
     @Test
     fun saveAndLoadRoundTrips() = runTest {
@@ -87,18 +87,18 @@ class OAuthCredentialStoreTest {
     @Test
     fun validAccessTokenReturnsUnexpiredTokenWithoutRefresh() = runTest {
         val store = OAuthCredentialStore(InMemoryCredentials())
-        store.save("gmail", tokens(access = "fresh", refresh = "ref", expires = 9_999_999_999_999), null)
+        store.save("gmail", tokens(access = "fresh", refresh = "ref", expiresAtEpochMs = 9_999_999_999_999), null)
         val provider = FakeProvider("gmail")
-        assertEquals("fresh", store.validAccessToken("gmail", provider, now = 1_000))
+        assertEquals("fresh", store.validAccessToken("gmail", provider, nowEpochMs = 1_000))
         assertFalse(provider.refreshCalled)
     }
 
     @Test
     fun expiredTokenIsRefreshedAndPersisted() = runTest {
         val store = OAuthCredentialStore(InMemoryCredentials())
-        store.save("gmail", tokens(access = "old", refresh = "ref", expires = 1_000), "user@example.com")
-        val provider = FakeProvider("gmail", refreshed = tokens(access = "new", refresh = "ref2", expires = 5_000))
-        assertEquals("new", store.validAccessToken("gmail", provider, now = 2_000))
+        store.save("gmail", tokens(access = "old", refresh = "ref", expiresAtEpochMs = 1_000), "user@example.com")
+        val provider = FakeProvider("gmail", refreshed = tokens(access = "new", refresh = "ref2", expiresAtEpochMs = 5_000))
+        assertEquals("new", store.validAccessToken("gmail", provider, nowEpochMs = 2_000))
         assertTrue(provider.refreshCalled)
         // 갱신된 토큰이 저장소에 반영되고 계정 표시명은 유지된다.
         assertEquals("new", store.load("gmail")!!.accessToken)
@@ -108,22 +108,22 @@ class OAuthCredentialStoreTest {
     @Test
     fun expiredWithoutRefreshTokenReturnsNull() = runTest {
         val store = OAuthCredentialStore(InMemoryCredentials())
-        store.save("gmail", tokens(access = "old", refresh = null, expires = 1_000), null)
+        store.save("gmail", tokens(access = "old", refresh = null, expiresAtEpochMs = 1_000), null)
         val provider = FakeProvider("gmail")
-        assertNull(store.validAccessToken("gmail", provider, now = 2_000))
+        assertNull(store.validAccessToken("gmail", provider, nowEpochMs = 2_000))
     }
 
     @Test
     fun refreshFailureReturnsNull() = runTest {
         val store = OAuthCredentialStore(InMemoryCredentials())
-        store.save("gmail", tokens(access = "old", refresh = "ref", expires = 1_000), null)
+        store.save("gmail", tokens(access = "old", refresh = "ref", expiresAtEpochMs = 1_000), null)
         val provider = FakeProvider("gmail", refreshed = null)
-        assertNull(store.validAccessToken("gmail", provider, now = 2_000))
+        assertNull(store.validAccessToken("gmail", provider, nowEpochMs = 2_000))
     }
 
     @Test
     fun missingCredentialReturnsNull() = runTest {
         val store = OAuthCredentialStore(InMemoryCredentials())
-        assertNull(store.validAccessToken("github", FakeProvider("github"), now = 1_000))
+        assertNull(store.validAccessToken("github", FakeProvider("github"), nowEpochMs = 1_000))
     }
 }
