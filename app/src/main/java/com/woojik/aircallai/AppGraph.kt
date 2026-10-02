@@ -18,7 +18,8 @@ import com.woojik.aircallai.settings.SettingsRepository
 import com.woojik.aircallai.settings.SharedPrefsStore
 import com.woojik.aircallai.tools.GitHubApiClient
 import com.woojik.aircallai.tools.GitHubTool
-import com.woojik.aircallai.tools.InMemoryToolPermissionStore
+import com.woojik.aircallai.tools.PersistedToolPermissionStore
+import com.woojik.aircallai.tools.ToolApprovalCoordinator
 import com.woojik.aircallai.tools.ToolExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,10 +31,11 @@ import kotlinx.coroutines.SupervisorJob
  * UI(Activity)와 Foreground Service가 동일한 인스턴스를 공유한다.
  * 로컬 기능 증분: 로컬 모델은 MediaPipe 어댑터 + 다운로드 갤러리로 구성한다.
  * PRD-06: GitHub Tool(READ/WRITE)과 승인 계층을 그래프에 연결한다.
- * WRITE 승인 상태는 메모리(InMemory)로 유지하며, 앱 재시작 시 다시 승인이 필요하다.
+ * WRITE 승인 상태는 일반 설정에 영속화되어 앱 재시작 후에도 유지된다.
  */
 class AppGraph(context: Context) {
-    val settings = SettingsRepository(SharedPrefsStore(context))
+    private val settingsStore = SharedPrefsStore(context)
+    val settings = SettingsRepository(settingsStore)
     val credentials = FileCredentialManager(AppStorage.credentialsDir(context), AndroidKeystoreCrypto())
 
     /** 로컬 모델: MediaPipe LLM Inference (갤러리에서 선택/다운로드한 .task 모델). */
@@ -58,8 +60,15 @@ class AppGraph(context: Context) {
 
     /** PRD-06: GitHub Tool 실행 계층. 토큰은 CredentialManager(github)에서만 읽는다. */
     val githubApi = GitHubApiClient(credentials)
-    val toolPermissions = InMemoryToolPermissionStore()
+    val toolPermissions = PersistedToolPermissionStore(settingsStore)
     val toolExecutor = ToolExecutor(listOf(GitHubTool(githubApi)), toolPermissions)
+
+    /** PRD-06: WRITE 작업 승인 흐름. 승인 상태는 toolPermissions에 영속 저장된다. */
+    val toolApproval = ToolApprovalCoordinator(
+        permissions = toolPermissions,
+        executor = toolExecutor,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    )
 
     /**
      * Android 음성 API(SpeechRecognizer/TTS)는 메인 스레드에서 호출한다.
