@@ -199,8 +199,7 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
             }
         }
 
-        // PRD-07 플로팅/백그라운드 제어: 오버레이는 선택 사항이며 권한 
-거부 시 알림 제어로 동작한다.
+        // PRD-07 플로팅/백그라운드 제어: 오버레이는 선택 사항이며 권한 거부 시 알림 제어로 동작한다.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
