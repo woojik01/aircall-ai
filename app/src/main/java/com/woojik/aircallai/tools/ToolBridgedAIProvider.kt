@@ -21,6 +21,7 @@ class ToolBridgedAIProvider(
     private val executor: ToolExecutor,
     private val logger: ToolExecutionLogger,
     private val toolsDescription: String,
+    private val tools: List<Tool> = emptyList(),
     private val approvalRequester: ((ToolRequest) -> Unit)? = null,
 ) : AIProvider {
 
@@ -41,7 +42,7 @@ class ToolBridgedAIProvider(
             round++
 
             val request = ToolRequest(call.toolName, call.action, call.arguments)
-            val risk = riskOf(call.toolName, call.action)
+            val risk = tools.firstOrNull { it.name == call.toolName }?.riskFor(call.action) ?: ToolRisk.WRITE
             val toolStart = System.currentTimeMillis()
             val result = executor.execute(request)
             val blocked = result.message == BLOCKED_MESSAGE
@@ -95,20 +96,6 @@ class ToolBridgedAIProvider(
         "TOOL_RESULT " + call.toolName + "." + call.action + " " +
             (if (result.success) "성공: " else "실패: ") + result.message +
             ". 이 결과를 반영해 사용자에게 자연스럽게 답한다."
-
-    private fun riskOf(toolName: String, action: String): ToolRisk {
-        // 실행 계층과 동일한 분류를 로깅에 쓴다. 실패 시에도 위험도는 기록한다.
-        val request = ToolRequest(toolName, action)
-        return runCatching { executorRisk(request) }.getOrDefault(ToolRisk.WRITE)
-    }
-
-    private fun executorRisk(request: ToolRequest): ToolRisk {
-        // ToolExecutor는 위험도를 직접 노출하지 않으므로 READ 작업 목록으로 판단한다:
-        // 차단되지 않고 실행된 READ는 executor 결과로만 구분 가능하므로,
-        // 여기서는 로깅 목적상 도구 목록에 위임하지 않고 기본 WRITE로 기록하고
-        // 성공/차단 여부로 구분한다.
-        return ToolRisk.WRITE
-    }
 
     companion object {
         private const val MAX_TOOL_ROUNDS = 2
