@@ -30,10 +30,12 @@ ToolRequest
 - Notes Adapter(`NotesTool`/`FileNotesStore`): 기기 로컬 파일에 메모를 저장한다(네트워크 없음).
   `add_note`(WRITE), `search_notes`/`list_notes`(READ)
 - Calendar Adapter(`CalendarTool`/`AndroidCalendarAdapter`): 기기 캘린더(ContentResolver)를 읽고 쓴다.
-  `read_upcoming`(READ), `create_event`(WRITE). 시각은 `CalendarTimeParser`가 "YYYY-MM-DD HH:MM" 형식으로 검증한다
+  `read_upcoming`(READ), `create_event`(WRITE). 시각은 `CalendarTimeParser`가 "YYYY-MM-DD HH:MM" 형식으로 검증한다.
+  런타임 권한(`READ_CALENDAR`/`WRITE_CALENDAR`)을 manifest에 선언하고 설정 → Calendar 연동에서 요청한다
 - Gmail Adapter(`GmailTool`/`GmailApiClient`): CredentialManager의 `gmail` 자격증명으로
   Gmail REST API(messages/send)를 호출한다. `send_email`(WRITE).
-  수신자 주소 검증, 헤더 주입(CRLF) 차단, 토큰 미노출
+  수신자 주소 검증, 헤더 주입(CRLF) 차단, 토큰 미노출.
+  액세스 토큰은 설정 → Gmail 연동에서 수동 등록한다(예: Google OAuth Playground, `https://mail.google.com/` 스코프)
 - Tool-AI 연결(`ToolCallParser`/`ToolBridgedAIProvider`): AI 응답의 `TOOL:` 지시어를 파싱·실행하고
   결과를 TOOL_RESULT로 이력에 반영해 최종 답변을 생성한다(최대 2 라운드).
   WRITE 미승인 차단 시 승인 코디네이터에 요청을 전달하고 승인 안내 응답을 반환한다
@@ -59,17 +61,20 @@ WRITE 승인 상태는 일반 설정에 영속화된다(PersistedToolPermissionS
 
 기존 PRD-02의 CredentialManager를 그대로 사용한다. 서비스 Adapter는 자격증명을 Tool 내부에서
 평문 저장하지 않고 CredentialManager를 통해 읽는다(GitHub=`github`, Gmail=`gmail`).
+GitHub PAT와 Gmail 액세스 토큰은 설정 화면에서 등록/삭제한다.
 
 ## 후속 증분 (완료)
 
 - GitHub Issue/PR 생성 API (WRITE, 승인 필요) — 완료
-- OAuth 또는 Personal Access Token 연결 UI — 완료(PAT)
+- OAuth 또는 Personal Access Token 연결 UI — 완료(PAT / Gmail 액세스 토큰 수동 등록)
 - Calendar/Gmail/Notes Adapter — 완료
+- 캘린더 런타임 권한 요청 UI — 완료
 - Tool 선택과 AI 응답 연결 — 완료
 - 사용자 승인 UI — 완료
 - 실행 메타데이터 로깅 — 완료
 
-Gmail OAuth 토큰 발급·갱신 흐름과 캘린더 계정 선택 UI는 실기 검증 후 후속 증분에서 다룬다.
+Gmail OAuth 자동 발급·갱신 흐름과 캘린더 계정 선택 UI는 후속 증분에서 다룬다.
+현재 Gmail 액세스 토큰은 만료 시 사용자가 다시 등록해야 한다.
 
 ## 완료 조건
 

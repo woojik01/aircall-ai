@@ -11,7 +11,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
@@ -23,6 +25,7 @@ import com.woojik.aircallai.ai.cloud.CloudAIProvider
 import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
 import com.woojik.aircallai.tools.GitHubApiClient
+import com.woojik.aircallai.tools.GmailApiClient
 
 /**
  * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models / privacy.
@@ -32,9 +35,13 @@ import com.woojik.aircallai.tools.GitHubApiClient
  * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
  * 로컬 기능 증분: 설정에서 로컬 모델 갤러리(다운로드/적용)로 이동한다.
  * PRD-08: 설정에서 개인정보(데이터 흐름) 화면으로 이동한다.
- * PRD-06: 설정에서 GitHub 토큰(PAT)을 등록/삭제하고, WRITE 작업 승인 다이얼로그를 띄운다.
+ * PRD-06: 설정에서 GitHub/Gmail 토큰을 등록/삭제하고, 캘린더 권한을 요청하며,
+ * WRITE 작업 승인 다이얼로그를 띄운다.
  */
 class MainActivity : ComponentActivity() {
+
+    // 캘린더 권한 상태. 런타임 요청 결과가 설정 화면에 즉시 반영되도록 compose 상태로 관리한다.
+    private var calendarGranted by mutableStateOf(false)
 
     private val requestMicPermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -43,8 +50,15 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    // PRD-06: 기기 캘린더 조회/등록 권한. 설정 → Calendar 연동에서 요청한다.
+    private val requestCalendarPermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            calendarGranted = hasCalendarPermission()
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        calendarGranted = hasCalendarPermission()
         val graph = (application as AirCallApp).graph
 
         val vm = MainViewModel(
@@ -57,7 +71,12 @@ class MainActivity : ComponentActivity() {
             isProviderReady = { graph.providerRouter.current().isReady() },
         )
         setContent {
-            AirCallUi(vm, graph)
+            AirCallUi(
+                vm,
+                graph,
+                calendarPermissionGranted = { calendarGranted },
+                requestCalendarPermission = { requestCalendarPermission() },
+            )
         }
     }
 
@@ -87,6 +106,20 @@ class MainActivity : ComponentActivity() {
         requestMicPermissions.launch(permissions.toTypedArray())
     }
 
+    /** PRD-06: 캘린더 조회·등록 권한. */
+    private fun hasCalendarPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun requestCalendarPermission() {
+        requestCalendarPermissions.launch(
+            arrayOf(
+                Manifest.permission.READ_CALENDAR,
+                Manifest.permission.WRITE_CALENDAR,
+            ),
+        )
+    }
+
     override fun onStart() {
         super.onStart()
         SecureLog.debuggable =
@@ -104,7 +137,12 @@ private object Routes {
 }
 
 @Composable
-private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
+private fun AirCallUi(
+    vm: MainViewModel,
+    graph: AppGraph,
+    calendarPermissionGranted: () -> Boolean,
+    requestCalendarPermission: () -> Unit,
+) {
     val navController = rememberNavController()
     val modelScope = rememberCoroutineScope()
     NavHost(navController = navController, startDestination = Routes.MAIN) {
@@ -141,12 +179,22 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                 },
                 onOpenLocalModels = { navController.navigate(Routes.LOCAL_MODELS) },
                 onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
-                // PRD-06: GitHub 토큰은 Cloud Key와 동일한 CredentialManager 계층에 보관한다.
+                // PRD-06: GitHub/Gmail 토큰은 Cloud Key와 동일한 CredentialManager 계층에 보관한다.
                 onSaveGitHubToken = { token ->
                     graph.credentials.save(GitHubApiClient.CREDENTIAL_SERVICE, token.toByteArray())
                 },
                 onDeleteGitHubToken = {
                     graph.credentials.delete(GitHubApiClient.CREDENTIAL_SERVICE)
+                },
+                // PRD-06: 기기 캘린더 권한 요청과 상태 표시.
+                calendarPermissionGranted = calendarPermissionGranted(),
+                onRequestCalendarPermission = requestCalendarPermission,
+                // PRD-06: Gmail OAuth 액세스 토큰 등록/삭제.
+                onSaveGmailToken = { token ->
+                    graph.credentials.save(GmailApiClient.CREDENTIAL_SERVICE, token.toByteArray())
+                },
+                onDeleteGmailToken = {
+                    graph.credentials.delete(GmailApiClient.CREDENTIAL_SERVICE)
                 },
                 // PRD-06 승인 증분: 승인된 WRITE 작업 목록 표시/해제.
                 toolApprovals = graph.toolPermissions.approvedActions(),

@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  * Cloud API 주소/모델명은 일반 설정에 저장되며 실제 호출은 앱이 직접 수행한다.
  * 로컬 기능 증분: Local 모델 관리(갤러리) 화면으로 이동한다.
  * PRD-08: 개인정보(데이터 흐름) 화면으로 이동한다.
- * PRD-06: GitHub 토큰(PAT) 저장/삭제, 승인된 WRITE 작업 목록 표시/해제.
+ * PRD-06: GitHub/Gmail 토큰 저장/삭제, 캘린더 권한 요청, 승인된 WRITE 작업 목록 표시/해제.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,12 +30,17 @@ fun SettingsScreen(
     onOpenPrivacy: () -> Unit = {},
     onSaveGitHubToken: suspend (String) -> Unit = {},
     onDeleteGitHubToken: suspend () -> Unit = {},
+    calendarPermissionGranted: Boolean = true,
+    onRequestCalendarPermission: () -> Unit = {},
+    onSaveGmailToken: suspend (String) -> Unit = {},
+    onDeleteGmailToken: suspend () -> Unit = {},
     toolApprovals: List<String> = emptyList(),
     onRevokeToolApproval: suspend (String) -> Unit = {},
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
     var apiKeyInput by remember { mutableStateOf("") }
     var gitHubTokenInput by remember { mutableStateOf("") }
+    var gmailTokenInput by remember { mutableStateOf("") }
     var baseUrlInput by remember { mutableStateOf(settings.cloudBaseUrl()) }
     var modelInput by remember { mutableStateOf(settings.cloudModel()) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -169,8 +174,8 @@ fun SettingsScreen(
             // PRD-06: GitHub 토큰(PAT) 연결. 저장소 조회(READ)와 승인된 생성 작업(WRITE)에 사용된다.
             Text("GitHub 연동", style = MaterialTheme.typography.titleMedium)
             Text(
-                "GitHub 토큰(PAT) 저장과 승인 계층이 준비되어 있습니다. 대화에서 Tool을 호출하는 기능은 아직 연결되지 않았습니다. 조회는 기본 허용, " +
-                    "Issue/PR 생성은 사용 시 승인이 필요합니다.",
+                "GitHub 토큰(PAT)을 저장하면 대화에서 저장소 조회와 Issue/PR 생성을 사용할 수 있습니다. " +
+                    "조회는 기본 허용, Issue/PR 생성은 사용 시 승인이 필요합니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )
@@ -210,6 +215,81 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 16.dp),
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // PRD-06: Gmail OAuth 액세스 토큰 등록. 이메일 발송(WRITE)은 Tool 승인 후 실행된다.
+            Text("Gmail 연동", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Gmail API용 OAuth 액세스 토큰을 저장합니다. 예: Google OAuth Playground에서 " +
+                    "https://mail.google.com/ 스코프으로 발급한 토큰. 토큰은 만료 시 다시 등록해야 하며, " +
+                    "이메일 발송은 사용 시 승인이 필요합니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedTextField(
+                value = gmailTokenInput,
+                onValueChange = { gmailTokenInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text("Gmail OAuth 액세스 토큰") },
+                placeholder = { Text("ya29....") },
+                singleLine = true,
+            )
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            onSaveGmailToken(gmailTokenInput)
+                            gmailTokenInput = ""
+                            status = "Gmail 토큰이 안전하게 저장되었습니다 (기기 암호화)."
+                        }
+                    },
+                    enabled = gmailTokenInput.isNotBlank(),
+                ) { Text("저장") }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            onDeleteGmailToken()
+                            status = "Gmail 토큰이 삭제되었습니다."
+                        }
+                    },
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { Text("삭제") }
+            }
+            Text(
+                "토큰은 기기의 Android Keystore로 암호화되어 저장되며 로그에 노출되지 않습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // PRD-06: 기기 캘린더 연동. 일정 조회/등록에는 캘린더 권한이 필요하다.
+            Text("Calendar 연동", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "기기 캘린더 일정 조회(기본 허용)와 일정 등록(승인 필요)에 캘린더 권한이 필요합니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (calendarPermissionGranted) {
+                Text(
+                    "캘린더 권한이 허용되었습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            } else {
+                Button(
+                    onClick = onRequestCalendarPermission,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) { Text("캘린더 권한 허용") }
+                Text(
+                    "권한을 거부한 경우 시스템 설정 → 앱 → AirCall AI → 권한에서 캘린더를 허용해 주세요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
