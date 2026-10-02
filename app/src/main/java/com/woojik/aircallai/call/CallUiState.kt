@@ -61,8 +61,7 @@ fun callControlsOf(status: CallStatus, sessionActive: Boolean): CallControls {
 }
 
 /** 음소거 버튼 라벨 (알림/오버레이/통화 화면이 동일한 문구를 쓴다). */
-fun muteLabel(muted: Boolean): String = if (muted) "음
-소거 해제" else "음소거"
+fun muteLabel(muted: Boolean): String = if (muted) "음소거 해제" else "음소거"
 
 /** 일시정지/재개 버튼 라벨. */
 fun pauseLabel(paused: Boolean): String = if (paused) "재개" else "일시정지"
