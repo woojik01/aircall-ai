@@ -10,3 +10,6 @@ build/
 *.apk
 *.aab
 .env
+
+# Kotlin compiler session/cache files
+.kotlin/
