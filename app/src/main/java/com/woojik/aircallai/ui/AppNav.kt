@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
@@ -30,7 +32,7 @@ import com.woojik.aircallai.tools.GitHubApiClient
  * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
  * 로컬 기능 증분: 설정에서 로컬 모델 갤러리(다운로드/적용)로 이동한다.
  * PRD-08: 설정에서 개인정보(데이터 흐름) 화면으로 이동한다.
- * PRD-06: 설정에서 GitHub 토큰(PAT)을 등록/삭제한다.
+ * PRD-06: 설정에서 GitHub 토큰(PAT)을 등록/삭제하고, WRITE 작업 승인 다이얼로그를 띄운다.
  */
 class MainActivity : ComponentActivity() {
 
@@ -146,6 +148,11 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                 onDeleteGitHubToken = {
                     graph.credentials.delete(GitHubApiClient.CREDENTIAL_SERVICE)
                 },
+                // PRD-06 승인 증분: 승인된 WRITE 작업 목록 표시/해제.
+                toolApprovals = graph.toolPermissions.approvedActions(),
+                onRevokeToolApproval = { key ->
+                    graph.toolPermissions.revoke(key)
+                },
             )
         }
         composable(Routes.LOCAL_MODELS) {
@@ -161,6 +168,16 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
             // PRD-08 개인정보 화면: 모드별/Tool별 데이터 흐름을 표시한다.
             PrivacyScreen()
         }
+    }
+
+    // PRD-06: WRITE Tool 작업 승인 다이얼로그 — 화면 어디에서든 대기 요청이 있으면 띄운다.
+    val pendingApproval by graph.toolApproval.pending.collectAsState()
+    pendingApproval?.let { request ->
+        ToolApprovalDialog(
+            request = request,
+            onApprove = { graph.toolApproval.approve() },
+            onDeny = { graph.toolApproval.deny() },
+        )
     }
 }
 
