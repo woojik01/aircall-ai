@@ -85,7 +85,7 @@ fun SettingsScreen(
 
             Text("Local 모델", style = MaterialTheme.typography.titleMedium)
             Text(
-                "로컬 모델을 다운로드하고 적용하면 인터넷 없이 기기에서만 대화할 수 있습니다.",
+                "AI 응답은 기기에서 생성합니다. 음성 인식·출력은 음성 서비스에 따라 네트워크가 필요할 수 있습니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )
@@ -169,7 +169,7 @@ fun SettingsScreen(
             // PRD-06: GitHub 토큰(PAT) 연결. 저장소 조회(READ)와 승인된 생성 작업(WRITE)에 사용된다.
             Text("GitHub 연동", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Tool 연동에 사용할 GitHub 토큰(PAT)을 등록합니다. 조회는 기본 허용, " +
+                "GitHub 토큰(PAT) 저장과 승인 계층이 준비되어 있습니다. 대화에서 Tool을 호출하는 기능은 아직 연결되지 않았습니다. 조회는 기본 허용, " +
                     "Issue/PR 생성은 사용 시 승인이 필요합니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),

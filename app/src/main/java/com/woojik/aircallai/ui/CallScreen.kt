@@ -25,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,6 +56,7 @@ import com.woojik.aircallai.session.SessionStatus
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
+    LaunchedEffect(vm) { vm.refreshProviderReadiness() }
     val conversation by vm.state.collectAsState()
     val sessionStatus by vm.sessionStatus.collectAsState()
     val muted by vm.sessionMuted.collectAsState()
@@ -119,6 +121,10 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
                 )
             }
 
+            if (!providerReady) {
+                Text("설정에서 로컬 모델을 다운로드·적용하거나 Cloud API Key를 등록해 주세요.")
+            }
+
             if (conversation is ConversationState.Error) {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -127,7 +133,7 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
-                TextButton(onClick = { vm.engine.clearError() }) { Text("재시도") }
+                TextButton(onClick = { vm.engine.clearError() }) { Text("오류 닫기") }
             }
 
             Spacer(Modifier.height(48.dp))

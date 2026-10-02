@@ -162,6 +162,7 @@ private fun AirCallUi(vm: MainViewModel, graph: AppGraph) {
                 adapter = graph.localModelAdapter,
                 downloadManager = graph.modelDownloadManager,
                 scope = modelScope,
+                onModelChanged = { vm.refreshProviderReadiness() },
             )
         }
         composable(Routes.PRIVACY) {

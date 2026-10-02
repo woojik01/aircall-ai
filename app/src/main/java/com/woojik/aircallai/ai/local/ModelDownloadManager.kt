@@ -2,177 +2,174 @@ package com.woojik.aircallai.ai.local
 
 import android.content.Context
 import com.woojik.aircallai.core.storage.AppStorage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.security.MessageDigest
 
-/**
- * 로컬 모델 다운로드 관리자.
- * 설정 갤러리에서 선택한 모델을 PRD-02 modelsDir에 내려받는다.
- *
- * - 진행률은 모델별(id 키) StateFlow로 노출 — 한 모델의 진행 상태가
- *   다른 모델 카드에 표시되지 않는다
- * - 같은 모델의 중복 다운로드는 뮤텍스로 차단한다
- * - 완전히 받은 뒤에만 .part 임시 파일을 최종 이름으로 바꾼다 (끊긴 파일 방지)
- * - HTTP 상태 코드별로 사람이 이해할 수 있는 오류 메시지를 제공한다 (404/401/403 구분)
- * - HuggingFace resolve URL은 Xet CDN으로 리다이렉트되므로 수동으로 따라간다
- */
-class ModelDownloadManager(private val context: Context) {
+/** Only a complete, verified file is published under the final model filename. */
+class ModelDownloadManager(
+    private val modelsDir: File,
+    private val connect: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
+) {
+    constructor(context: Context) : this(AppStorage.modelsDir(context))
 
     private val _states = MutableStateFlow<Map<String, ModelDownloadState>>(emptyMap())
-
-    /** 모델 id → 다운로드 상태. 없는 키는 Idle로 간주한다. */
     val states: StateFlow<Map<String, ModelDownloadState>> = _states.asStateFlow()
+    private val active = mutableSetOf<String>()
 
-    private val perModelMutex = Mutex()
-
-    fun stateOf(model: LocalModelInfo): ModelDownloadState =
-        _states.value[model.id] ?: ModelDownloadState.Idle
-
-    fun isDownloading(model: LocalModelInfo): Boolean =
-        stateOf(model) is ModelDownloadState.Downloading
-
-    /** 모델 파일의 최종 위치 (다운로드 여부와 무관). */
-    fun targetFile(model: LocalModelInfo): File =
-        File(AppStorage.modelsDir(context), model.fileName)
-
-    fun isDownloaded(model: LocalModelInfo): Boolean = targetFile(model).exists()
+    fun targetFile(model: LocalModelInfo): File = File(modelsDir, model.fileName)
+    fun isDownloaded(model: LocalModelInfo): Boolean = isInstalledModel(targetFile(model), model)
 
     suspend fun download(model: LocalModelInfo): Result<File> = withContext(Dispatchers.IO) {
-        // 같은 모델의 중복 다운로드 차단. 다른 모델은 서로 독립적으로 진행된다.
-        perModelMutex.withLock {
-            if (isDownloading(model)) {
+        synchronized(active) {
+            if (!active.add(model.id)) {
                 return@withContext Result.failure(IOException("이미 다운로드 중입니다"))
             }
         }
         val target = targetFile(model)
-        if (target.exists()) {
-            updateState(model.id, ModelDownloadState.Completed(model.fileName))
-            return@withContext Result.success(target)
-        }
-        val temp = File(target.parentFile, target.name + ".part")
-        updateState(model.id, ModelDownloadState.Downloading(0, null))
+        val temp = File(modelsDir, model.fileName + ".part")
+        var connection: HttpURLConnection? = null
         try {
-            val connection = openFollowingRedirects(model.downloadUrl)
-            val code = connection.responseCode
-            if (code != HTTP_OK) {
-                connection.disconnect()
-                temp.delete()
-                updateState(model.id, ModelDownloadState.Failed(httpErrorMessage(code)))
-                return@withContext Result.failure(IOException("HTTP " + code))
+            modelsDir.mkdirs()
+            // Verify existing files too, so an interrupted/legacy installation can be repaired.
+            if (isDownloaded(model) && verifyModelFile(target, model)) {
+                updateState(model.id, ModelDownloadState.Completed(model.fileName))
+                return@withContext Result.success(target)
             }
-            val total = connection.contentLengthLong.takeIf { it > 0 }
+            if (target.exists() && !target.delete()) throw IOException("기존 모델 파일을 삭제하지 못했습니다")
+            updateState(model.id, ModelDownloadState.Downloading(0, model.sizeBytes))
+            connection = openFollowingRedirects(model.downloadUrl)
+            val code = connection.responseCode
+            if (code != HttpURLConnection.HTTP_OK) throw IOException(httpErrorMessage(code))
+            val length = connection.contentLengthLong
+            if (length > 0 && length != model.sizeBytes) throw IOException("모델 파일 크기가 일치하지 않습니다")
+            val digest = MessageDigest.getInstance("SHA-256")
+            var downloaded = 0L
             connection.inputStream.use { input ->
                 temp.outputStream().use { output ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var downloaded = 0L
+                    val buffer = ByteArray(64 * 1024)
                     while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        downloaded += read
-                        updateState(
-                            model.id,
-                            ModelDownloadState.Downloading(downloaded, total),
-                        )
+                        currentCoroutineContext().ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        downloaded += count
+                        if (downloaded > model.sizeBytes) throw IOException("모델 파일 크기가 일치하지 않습니다")
+                        output.write(buffer, 0, count)
+                        digest.update(buffer, 0, count)
+                        updateState(model.id, ModelDownloadState.Downloading(downloaded, model.sizeBytes))
                     }
                 }
             }
-            connection.disconnect()
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
+            updateState(model.id, ModelDownloadState.Verifying)
+            if (downloaded != model.sizeBytes || digest.digest().hex() != model.sha256) {
+                throw IOException("모델 파일 검증에 실패했습니다. 다시 다운로드해 주세요")
             }
+            currentCoroutineContext().ensureActive()
+            // Same-directory rename is atomic; copying to the final path exposes incomplete data.
+            if (!temp.renameTo(target)) throw IOException("모델 파일을 저장하지 못했습니다")
             updateState(model.id, ModelDownloadState.Completed(model.fileName))
             Result.success(target)
-        } catch (e: IOException) {
-            temp.delete()
-            updateState(
-                model.id,
-                ModelDownloadState.Failed("다운로드 실패: " + (e.message ?: e.javaClass.simpleName)),
-            )
-            Result.failure(e)
+        } catch (e: CancellationException) {
+            updateState(model.id, ModelDownloadState.Idle)
+            throw e
         } catch (e: Exception) {
-            temp.delete()
-            updateState(
-                model.id,
-                ModelDownloadState.Failed("다운로드 실패: " + (e.message ?: e.javaClass.simpleName)),
-            )
+            // Do not expose response bodies, signed CDN URLs, or server exception messages.
+            val message = if (e is IOException && e.message?.startsWith("모델") == true) {
+                e.message!!
+            } else {
+                "다운로드 실패. 네트워크와 저장 공간을 확인하고 다시 시도해 주세요."
+            }
+            updateState(model.id, ModelDownloadState.Failed(message))
             Result.failure(e)
+        } finally {
+            connection?.disconnect()
+            temp.delete()
+            synchronized(active) { active.remove(model.id) }
         }
     }
 
     private fun updateState(id: String, state: ModelDownloadState) {
-        _states.value = _states.value + (id to state)
+        _states.update { it + (id to state) }
     }
 
-    /**
-     * 리다이렉트(최대 5회)를 수동으로 따라간다. HuggingFace의 resolve URL은
-     * 302로 Xet CDN(별도 호스트)을 가리키며, HttpURLConnection의 자동 리다이렉트는
-     * 신뢰할 수 없어 직접 Location 헤더를 따른다.
-     */
     private fun openFollowingRedirects(startUrl: String): HttpURLConnection {
-        var url = startUrl
-        var redirects = 0
-        while (true) {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            val code = connection.responseCode
-            if (code in 300..399) {
+        var url = URI(startUrl)
+        repeat(6) { redirect ->
+            if (url.scheme != "https") throw IOException("모델 다운로드에는 HTTPS가 필요합니다")
+            val connection = connect(url.toString())
+            try {
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 30_000
+                connection.instanceFollowRedirects = false
+                connection.setRequestProperty("User-Agent", "AirCallAI/0.2 (Android)")
+                val code = connection.responseCode
+                if (code !in 300..399) return connection
                 val location = connection.getHeaderField("Location")
+                if (location.isNullOrBlank() || redirect == 5) throw IOException("모델 다운로드 리다이렉트 실패")
+                url = url.resolve(location)
+            } catch (e: Exception) {
                 connection.disconnect()
-                if (location.isNullOrBlank() || redirects >= MAX_REDIRECTS) {
-                    throw IOException("리다이렉트 실패 (HTTP $code)")
-                }
-                url = resolveAgainst(url, location)
-                redirects++
-                continue
+                throw e
             }
-            return connection
+            connection.disconnect()
         }
+        throw IOException("모델 다운로드 리다이렉트 실패")
     }
 
-    /** 상대 경로 Location을 기준 URL에 대해 절대 URL로 변환한다. */
-    private fun resolveAgainst(baseUrl: String, location: String): String =
-        if (location.startsWith("http")) {
-            location
-        } else {
-            URI(baseUrl).resolve(location).toString()
-        }
-
-    /** HTTP 오류를 사용자가 원인을 알 수 있는 문구로 변환한다. */
     private fun httpErrorMessage(code: Int): String = when (code) {
-        404 -> "다운로드 실패: 모델 파일을 찾을 수 없습니다 (HTTP 404)"
-        401, 403 -> "다운로드 실패: 접근이 거부되었습니다 (라이선스 동의 필요, HTTP $code)"
-        429 -> "다운로드 실패: 요청이 너무 많습니다. 잠시 후 다시 시도하세요 (HTTP 429)"
-        in 500..599 -> "다운로드 실패: 서버 오류 (HTTP $code). 잠시 후 다시 시도하세요"
-        else -> "다운로드 실패: HTTP $code"
+        404 -> "모델 파일을 찾을 수 없습니다 (HTTP 404)"
+        401, 403 -> "모델 다운로드 접근이 거부되었습니다 (HTTP $code)"
+        429 -> "모델 다운로드 요청이 너무 많습니다. 잠시 후 다시 시도하세요 (HTTP 429)"
+        else -> "모델 다운로드 서버 오류 (HTTP $code)"
     }
 
-    fun delete(model: LocalModelInfo): Boolean = targetFile(model).delete()
-
-    fun reset() {
-        _states.value = emptyMap()
+    /** Only the two retired catalog filenames (and their partial downloads) are eligible. */
+    private fun legacyFiles(): List<File> = listOf("e2b", "e4b").flatMap { size ->
+        val name = "gemma-4-$size-it-web.task"
+        listOf(File(modelsDir, name), File(modelsDir, "$name.part"))
     }
 
-    companion object {
-        private const val CONNECT_TIMEOUT_MS = 15_000
-        private const val READ_TIMEOUT_MS = 30_000
-        private const val BUFFER_SIZE = 64 * 1024
-        private const val HTTP_OK = 200
-        private const val MAX_REDIRECTS = 5
-        private const val USER_AGENT = "AirCallAI/0.1 (Android)"
+    fun hasLegacyFiles(): Boolean = legacyFiles().any { it.isFile }
+
+    fun deleteLegacyFiles(): Boolean = legacyFiles().map { !it.exists() || it.delete() }.all { it }
+
+    fun delete(model: LocalModelInfo): Boolean = synchronized(active) {
+        if (model.id in active) return@synchronized false
+        val file = targetFile(model)
+        val deleted = !file.exists() || file.delete()
+        if (deleted) updateState(model.id, ModelDownloadState.Idle)
+        deleted
     }
 }
+
+internal fun isInstalledModel(file: File, model: LocalModelInfo): Boolean =
+    file.isFile && file.length() == model.sizeBytes
+
+internal suspend fun verifyModelFile(file: File, model: LocalModelInfo): Boolean {
+    if (!isInstalledModel(file, model)) return false
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    return digest.digest().hex() == model.sha256
+}
+
+private fun ByteArray.hex(): String = joinToString("") { "%02x".format(it) }

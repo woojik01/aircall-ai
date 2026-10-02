@@ -1,6 +1,7 @@
 package com.woojik.aircallai.ai.local
 
 import com.woojik.aircallai.ai.provider.AIProvider
+import kotlinx.coroutines.CancellationException
 import com.woojik.aircallai.ai.provider.AIProviderException
 import com.woojik.aircallai.ai.provider.AIResponse
 import com.woojik.aircallai.ai.provider.ChatMessage
@@ -22,14 +23,16 @@ class LocalAIProvider(
 
     override suspend fun respond(history: List<ChatMessage>): AIResponse {
         val started = System.currentTimeMillis()
-        if (!adapter.isDeviceSupported()) {
-            throw AIProviderException(ProviderErrorKind.UNSUPPORTED_DEVICE)
-        }
         if (!adapter.isModelAvailable()) {
             throw AIProviderException(ProviderErrorKind.MODEL_NOT_INSTALLED)
         }
+        if (!adapter.isDeviceSupported()) {
+            throw AIProviderException(ProviderErrorKind.UNSUPPORTED_DEVICE)
+        }
         val text = try {
             adapter.generate(history)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: AIProviderException) {
             throw e
         } catch (e: OutOfMemoryError) {

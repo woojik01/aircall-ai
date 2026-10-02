@@ -26,7 +26,7 @@ interface AIProvider {
     val type: ProviderType
     val displayName: String
 
-    /** True when the provider is ready to be used (model loaded / credential present). */
+    /** Prerequisite check (model file/device support or credential); inference may still fail. */
     suspend fun isReady(): Boolean
 
     suspend fun respond(history: List<ChatMessage>): AIResponse

@@ -1,48 +1,43 @@
 package com.woojik.aircallai.ai.local
 
-import com.woojik.aircallai.ai.provider.ChatMessage
-
-/**
- * 로컬 모델 갤러리 카탈로그 (Edge AI Gallery 방식).
- * 사용자가 모델을 선택해 다운로드하고 적용한다. 모델 파일이 GB 단위이므로
- * 앱에 내장하지 않고 설정 시점에 내려받아 PRD-02 modelsDir에 보관한다.
- *
- * MediaPipe LLM Inference 호환 .task 모델만 등록한다 (1단계 백엔드).
- * URL은 라이선스 동의 없이 공개 다운로드되는 litert-community 저장소만 사용한다.
- */
+/** Android용 LiteRT-LM 모델 카탈로그. 웹용 .task 파일과 호환되지 않는다. */
 data class LocalModelInfo(
     val id: String,
     val displayName: String,
     val fileName: String,
     val downloadUrl: String,
-    /** 표시용 근사 크기 (바이트). 실제 다운로드는 Content-Length 기준. */
+    /** 고정한 저장소 revision의 정확한 파일 크기. */
     val sizeBytes: Long,
     /** 실행에 필요한 최소 기기 RAM (MB). */
     val minRamMb: Int,
     val description: String,
+    val sha256: String,
 )
 
 object LocalModelRegistry {
 
-    /** MediaPipe 사전 변환(.task) 모델 — LiteRT Community HuggingFace (공개 다운로드). */
+    /** LiteRT Community의 Android CPU 모델. revision과 SHA-256으로 다운로드를 검증한다. */
+    // New IDs prevent a saved web-model selection from bypassing native load/apply validation.
     val models: List<LocalModelInfo> = listOf(
         LocalModelInfo(
-            id = "gemma-4-e2b",
+            id = "gemma-4-e2b-cpu",
             displayName = "Gemma 4 E2B",
-            fileName = "gemma-4-e2b-it-web.task",
-            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.task",
-            sizeBytes = 2_000_000_000L,
+            fileName = "gemma-4-E2B-it.litertlm",
+            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1/gemma-4-E2B-it.litertlm",
+            sizeBytes = 2_588_147_712L,
             minRamMb = 4096,
-            description = "가장 가벼운 기본 모델. 중급 기기에 적합.",
+            description = "텍스트 응답용 CPU 모델. 속도와 실행 가능 여부는 기기 메모리에 따라 다릅니다.",
+            sha256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
         ),
         LocalModelInfo(
-            id = "gemma-4-e4b",
+            id = "gemma-4-e4b-cpu",
             displayName = "Gemma 4 E4B",
-            fileName = "gemma-4-e4b-it-web.task",
-            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.task",
-            sizeBytes = 2_960_000_000L,
+            fileName = "gemma-4-E4B-it.litertlm",
+            downloadUrl = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/2eee7ac325f20eb8c9ac1d0e972f7c84663062da/gemma-4-E4B-it.litertlm",
+            sizeBytes = 3_659_530_240L,
             minRamMb = 8192,
-            description = "더 높은 품질. 플래그십(8GB RAM 이상) 권장.",
+            description = "더 큰 텍스트 응답용 CPU 모델. E2B보다 많은 저장 공간과 메모리가 필요합니다.",
+            sha256 = "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
         ),
     )
 
@@ -55,6 +50,7 @@ object LocalModelRegistry {
 fun formatSizeBytes(bytes: Long): String {
     val gb = bytes / 1_000_000_000.0
     return if (gb >= 1.0) String.format("%.1f GB", gb)
+
     else String.format("%.0f MB", bytes / 1_000_000.0)
 }
 
@@ -72,20 +68,4 @@ sealed interface ModelDownloadState {
     data object Verifying : ModelDownloadState
     data class Failed(val message: String) : ModelDownloadState
     data class Completed(val fileName: String) : ModelDownloadState
-}
-
-/**
- * 대화 기록을 로컬 모델 프롬프트로 변환한다.
- * 로컬 소형 모델은 시스템 롤을 지원하지 않으므로 하나의 텍스트 프롬프트로 직렬화한다.
- */
-fun buildLocalPrompt(history: List<ChatMessage>): String = buildString {
-    append("You are AirCall AI, a helpful Korean voice assistant. Answer briefly.\n\n")
-    history.forEach { message ->
-        when (message.role) {
-            ChatMessage.Role.SYSTEM -> append("지시: ").append(message.content).append('\n')
-            ChatMessage.Role.USER -> append("사용자: ").append(message.content).append('\n')
-            ChatMessage.Role.ASSISTANT -> append("AI: ").append(message.content).append('\n')
-        }
-    }
-    append("AI: ")
 }

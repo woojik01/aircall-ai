@@ -41,7 +41,7 @@ fun ConversationScreen(vm: MainViewModel) {
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
-                TextButton(onClick = { vm.engine.clearError() }) { Text("재시도") }
+                TextButton(onClick = { vm.engine.clearError() }) { Text("오류 닫기") }
             }
             LazyColumn(
                 modifier = Modifier
@@ -76,7 +76,7 @@ fun ConversationScreen(vm: MainViewModel) {
                     OutlinedButton(onClick = { vm.endSession() }) { Text("세션 종료") }
                 }
                 Text(
-                    text = "백그라운드 대화 진행 중 — 다른 앱 사용 중이나 화면이 꺼져도 대화가 유지됩니다.",
+                    text = "백그라운드 음성 세션 실행 중입니다. 기기 절전 설정에 따라 중단될 수 있습니다.",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )

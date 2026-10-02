@@ -7,6 +7,7 @@ import com.woojik.aircallai.ai.provider.NoopAIProvider
 import com.woojik.aircallai.ai.provider.ProviderType
 import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.conversation.ConversationState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -14,6 +15,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConversationEngineTest {
+
+    @Test(expected = CancellationException::class)
+    fun cancellationIsNotReportedAsModelFailure() = runTest {
+        val provider = object : AIProvider by NoopAIProvider() {
+            override suspend fun respond(history: List<ChatMessage>): AIResponse =
+                throw CancellationException("session ended")
+        }
+        ConversationEngine(provider).submitUserMessage("hello")
+    }
 
     @Test
     fun initialStateIsIdleWithEmptyTranscript() {

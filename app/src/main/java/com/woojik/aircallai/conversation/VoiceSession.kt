@@ -37,7 +37,7 @@ class VoiceSession(
 
         val recognitionEnd = System.currentTimeMillis()
         engine.submitUserMessage(text, voiceMode = true)
-        val response = engine.latestAssistantMessage() ?: return
+        val response = (engine.state.value as? ConversationState.Speaking)?.assistantMessage ?: return
         val aiResponseEnd = System.currentTimeMillis()
 
         val ttsStart = System.currentTimeMillis()

@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -17,7 +18,7 @@ android {
 
     buildTypes {
         release {
-            // PRD-08: Release 빌드에 R8 축소/난독화 적용. MediaPipe JNI 유지 규칙은
+            // PRD-08: Release 빌드에 R8 축소/난독화 적용. LiteRT-LM JNI 유지 규칙은
             // proguard-rules.pro 참조.
             isMinifyEnabled = true
             isShrinkResources = true
@@ -36,9 +37,6 @@ android {
     }
     buildFeatures {
         compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
     }
     packaging {
         resources {
@@ -59,11 +57,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
-    // 로컬 모델 추론 백엔드 (로컬 기능 증분): MediaPipe LLM Inference (.task 모델)
-    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+    // Gemma 4 Android 모델은 LiteRT-LM의 .litertlm 형식으로 실행한다.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.10.2")
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
