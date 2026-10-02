@@ -1,6 +1,10 @@
 package com.woojik.aircallai
 
 import com.woojik.aircallai.ai.provider.ChatMessage
+import com.woojik.aircallai.ai.provider.AIProvider
+import com.woojik.aircallai.ai.provider.AIProviderException
+import com.woojik.aircallai.ai.provider.AIResponse
+import com.woojik.aircallai.ai.provider.ProviderErrorKind
 import com.woojik.aircallai.ai.provider.NoopAIProvider
 import com.woojik.aircallai.audio.AudioError
 import com.woojik.aircallai.audio.SpeechRecognizerInterface
@@ -28,6 +32,23 @@ class VoiceSessionTest {
             spoken.add(text)
         }
         override fun stop() { stopped++ }
+    }
+
+    @Test
+    fun modelLoadFailureDoesNotReplayPreviousResponse() = runTest {
+        val engine = ConversationEngine(NoopAIProvider())
+        val tts = FakeSynthesizer()
+        val session = VoiceSession(FakeRecognizer { "hello" }, tts, engine)
+        session.runOneTurn()
+        val failing = object : AIProvider by NoopAIProvider() {
+            override suspend fun respond(history: List<ChatMessage>): AIResponse =
+                throw AIProviderException(ProviderErrorKind.LOAD_FAILED)
+        }
+        engine.updateProvider(failing)
+        session.runOneTurn()
+        assertEquals(1, tts.spoken.size)
+        assertEquals(1, session.metrics.value.size)
+        assertTrue(engine.state.value is ConversationState.Error)
     }
 
     @Test

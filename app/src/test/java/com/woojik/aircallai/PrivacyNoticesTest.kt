@@ -13,13 +13,13 @@ import org.junit.Test
 class PrivacyNoticesTest {
 
     @Test
-    fun localModeExplainsNoDataLeaves() {
+    fun localModeDistinguishesInferenceFromSpeechServices() {
         val notice: PrivacyNotice = PrivacyNotices.localMode
         assertEquals("Local 모드", notice.title)
         assertTrue(notice.detail.isNotBlank())
         assertTrue(
-            "Local 모드는 데이터가 외부로 나가지 않음을 명시해야 한다",
-            notice.detail.contains("벗어나지"),
+            "음성 서비스의 별도 네트워크 사용을 명시해야 한다",
+            notice.detail.contains("음성·텍스트") && notice.detail.contains("네트워크"),
         )
     }
 
@@ -29,7 +29,7 @@ class PrivacyNoticesTest {
         assertEquals("Cloud 모드", notice.title)
         assertTrue("HTTPS 언급 필수", notice.detail.contains("HTTPS"))
         assertTrue("전송 대상 명시 필수", notice.detail.contains("대화 텍스트"))
-        assertTrue("Key 미전송 명시 필수", notice.detail.contains("보내지 않습니다"))
+        assertTrue("Key 인증 전송 명시 필수", notice.detail.contains("인증하기 위해"))
     }
 
     @Test

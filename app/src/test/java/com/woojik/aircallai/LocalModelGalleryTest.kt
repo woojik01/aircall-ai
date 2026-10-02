@@ -1,7 +1,8 @@
 package com.woojik.aircallai
 
 import com.woojik.aircallai.ai.local.LocalModelRegistry
-import com.woojik.aircallai.ai.local.buildLocalPrompt
+import com.woojik.aircallai.ai.local.localConversationConfig
+import com.google.ai.edge.litertlm.Role
 import com.woojik.aircallai.ai.local.downloadPercent
 import com.woojik.aircallai.ai.local.formatSizeBytes
 import com.woojik.aircallai.ai.provider.ChatMessage
@@ -23,6 +24,15 @@ class LocalModelGalleryTest {
     // ----- 카탈로그 무결성 -----
 
     @Test
+    fun legacySelectionRequiresExplicitNativeModelApply() {
+        val settings = SettingsRepository(InMemorySettingsStore())
+        for (legacyId in listOf("gemma-4-e2b", "gemma-4-e4b")) {
+            settings.setLocalModelId(legacyId)
+            assertNull(LocalModelRegistry.byId(settings.localModelId()))
+        }
+    }
+
+    @Test
     fun registryHasModels() {
         assertTrue(LocalModelRegistry.models.isNotEmpty())
     }
@@ -39,11 +49,15 @@ class LocalModelGalleryTest {
             assertTrue("blank id", model.id.isNotBlank())
             assertTrue("blank name", model.displayName.isNotBlank())
             assertTrue("blank file", model.fileName.isNotBlank())
-            assertTrue("file not .task: " + model.fileName, model.fileName.endsWith(".task"))
+            assertTrue("file not .litertlm: " + model.fileName, model.fileName.endsWith(".litertlm"))
             assertTrue("bad url: " + model.downloadUrl, model.downloadUrl.startsWith("https://"))
             assertTrue("size must be positive", model.sizeBytes > 0)
             assertTrue("minRam must be sane", model.minRamMb >= 1024)
             assertTrue("blank description", model.description.isNotBlank())
+            assertTrue(model.sha256.matches(Regex("[a-f0-9]{64}")))
+            assertTrue(model.downloadUrl.endsWith("/" + model.fileName))
+            assertFalse(model.downloadUrl.contains("/main/"))
+            assertFalse(model.fileName.contains("web"))
         }
     }
 
@@ -99,11 +113,15 @@ class LocalModelGalleryTest {
             ChatMessage(ChatMessage.Role.ASSISTANT, "안녕하세요"),
             ChatMessage(ChatMessage.Role.USER, "날씨 어때?"),
         )
-        val prompt = buildLocalPrompt(history)
-        assertTrue(prompt.contains("사용자: 안녕"))
-        assertTrue(prompt.contains("AI: 안녕하세요"))
-        assertTrue(prompt.contains("사용자: 날씨 어때?"))
-        assertTrue("마지막은 AI 차례로 끝난다", prompt.trim().endsWith("AI:"))
+        val config = localConversationConfig(history)
+        assertEquals(listOf(Role.USER, Role.MODEL), config.initialMessages.map { it.role })
+        assertEquals(listOf("안녕", "안녕하세요"), config.initialMessages.map { it.toString() })
+        assertEquals(false, config.extraContext["enable_thinking"])
+        val voiceConfig = localConversationConfig(
+            listOf(ChatMessage(ChatMessage.Role.SYSTEM, "짧게 말해 주세요")) + history,
+        )
+        assertTrue(voiceConfig.systemInstruction.toString().contains("짧게 말해 주세요"))
+        assertEquals(2, voiceConfig.initialMessages.size)
     }
 
     // ----- 설정: 로컬 모델 선택 -----
