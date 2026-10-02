@@ -23,9 +23,10 @@ class AccountConnectionRepository(
         val updated = states.value.toMutableMap()
         for (provider in providerMap.keys) {
             val tokens = store.load(provider)
+            val savedName = store.loadDisplayName(provider)
             updated[provider] = ConnectionAccount(
                 provider = provider,
-                displayName = store.loadDisplayName(provider),
+                displayName = savedName,
                 status = when {
                     tokens == null -> ConnectionStatus.NOT_CONNECTED
                     tokens.isExpired(nowEpochMs) && tokens.refreshToken == null -> ConnectionStatus.REAUTH_REQUIRED
@@ -39,22 +40,32 @@ class AccountConnectionRepository(
 
     suspend fun connect(provider: String, tokens: OAuthTokens, displayName: String?, nowEpochMs: Long) {
         store.save(provider, tokens, displayName)
-        mark(provider, ConnectionStatus.CONNECTED, displayName)
+        update(provider, ConnectionStatus.CONNECTED, displayName)
         refresh(nowEpochMs)
     }
 
-    /** PRD-09 연결 해제: 해당 서비스만 초기화한다. */
+    /** PRD-09 연결 해제: 해당 서비스만 초기화한다. 계정 식별자도 함께 지운다. */
     suspend fun disconnect(provider: String) {
         store.disconnect(provider)
-        mark(provider, ConnectionStatus.NOT_CONNECTED, null)
+        update(provider, ConnectionStatus.NOT_CONNECTED, null)
     }
 
     suspend fun mark(provider: String, status: ConnectionStatus, displayName: String? = null) {
         val current = states.value[provider] ?: return
+        update(
+            provider,
+            status,
+            if (displayName != null) displayName else current.displayName,
+        )
+    }
+
+    private fun update(provider: String, status: ConnectionStatus, displayName: String?) {
+        val current = states.value[provider] ?: return
         val updated = states.value.toMutableMap()
-        updated[provider] = current.copy(
+        updated[provider] = ConnectionAccount(
+            provider = provider,
+            displayName = displayName,
             status = status,
-            displayName = displayName ?: current.displayName,
         )
         states.value = updated
     }
