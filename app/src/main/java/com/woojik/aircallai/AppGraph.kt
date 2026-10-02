@@ -20,6 +20,8 @@ import com.woojik.aircallai.tools.GitHubApiClient
 import com.woojik.aircallai.tools.GitHubTool
 import com.woojik.aircallai.tools.PersistedToolPermissionStore
 import com.woojik.aircallai.tools.ToolApprovalCoordinator
+import com.woojik.aircallai.tools.ToolBridgedAIProvider
+import com.woojik.aircallai.tools.ToolExecutionLogger
 import com.woojik.aircallai.tools.ToolExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,35 +34,22 @@ import kotlinx.coroutines.SupervisorJob
  * 로컬 기능 증분: 로컬 모델은 LiteRT-LM 어댑터 + 다운로드 갤러리로 구성한다.
  * PRD-06: GitHub Tool(READ/WRITE)과 승인 계층을 그래프에 연결한다.
  * WRITE 승인 상태는 일반 설정에 영속화되어 앱 재시작 후에도 유지된다.
+ * Tool-AI 연결: 모든 provider를 ToolBridgedAIProvider로 감싸 Tool 지시어를 처리한다.
  */
 class AppGraph(context: Context) {
     private val settingsStore = SharedPrefsStore(context)
     val settings = SettingsRepository(settingsStore)
     val credentials = FileCredentialManager(AppStorage.credentialsDir(context), AndroidKeystoreCrypto())
 
-    /** 로컬 모델: LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */
+    /** 로컬 모델:
+ LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */
     val localModelAdapter = LiteRtModelAdapter(context, settings)
     val modelDownloadManager = ModelDownloadManager(context)
-
-    val localProvider: AIProvider = LocalAIProvider(localModelAdapter)
-    val cloudProvider: AIProvider = CloudAIProvider(
-        credentials = credentials,
-        apiAdapter = HttpCloudApiAdapter(),
-        endpointProvider = {
-            CloudAIProvider.Endpoint(
-                baseUrl = settings.cloudBaseUrl(),
-                model = settings.cloudModel(),
-            )
-        },
-    )
-
-    val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)
-
-    val engine = ConversationEngine(providerRouter.current())
 
     /** PRD-06: GitHub Tool 실행 계층. 토큰은 CredentialManager(github)에서만 읽는다. */
     val githubApi = GitHubApiClient(credentials)
     val toolPermissions = PersistedToolPermissionStore(settingsStore)
+    val toolLogger = ToolExecutionLogger()
     val toolExecutor = ToolExecutor(listOf(GitHubTool(githubApi)), toolPermissions)
 
     /** PRD-06: WRITE 작업 승인 흐름. 승인 상태는 toolPermissions에 영속 저장된다. */
@@ -69,6 +58,41 @@ class AppGraph(context: Context) {
         executor = toolExecutor,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
+
+    /** Tool-AI 연결: AI 응답의 TOOL 지시어를 실행하고 결과를 반영한다. */
+    private val toolCatalog =
+        "github.read_repository owner=<소유자> repo=<저장소> — GitHub 저장소를 조회한다\n" +
+            "github.create_issue owner=<소유자> repo=<저장소> title=<제목> [body=<내용>] — Issue를 만든다 (승인 필요)\n" +
+            "github.create_pull_request owner=<소유자> repo=<저장소> title=<제목> head=<브랜치> base=<브랜치> — PR을 만든다 (승인 필요)"
+
+    val localProvider: AIProvider = ToolBridgedAIProvider(
+        base = LocalAIProvider(localModelAdapter),
+        executor = toolExecutor,
+        logger = toolLogger,
+        toolsDescription = toolCatalog,
+        approvalRequester = { request -> toolApproval.submit(request) },
+    )
+    val cloudProvider: AIProvider = ToolBridgedAIProvider(
+        base = CloudAIProvider(
+            credentials = credentials,
+            apiAdapter = HttpCloudApiAdapter(),
+            endpointProvider = {
+                CloudAIProvider.Endpoint(
+                    baseUrl = settings.cloudBaseUrl(),
+                    model = settings.cloudModel(),
+                )
+            },
+        ),
+        executor = toolExecutor,
+        logger = toolLogger,
+        toolsDescription = toolCatalog,
+        approvalRequester = { request -> toolAppro
+val.submit(request) },
+    )
+
+    val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)
+
+    val engine = ConversationEngine(providerRouter.current())
 
     /**
      * Android 음성 API(SpeechRecognizer/TTS)는 메인 스레드에서 호출한다.

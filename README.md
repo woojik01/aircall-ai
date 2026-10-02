@@ -10,11 +10,10 @@
 - Foreground Service·알림·오버레이 컨트롤과 통화형 화면
 - 로컬 모델 다운로드·파일 검증·로드 후 적용, LiteRT-LM CPU 추론 어댑터
 - GitHub PAT 저장, 저장소 조회 및 Issue/PR 생성 API, WRITE 승인·승인 영속화 계층
+- 대화에서 Tool을 호출하는 연결(TOOL 지시어 파싱·실행·결과 반영)과 실행 메타데이터 로깅
 - 개인정보 안내와 Release R8 빌드 구성 (앱 버전 0.2.0)
 
-**미완료:** 대화에서 Tool을 호출하는 연결, Calendar/Gmail/Notes Adapter, Tool 실행 메타데이터 로깅.
-GitHub 토큰을 저장해도 현재 대화에서 저장소 조회나 Issue/PR 생성을 요청할 수는 없습니다.
-Tool-AI 연결·실행 로깅은 [미병합 PR #17](https://github.com/woojik01/aircall-ai/pull/17)에서 별도로 진행 중입니다.
+**미완료:** Calendar/Gmail/Notes Adapter.
 
 **실기 검증 필요:** 로컬 모델의 Android 추론 성능과 메모리 사용, 음성 인식·출력,
 화면 회전·복귀·다른 앱 전환·화면 OFF·알림/오버레이·배터리 동작, Release APK 설치.
@@ -48,9 +47,15 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 
 - 설정 → GitHub 연동에서 PAT 등록 (기기 Keystore 암호화 저장)
 - `github` Tool: `read_repository`는 기본 허용, `create_issue`/`create_pull_request`는 승인 필요
-- 승인 요청·다이얼로그·실행 계층은 구현되어 있으나 현재 대화 엔진에서 호출하지 않습니다.
-- 승인은 **도구·작업 단위**로 저장됩니다. 승인 후에는 다른 인자로 같은 작업을 요청해도
-  다시 묻지 않으며, 앱 재시작 후에도 유지됩니다. 설정 → Tool 작업 승인에서 해제할 수 있습니다.
+- **Tool-AI 연결**: AI가 `TOOL: github.read_repository owner=... repo=...` 지시어를 응답하면
+  실행 결과를 대화에 반영해 최종 답
+변한다 (최대 2회 라운드)
+- 승인 요청·다이얼로그·실행 계층이 대화 엔진에 연결되어 있으며,
+  WRITE 작업은 승인 다이얼로그를 통한 사용자 승인이 필요하다
+- 승인은 **도구·작업 단위**로 저장된다. 승인 후에는 다른 인자로 같은 작업을 요청해도
+  다시 묻지 않으며, 앱 재시작 후에도 유지된다. 설정 → Tool 작업 승인에서 해제할 수 있다.
+- **실행 메타데이터 로깅**: 도구/액션/위험도/차단 여부/성공/지연(ms)을 기록한다
+  (인자 값은 민감 정보 방지를 위해 미기록, 최근 100건 메모리 + 디버그 로그 요약)
 
 ## 개인정보
 
@@ -58,7 +63,7 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 
 - **Local:** AI 추론용 대화 텍스트를 외부 AI 서버로 보내지 않습니다. 음성 서비스의 네트워크 사용은 별도입니다.
 - **Cloud:** 대화 텍스트와 인증용 API Key가 설정한 HTTPS API 주소로 전송됩니다. Key는 기기에 암호화 저장됩니다.
-- **Tool:** 실행 시 요청과 인증 토큰이 해당 서비스로 전송됩니다. 현재 대화에서는 Tool 호출이 연결되지 않았습니다.
+- **Tool:** 실행 시 요청과 인증 토큰이 해당 서비스로 전송됩니다. READ는 기본 허용, WRITE는 승인 후 실행됩니다.
 
 ## 구조
 
@@ -71,7 +76,8 @@ app/src/main/java/com/woojik/aircallai/
   session/       세션 상태·제어
   service/       ConversationService
   call/, overlay/ 통화 상태·오버레이
-  tools/         GitHub API·실행·승인 계층
+  tools/         GitHub API·실행·승인 계층, ToolCallParser(TOOL 지시어 파싱),
+                 ToolBridgedAIProvider(AI-Tool 연결), ToolExecutionLogger(실행 메타데이터)
   settings/, privacy/, ui/
 ```
 
