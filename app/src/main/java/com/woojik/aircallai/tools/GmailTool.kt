@@ -44,7 +44,9 @@ open class GmailApiClient(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(message.toByteArray(Charsets.UTF_8))
     }
 
-    private fun sanitizeHeader(value: String): String = value.replace(CRLF, " ")
+    /** CRLF 쌍은 공백 하나로, 남은 단독 CR/LF도 공백으로 바꿔 헤더 주입을 차단한다. */
+    private fun sanitizeHeader(value: String): String =
+        value.replace(CRLF_PAIR, " ").replace(CRLF, " ")
 
     private fun send(raw: String, token: String): ToolResult {
         return runCatching {
@@ -73,6 +75,7 @@ open class GmailApiClient(
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 15_000
         private val VALID_EMAIL = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+        private val CRLF_PAIR = Regex("\\r\\n")
         private val CRLF = Regex("[\\r\\n]")
     }
 }
