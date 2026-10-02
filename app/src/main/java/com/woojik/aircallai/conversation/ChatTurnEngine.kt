@@ -4,6 +4,7 @@ import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.AIProviderException
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.audio.AudioError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,6 +70,8 @@ class ConversationEngine(
             val assistantMessage = response.message.copy(content = responseText)
             _transcript.update { it + assistantMessage }
             _state.value = ConversationState.Speaking(assistantMessage)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: AIProviderException) {
             _state.value = ConversationState.Error(
                 ConversationState.ErrorKind.AI_PROVIDER,

@@ -16,7 +16,7 @@ enum class CallStatus(val glyph: String, val label: String) {
     SPEAKING("💬", "말하는 중"),
     PAUSED("⏸", "일시정지됨"),
     MUTED("🔇", "음소거"),
-    OFFLINE("📴", "오프라인 — 설정에서 Cloud API 키를 등록하세요"),
+    OFFLINE("📴", "AI 설정 필요"),
     ERROR("⚠", "오류"),
 }
 
@@ -32,7 +32,7 @@ data class CallControls(
  * 순수 로직이므로 JVM 단위 테스트로 상태 전환의 정확성을 검증한다 (PRD-07 완료 조건).
  *
  * 우선순위: 오류 > 일시정지 > 음소거 > 말하는 중 > 생각 중 > 듣고 있습니다.
- * 세션이 없을 때 Provider가 준비되지 않았으면 오프라인으로 표시한다.
+ * 세션이 없을 때 Provider가 준비되지 않았으면 설정 필요로 표시한다.
  */
 fun callStatusOf(
     session: SessionStatus,
@@ -61,7 +61,8 @@ fun callControlsOf(status: CallStatus, sessionActive: Boolean): CallControls {
 }
 
 /** 음소거 버튼 라벨 (알림/오버레이/통화 화면이 동일한 문구를 쓴다). */
-fun muteLabel(muted: Boolean): String = if (muted) "음소거 해제" else "음소거"
+fun muteLabel(muted: Boolean): String = if (muted) "음
+소거 해제" else "음소거"
 
 /** 일시정지/재개 버튼 라벨. */
 fun pauseLabel(paused: Boolean): String = if (paused) "재개" else "일시정지"

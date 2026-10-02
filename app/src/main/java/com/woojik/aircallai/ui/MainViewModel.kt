@@ -42,7 +42,7 @@ class MainViewModel(
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    /** PRD-07: Provider 준비 여부 — 준비되지 않으면 통화 화면이 오프라인 상태를 표시한다. */
+    /** PRD-07: Provider 준비 여부 — 준비되지 않으면 통화 화면이 설정 필요 상태를 표시한다. */
     private val _providerReady = MutableStateFlow(true)
     val providerReady: StateFlow<Boolean> = _providerReady.asStateFlow()
 

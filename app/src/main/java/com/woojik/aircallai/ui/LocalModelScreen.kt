@@ -29,12 +29,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.woojik.aircallai.ai.local.LocalModelInfo
 import com.woojik.aircallai.ai.local.LocalModelRegistry
-import com.woojik.aircallai.ai.local.MediaPipeModelAdapter
+import com.woojik.aircallai.ai.local.LiteRtModelAdapter
 import com.woojik.aircallai.ai.local.ModelDownloadManager
 import com.woojik.aircallai.ai.local.ModelDownloadState
 import com.woojik.aircallai.ai.local.downloadPercent
 import com.woojik.aircallai.ai.local.formatSizeBytes
 import com.woojik.aircallai.settings.SettingsRepository
+import kotlinx.coroutines.CancellationException
+import com.woojik.aircallai.ai.provider.AIProviderException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -47,12 +49,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun LocalModelScreen(
     settings: SettingsRepository,
-    adapter: MediaPipeModelAdapter,
+    adapter: LiteRtModelAdapter,
     downloadManager: ModelDownloadManager,
     scope: CoroutineScope,
+    onModelChanged: () -> Unit,
 ) {
     val states by downloadManager.states.collectAsState()
     var selectedId by remember { mutableStateOf(settings.localModelId()) }
+    var applying by remember { mutableStateOf(false) }
+    var hasLegacyFiles by remember { mutableStateOf(downloadManager.hasLegacyFiles()) }
+    var status by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("로컬 모델") }) },
@@ -66,29 +72,75 @@ fun LocalModelScreen(
         ) {
             item {
                 Text(
-                    "모델을 다운로드하면 인터넷 없이 기기에서만 대화할 수 있습니다.",
+                    "모델을 다운로드하고 적용하면 AI 응답을 기기에서 생성합니다. 음성 인식·출력의 네트워크 사용 여부는 기기의 음성 서비스에 따라 다릅니다.",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
+            }
+            item {
+                if (hasLegacyFiles) {
+                    Text("이전 웹용 모델은 사용할 수 없습니다. 삭제하면 새 모델을 위한 저장 공간을 확보할 수 있습니다.")
+                    OutlinedButton(onClick = {
+                        val deleted = downloadManager.deleteLegacyFiles()
+                        hasLegacyFiles = downloadManager.hasLegacyFiles()
+                        status = if (deleted) "이전 모델 파일을 삭제했습니다." else "이전 모델 파일을 삭제하지 못했습니다."
+                    }) { Text("이전 모델 파일 삭제") }
+                }
+                if (applying) Text("모델을 로드하는 중입니다. 잠시 기다려 주세요.")
+                status?.let { Text(it) }
+                val selected = LocalModelRegistry.byId(selectedId)
+                if (selectedId != null && (selected == null || !downloadManager.isDownloaded(selected))) {
+                    Text("선택한 모델을 다시 다운로드하고 적용해 주세요. 이전 웹용 모델 파일은 사용할 수 없습니다.")
+                }
             }
             items(LocalModelRegistry.models) { model ->
                 ModelCard(
                     model = model,
                     downloaded = downloadManager.isDownloaded(model),
-                    selected = selectedId == model.id,
+                    selected = selectedId == model.id && downloadManager.isDownloaded(model),
+                    busy = applying,
                     // 모델별 상태만 이 카드에 전달한다.
                     downloadState = states[model.id] ?: ModelDownloadState.Idle,
                     onDownload = {
                         scope.launch { downloadManager.download(model) }
                     },
-                    onDelete = { downloadManager.delete(model) },
+                    onDelete = {
+                        if (!downloadManager.delete(model)) status = "모델을 삭제하지 못했습니다. 다시 시도해 주세요."
+                    },
                     onApply = {
-                        settings.setLocalModelId(model.id)
-                        selectedId = model.id
+                        applying = true
+                        status = null
+                        scope.launch {
+                            try {
+                                adapter.apply(model)
+                                selectedId = model.id
+                                status = "모델을 로드하고 적용했습니다."
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: AIProviderException) {
+                                status = e.message
+                            } finally {
+                                applying = false
+                                onModelChanged()
+                            }
+                        }
                     },
                     onUnapply = {
-                        settings.setLocalModelId(null)
-                        selectedId = null
+                        applying = true
+                        scope.launch {
+                            try {
+                                adapter.unapply()
+                                selectedId = null
+                                status = null
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: AIProviderException) {
+                                status = e.message
+                            } finally {
+                                applying = false
+                                onModelChanged()
+                            }
+                        }
                     },
                 )
             }
@@ -108,6 +160,7 @@ private fun ModelCard(
     model: LocalModelInfo,
     downloaded: Boolean,
     selected: Boolean,
+    busy: Boolean,
     downloadState: ModelDownloadState,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
@@ -136,7 +189,7 @@ private fun ModelCard(
             )
             Text(
                 "크기 약 " + formatSizeBytes(model.sizeBytes) +
-                    " · 권장 RAM " + (model.minRamMb / 1024) + "GB 이상",
+                    " · RAM 검사 기준 " + (model.minRamMb / 1024) + "GiB 이상",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )
@@ -145,7 +198,7 @@ private fun ModelCard(
                 is ModelDownloadState.Downloading -> {
                     val percent = downloadPercent(downloadState.downloadedBytes, downloadState.totalBytes)
                     LinearProgressIndicator(
-                        progress = percent / 100f,
+                        progress = { percent / 100f },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 12.dp),
@@ -156,6 +209,7 @@ private fun ModelCard(
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
+                ModelDownloadState.Verifying -> Text("모델 파일 검증 중…")
                 is ModelDownloadState.Failed -> {
                     Text(
                         downloadState.message,
@@ -174,17 +228,18 @@ private fun ModelCard(
                 if (!downloaded) {
                     Button(
                         onClick = onDownload,
-                        enabled = downloadState !is ModelDownloadState.Downloading,
+                        enabled = !busy && downloadState !is ModelDownloadState.Downloading &&
+                            downloadState !is ModelDownloadState.Verifying,
                     ) {
                         Text("다운로드")
                     }
                 } else {
                     if (selected) {
-                        OutlinedButton(onClick = onUnapply) { Text("적용 해제") }
+                        OutlinedButton(onClick = onUnapply, enabled = !busy) { Text("적용 해제") }
                     } else {
-                        Button(onClick = onApply) { Text("적용") }
+                        Button(onClick = onApply, enabled = !busy) { Text("적용") }
                     }
-                    TextButton(onClick = onDelete, enabled = !selected) { Text("삭제") }
+                    TextButton(onClick = onDelete, enabled = !selected && !busy) { Text("삭제") }
                 }
             }
         }

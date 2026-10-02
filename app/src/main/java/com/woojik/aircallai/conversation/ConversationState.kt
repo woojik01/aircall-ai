@@ -4,7 +4,7 @@ import com.woojik.aircallai.ai.provider.ChatMessage
 
 /**
  * Conversation state lives outside any Activity/Composable so it survives
- * configuration changes and process death is handled by the ViewModel layer.
+ * configuration changes. Process death clears this in-memory state.
  */
 sealed interface ConversationState {
     data object Idle : ConversationState
