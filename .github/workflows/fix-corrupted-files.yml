@@ -10,45 +10,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply fixes
+      - name: Fix GoogleOAuthClient regex lines
         run: |
           python3 - <<'EOF'
           import pathlib
-          base = pathlib.Path('app/src/main/java/com/woojik/aircallai')
-          fixes = {
-              'ui/AppNav.kt': [
-                  ('PollResult.Pendi\nng', 'PollResult.Pending'),
-                  ('READ_CAL\nENDAR,', 'READ_CALENDAR,'),
-                  ('onM\nodeChanged = {', 'onModeChanged = {'),
-              ],
-              'ui/SettingsPane.kt': [
-                  ('\uc554\ud638\ud654\ub418\uc5b4 \uc800\n\uc7a5\ub418\uba70', '\uc554\ud638\ud654\ub418\uc5b4 \uc800\uc7a5\ub418\uba70'),
-                  ('setGoogleOAuthClien\ntId(', 'setGoogleOAuthClientId('),
-                  ('style = Mate\nrialTheme', 'style = MaterialTheme'),
-              ],
-              'auth/GoogleOAuthClient.kt': [
-                  ('\\s*:', '\\\\s*:'),
-                  ('(-?\\d+)', '(-?\\\\d+)'),
-              ],
-          }
-          changed = []
-          for rel, subs in fixes.items():
-              p = base / rel
-              s = p.read_text()
-              orig = s
-              for a, b in subs:
-                  if a in s:
-                      s = s.replace(a, b)
-                  else:
-                      print('NOT FOUND in', rel, ':', repr(a))
-              if s != orig:
-                  p.write_text(s)
-                  changed.append(rel)
-          print('changed:', changed)
+          p = pathlib.Path('app/src/main/java/com/woojik/aircallai/auth/GoogleOAuthClient.kt')
+          s = p.read_text()
+          good1 = r'            Regex("\"" + key + "\"\\s*:\\s*\"([^\\"]*)\"").find(body)?.groupValues?.get(1)'
+          good2 = r'            Regex("\"" + key + "\"\\s*:\\s*(-?\\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()'
+          lines = s.split('\n')
+          hits = 0
+          for i, l in enumerate(lines):
+              prev = lines[i-1] if i > 0 else ''
+              if l.strip().startswith('Regex(') and 'extractString' in prev:
+                  lines[i] = good1
+                  hits += 1
+              elif l.strip().startswith('Regex(') and 'extractNumber' in prev:
+                  lines[i] = good2
+                  hits += 1
+          s2 = '\n'.join(lines)
+          if s2 != s:
+              p.write_text(s2)
+              print('fixed lines:', hits)
+          else:
+              print('no changes needed')
           EOF
       - name: Commit fixes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --cached --quiet || (git commit -m "fix: 소스 파일 줄바꿈/이스케이프 손상 복구" && git push)
+          git diff --cached --quiet || (git commit -m "fix: GoogleOAuthClient 정규식 라인 복구" && git push)
