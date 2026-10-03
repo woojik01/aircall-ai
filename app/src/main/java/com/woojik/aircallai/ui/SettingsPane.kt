@@ -143,8 +143,7 @@ fun SettingsScreen(
                 ) { Text("삭제") }
             }
             Text(
-                "Key는 기기의 Android Keystore로 암호화되어 저
-장되며 서버로 전송되지 않습니다.",
+                "Key는 기기의 Android Keystore로 암호화되어 저장되며 서버로 전송되지 않습니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 16.dp),
             )
@@ -333,8 +332,7 @@ fun SettingsScreen(
             Row(modifier = Modifier.padding(top = 4.dp)) {
                 Button(
                     onClick = {
-                        settings.setGoogleOAuthClien
-tId(googleClientIdInput)
+                        settings.setGoogleOAuthClientId(googleClientIdInput)
                         status = "Google Client ID가 저장되었습니다."
                     },
                     enabled = googleClientIdInput.isNotBlank(),
@@ -383,8 +381,7 @@ tId(googleClientIdInput)
             if (calendarPermissionGranted) {
                 Text(
                     "캘린더 권한이 허용되었습니다.",
-                    style = Mate
-rialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             } else {

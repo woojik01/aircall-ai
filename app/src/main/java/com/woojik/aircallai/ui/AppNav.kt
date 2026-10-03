@@ -137,8 +137,7 @@ class MainActivity : ComponentActivity() {
                     appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
                     return result.reason
                 }
-                GitHubDeviceFlowClient.PollResult.Pendi
-ng -> delay(session.intervalSeconds * 1000L)
+                GitHubDeviceFlowClient.PollResult.Pending -> delay(session.intervalSeconds * 1000L)
             }
         }
         appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
@@ -243,8 +242,7 @@ ng -> delay(session.intervalSeconds * 1000L)
     private fun requestCalendarPermission() {
         requestCalendarPermissions.launch(
             arrayOf(
-                Manifest.permission.READ_CAL
-ENDAR,
+                Manifest.permission.READ_CALENDAR,
                 Manifest.permission.WRITE_CALENDAR,
             ),
         )
@@ -303,8 +301,7 @@ private fun AirCallUi(
             val accounts by graph.accountRepository.connections.collectAsState()
             SettingsScreen(
                 settings = graph.settings,
-                onM
-odeChanged = {
+                onModeChanged = {
                     vm.engine.updateProvider(graph.providerRouter.current())
                     vm.refreshProviderReadiness()
                 },
