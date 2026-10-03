@@ -89,9 +89,9 @@ jobs:
             fi
           fi
 
-      - name: Build debug APK
+      - name: Build debug and release APKs
         timeout-minutes: 5
-        run: gradle --no-daemon --console=plain assembleDebug
+        run: gradle --no-daemon --console=plain assembleDebug assembleRelease
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

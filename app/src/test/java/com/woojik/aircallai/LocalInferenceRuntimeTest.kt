@@ -12,6 +12,21 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 class LocalInferenceRuntimeTest {
+    @Test fun gpuSettingChangeReloadsOnSameWorker() = runBlocking {
+        val threads = mutableSetOf<Long>()
+        var created = 0
+        val runtime = LocalInferenceRuntime {
+            threads.add(Thread.currentThread().id)
+            created++
+            Backend()
+        }
+        runtime.withModel(File("same"), "gpu") { threads.add(Thread.currentThread().id) }
+        runtime.withModel(File("same"), "cpu") { threads.add(Thread.currentThread().id) }
+        runtime.unload { threads.add(Thread.currentThread().id) }
+        assertEquals(2, created)
+        assertEquals(1, threads.size)
+    }
+
     @Test fun failedInferenceRecreatesEngineOnNextTurn() = runBlocking {
         val engines = mutableListOf<Backend>()
         val runtime = LocalInferenceRuntime { Backend().also { engines.add(it) } }

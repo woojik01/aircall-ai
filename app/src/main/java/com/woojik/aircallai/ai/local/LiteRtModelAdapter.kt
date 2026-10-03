@@ -10,6 +10,8 @@ import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.core.storage.AppStorage
 import com.woojik.aircallai.settings.SettingsRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
 /** Gemma 4 native Android backend. STT/TTS remain separate Android services. */
@@ -18,9 +20,15 @@ class LiteRtModelAdapter(
     private val settings: SettingsRepository,
 ) : LocalModelAdapter {
     private val context = context.applicationContext
+    private val _runtimeStatus = MutableStateFlow("모델 대기 중")
+    val runtimeStatus = _runtimeStatus.asStateFlow()
     private val runtime = LocalInferenceRuntime { file ->
         localErrors(ProviderErrorKind.LOAD_FAILED) {
-            LiteRtBackend(file, this.context.cacheDir, useGpu = settings.localUseGpu())
+            GpuFallbackBackend(
+                useGpu = settings.localUseGpu(),
+                create = { gpu -> LiteRtBackend(file, this.context.cacheDir, useGpu = gpu) },
+                onBackend = { backend -> _runtimeStatus.value = "실행 장치: $backend · LiteRT-LM 0.17.1" },
+            )
         }
     }
 
@@ -45,23 +53,33 @@ class LiteRtModelAdapter(
     suspend fun apply(model: LocalModelInfo) {
         requireAvailable(model)
         localErrors(ProviderErrorKind.LOAD_FAILED) {
-            runtime.withModel(modelFile(model)) { settings.setLocalModelId(model.id) }
+            runtime.withModel(modelFile(model), settings.localUseGpu().toString()) {
+                it.validate()
+                settings.setLocalModelId(model.id)
+            }
         }
     }
 
     suspend fun unapply() = localErrors(ProviderErrorKind.LOAD_FAILED) {
-        runtime.unload { settings.setLocalModelId(null) }
+        runtime.unload { settings.setLocalModelId(null); _runtimeStatus.value = "모델 대기 중" }
     }
 
     override suspend fun generate(history: List<ChatMessage>): String {
         val model = selectedModel() ?: throw AIProviderException(ProviderErrorKind.MODEL_NOT_INSTALLED)
         requireAvailable(model)
+        val bounded = localInferenceHistory(history)
         return localErrors(ProviderErrorKind.INFERENCE_FAILED) {
-            runtime.withModel(modelFile(model)) { backend ->
-                backend.generate(history).ifBlank {
+            runtime.withModel(modelFile(model), settings.localUseGpu().toString()) { backend ->
+                backend.generate(bounded).ifBlank {
                     throw AIProviderException(ProviderErrorKind.INFERENCE_FAILED)
                 }
             }
+        }
+    }
+
+    suspend fun setGpuEnabled(enabled: Boolean) {
+        localErrors(ProviderErrorKind.LOAD_FAILED) {
+            runtime.unload { settings.setLocalUseGpu(enabled); _runtimeStatus.value = "다음 요청에서 모델을 다시 로드합니다" }
         }
     }
 
@@ -73,9 +91,16 @@ class LiteRtModelAdapter(
     }
 
     private fun modelFile(model: LocalModelInfo) = File(AppStorage.modelsDir(context), model.fileName)
+
+    private inline fun <T> localErrors(kind: ProviderErrorKind, block: () -> T): T = try {
+        mapLocalErrors(kind, block)
+    } catch (failure: AIProviderException) {
+        _runtimeStatus.value = failure.message ?: failure.kind.userMessage
+        throw failure
+    }
 }
 
-private inline fun <T> localErrors(kind: ProviderErrorKind, block: () -> T): T = try {
+private inline fun <T> mapLocalErrors(kind: ProviderErrorKind, block: () -> T): T = try {
     block()
 } catch (e: CancellationException) {
     throw e
@@ -87,5 +112,5 @@ private inline fun <T> localErrors(kind: ProviderErrorKind, block: () -> T): T =
     throw AIProviderException(ProviderErrorKind.UNSUPPORTED_DEVICE)
 } catch (e: Exception) {
     SecureLog.d("LiteRtAdapter", "local inference failed: " + e.javaClass.simpleName)
-    throw AIProviderException(kind)
+    throw AIProviderException(kind, localFailureCode(e)).also { it.initCause(e) }
 }

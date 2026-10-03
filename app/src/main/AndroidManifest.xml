@@ -32,6 +32,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AirCallAI">
 
+        <!-- LiteRT-LM GPU dependency visibility on Android 12+. CPU remains available. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+
         <activity
             android:name=".ui.MainActivity"
             android:exported="true">
