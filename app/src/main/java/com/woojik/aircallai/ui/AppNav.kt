@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
                 appGraph,
                 calendarPermissionGranted = { calendarGranted },
                 requestCalendarPermission = { requestCalendarPermission() },
-                connectGitHub = { connectGitHub() },
+                connectGitHub = { onDeviceCodeReady -> connectGitHub(onDeviceCodeReady) },
                 connectGoogle = { connectGoogle() },
                 disconnectAccount = { provider -> uiScope.launch { appGraph.accountRepository.disconnect(provider) } },
             )
@@ -117,27 +117,41 @@ class MainActivity : ComponentActivity() {
     }
 
     /** PRD-09 Phase 2: GitHub OAuth 기기 인증. user_code를 보여주고 토큰을 폴링한다. */
-    private suspend fun connectGitHub(): String {
+    private suspend fun connectGitHub(onDeviceCodeReady: (String) -> Unit): String {
         val appGraph = graph()
         appGraph.accountRepository.mark("github", ConnectionStatus.CONNECTING)
-        val session = appGraph.githubAuth.startDeviceFlow()
-        if (session == null) {
+        if (appGraph.settings.githubOAuthClientId().isBlank()) {
             appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
             return "GitHub OAuth App Client ID를 먼저 저장해 주세요 (GitHub 연동 섹션)."
         }
-        openBrowser(session.verificationUri)
-        // 사용자가 브라우저에서 코드를 입력하고 승인할 때까지 폴링한다.
+        val session = appGraph.githubAuth.startDeviceFlow()
+        if (session == null) {
+            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+            return "기기 인증을 시작하지 못했습니다. Client ID, 네트워크, OAuth App의 Device Flow 설정을 확인해 주세요."
+        }
+        onDeviceCodeReady(session.userCode)
+        if (!openBrowser(session.verificationUri)) {
+            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+            return "GitHub 인증 페이지를 열 수 없습니다. 브라우저를 설치한 뒤 다시 시도해 주세요."
+        }
+        var pollIntervalSeconds = session.intervalSeconds
+        delay(pollIntervalSeconds * 1000L)
         while (System.currentTimeMillis() < session.expiresAtMs) {
             when (val result = appGraph.githubAuth.pollToken(session)) {
                 is GitHubDeviceFlowClient.PollResult.Success -> {
                     appGraph.accountRepository.connect("github", result.tokens, null, System.currentTimeMillis())
-                    return "GitHub 계정이 연결되었습니다. 코드: " + session.userCode + " 승인 완료."
+                    return "GitHub 계정이 연결되었습니다."
                 }
                 is GitHubDeviceFlowClient.PollResult.Failed -> {
                     appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
                     return result.reason
                 }
-                GitHubDeviceFlowClient.PollResult.Pending -> delay(session.intervalSeconds * 1000L)
+                GitHubDeviceFlowClient.PollResult.Pending ->
+                    delay(pollIntervalSeconds * 1000L)
+                is GitHubDeviceFlowClient.PollResult.SlowDown -> {
+                    pollIntervalSeconds = maxOf(pollIntervalSeconds + 5, result.intervalSeconds)
+                    delay(pollIntervalSeconds * 1000L)
+                }
             }
         }
         appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
