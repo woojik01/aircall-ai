@@ -47,7 +47,8 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
   필요하거나 음성·텍스트가 음성 서비스 제공자에게 전송될 수 있어, 오프라인 통화는 보장하지 않습니다.
 - 모델 다운로드는 앱이 실행되는 동안 진행됩니다. 프로세스가 종료되면 다시 다운로드해야 하며 이어받기는 지원하지 않습니다.
 
-모델 형식과 엔진 API: [Gemma 4 E2B 배포 안내](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm),
+모델 형식과 엔진 API: [Gemma 4 
+E2B 배포 안내](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm),
 [LiteRT-LM Kotlin API](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.10.2/docs/api/kotlin/getting_started.md).
 카탈로그는 모델 revision·파일 크기·SHA-256을 고정합니다.
 
@@ -59,8 +60,7 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 - `github` Tool: `read_repository`는 기본 허용, `create_issue`/`create_pull_request`는 승인 필요
 - **Gmail 연동(소셜 로그인)**: 설정의 **"Google로 로그인"** 버튼.
   승인 후 앱으로 돌아오면 연결되고 refresh token으로 만료 시 자동 갱신된다.
-  Client ID는 빌드 시점 기본값 또는 고급 설정 등록.
-  Google Cloud Console에 리디렉션 URI `com.woojik.aircallai://oauth2redirect` 등록 필요.
+  Client ID는 빌드 시점 기본값 또는 고급 설정 등록(Android 유형 OAuth 클라이언트).
   고급으로 액세스 토큰 직접 입력 유지
 - **Tool-AI 연결**: AI가 `TOOL: <도구>.<액션> key=value` 지시어를 응답하면
   실행 결과를 대화에 반영해 최종 답변한다 (최대 2회 라운드)
@@ -83,13 +83,16 @@ Client ID는 공개값이므로 빌드에 포함해도 안전하다.
 1. **GitHub**: github.com → Settings → Developer settings → OAuth Apps → New OAuth App.
    앱 이름·홈페이지 URL 입력(콜백 URL은 비워도 됨, 기기 흐름 사용). 발급된 Client ID를 아래에 등록.
 2. **Google**: Google Cloud Console → 프로젝트 생성 → API 및 서비스 → 사용자 인증 정보 →
-   OAuth 클라이언트 ID(웹 애플리케이션) 생성. 승인된 리디렉션 URI에
-   `com.woojik.aircallai://oauth2redirect` 등록. Gmail API 사용 설정 필요.
+   OAuth 클라이언트 ID(**Android** 유형) 생성. 패키지 이름 `com.woojik.aircallai`,
+   SHA-1 인증서 지문(debug.keystore의 것, 아래 참조) 입력. Gmail API 사용 설정 필요.
+   콜백 주소는 Client ID에서 유도되는 리버스 스킴(com.googleusercontent.apps.<id>:/oauth2redirect)으로
+   앱이 자동 처리하므로 별도 등록이 필요 없다. Release APK 배포 시 릴리스 서명의 SHA-1도 추가 등록한다.
 3. 빌드 머신의 `~/.gradle/gradle.properties`(또는 CI 시크릿)에 추가:
 
 ```properties
 GITHUB_OAUTH_CLIENT_ID=Iv1.xxxx
-GOOGLE_OAUTH_CLIENT_ID=xxxx.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_
+ID=xxxx.apps.googleusercontent.com
 ```
 
 등록하지 않고 빌드하면 버튼 대신 안내 문구가 표시되며, 앱의 고급 설정에서도 등록할 수 있다.

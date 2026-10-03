@@ -9,6 +9,8 @@ import java.util.Base64
  * 시스템 브라우저로 Google 인증 화면을 열고, 앱으로 돌아온 code를 토큰으로 교환한다.
  * access_type=offline로 refresh token을 받아 만료 시 자동 갱신한다.
  * Google OAuth Client ID는 공개 값이므로 일반 설정에서 읽는다.
+ * Android 유형 OAuth 클라이언트를 사용하므로 콜백은 리버스 클라이언트 ID 스킴
+ * (com.googleusercontent.apps.<번호>-<해시>:/oauth2redirect)로 돌아온다.
  */
 class GoogleOAuthClient(
     private val http: OAuthHttpPost,
@@ -111,6 +113,26 @@ class GoogleOAuthClient(
         const val SCOPE = "https://mail.google.com/"
         private const val AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
         private const val TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+        const val CALLBACK_PATH = "/oauth2redirect"
+
+        /**
+         * Android 유형 OAuth 클라이언트의 콜백 URI.
+         * Client ID(<번호>-<해시>.apps.googleusercontent.com)를 뒤집은
+         * 리버스 스킴(com.googleusercontent.apps.<번호>-<해시>)으로 계산한다.
+         * 미등록 Client ID에는 null을 돌려준다.
+         */
+        fun redirectUriFor(clientId: String): String? {
+            val id = clientId.trim()
+            if (!id.endsWith(".apps.googleusercontent.com")) return null
+            val suffix = id.substringBefore(".apps.googleusercontent.com")
+                .split(".").reversed().joinToString(".")
+            if (suffix.isEmpty()) return null
+            return "com.googleusercontent.apps." + suffix + ":" + CALLBACK_PATH
+        }
+
+        /** 콜백 URI에서 스킴 부분(리버스 클라이언트 ID). */
+        fun callbackSchemeFor(clientId: String): String? =
+            redirectUriFor(clientId)?.removeSuffix(":" + CALLBACK_PATH)
 
         fun enc(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")
 

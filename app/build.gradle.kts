@@ -22,9 +22,38 @@ android {
         val googleOAuthClientId = (project.findProperty("GOOGLE_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
         buildConfigField("String", "GITHUB_OAUTH_CLIENT_ID", "\"$githubOAuthClientId\"")
         buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", "\"$googleOAuthClientId\"")
+
+        // PRD-09 Google Android 클라이언트: 리버스 클라이언트 ID 스킴을 manifest에 주입한다.
+        // Client ID(<번호>-<해시>.apps.googleusercontent.com)를 뒤집어
+        // com.googleusercontent.apps.<번호>-<해시> 스킴으로 콜백을 받는다.
+        // 미설정 시 대체 스킴(비활성)을 넣어 빌드는 항상 가능하게 한다.
+        val googleCallbackScheme = if (googleOAuthClientId.endsWith(".apps.googleusercontent.com")) {
+            googleOAuthClientId.substringBefore(".apps.googleusercontent.com")
+                .split(".").reversed().joinToString(".")
+                .let { "com.googleusercontent.apps." + it }
+        } else {
+            "com.woojik.aircallai.invalid"
+        }
+        manifestPlaceholders["googleOAuthRedirectScheme"] = googleCallbackScheme
+    }
+
+    // PRD-09: CI가 생성·커밋한 고정 디버그 서명 키. 개발 PC 없이도 SHA-1이 매 빌드 동일하며
+    // Google OAuth(Android 유형) 등록에 필요한 지문이 변하지 않는다. 키가 없으면 기본 동작 유지.
+    signingConfigs {
+        create("fixedDebug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            if (file("debug.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("fixedDebug")
+            }
+        }
         release {
             // PRD-08: Release 빌드에 R8 축소/난독화 적용. LiteRT-LM JNI 유지 규칙은
             // proguard-rules.pro 참조.
