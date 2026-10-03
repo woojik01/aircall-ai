@@ -184,7 +184,8 @@ class MainActivity : ComponentActivity() {
                     return result.reason
                 }
                 is GitHubDeviceFlowClient.PollResult.SlowDown -> {
-                    intervalSeconds = result.intervalSeconds
+                    // GitHub requests +5 seconds for each slow_down, cumulatively.
+                    intervalSeconds = maxOf(intervalSeconds + 5, result.intervalSeconds)
                     delay(intervalSeconds * 1000L)
                 }
                 GitHubDeviceFlowClient.PollResult.Pending -> delay(intervalSeconds * 1000L)
