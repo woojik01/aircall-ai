@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -53,25 +53,41 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-      - name: Show debug SHA-1
+
+      # PRD-09: 고정 디버그 서명 키. 개발 PC가 없어도 SHA-1이 매 빌드 동일하다.
+      # main 에서 최초 1회 생성 후 커밋하고, 지문을 저장소 파일과 run summary 에 남긴다.
+      - name: Ensure fixed debug keystore
         run: |
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            mkdir -p "$HOME/.android"
-            keytool -genkeypair -v \\
-              -keystore "$HOME/.android/debug.keystore" \\
-              -storepass android \\
-              -keypass android \\
-              -alias androiddebugkey \\
-              -keyalg RSA \\
-              -keysize 2048 \\
-              -validity 10000 \\
+          set -e
+          if [ ! -f app/debug.keystore ]; then
+            echo "고정 디버그 서명 키가 없어 새로 생성합니다."
+            keytool -genkeypair -v \
+              -keystore app/debug.keystore \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-          keytool -list -v \\
-            -keystore "$HOME/.android/debug.keystore" \\
-            -alias androiddebugkey \\
-            -storepass android \\
-            -keypass android | grep -E "SHA1:|SHA-1:"
+          SHA1=$(keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android | grep -E "SHA1:|SHA-1:" | head -n 1 | awk '{print $NF}')
+          SHA256=$(keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android | grep -E "SHA256:|SHA-256:" | head -n 1 | awk '{print $NF}')
+          echo "### 디버그 서명 지문" >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-1:   $SHA1" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256: $SHA256" >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            if ! grep -q "$SHA1" app/debug-keystore-info.txt 2>/dev/null; then
+              printf 'debug.keystore SHA-1:\n%s\n\ndebug.keystore SHA-256:\n%s\n' "$SHA1" "$SHA256" > app/debug-keystore-info.txt
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add app/debug.keystore app/debug-keystore-info.txt
+              git diff --cached --quiet || git commit -m "CI: 고정 디버그 서명 keystore 및 SHA-1/SHA-256 지문 기록"
+              git push
+            fi
+          fi
 
       - name: Build debug APK
         timeout-minutes: 5

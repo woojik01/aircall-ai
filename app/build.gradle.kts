@@ -37,14 +37,31 @@ android {
         manifestPlaceholders["googleOAuthRedirectScheme"] = googleCallbackScheme
     }
 
+    // PRD-09: CI가 생성·커밋한 고정 디버그 서명 키. 개발 PC 없이도 SHA-1이 매 빌드 동일하며
+    // Google OAuth(Android 유형) 등록에 필요한 지문이 변하지 않는다. 키가 없으면 기본 동작 유지.
+    signingConfigs {
+        create("fixedDebug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            if (file("debug.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("fixedDebug")
+            }
+        }
         release {
             // PRD-08: Release 빌드에 R8 축소/난독화 적용. LiteRT-LM JNI 유지 규칙은
             // proguard-rules.pro 참조.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
+                getDefaultProguardFile("proguard-andr
+oid-optimize.txt"),
                 "proguard-rules.pro",
             )
         }
