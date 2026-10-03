@@ -4,20 +4,50 @@ import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.AIProviderException
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.audio.AudioError
+import com.woojik.aircallai.tools.ToolActivityBus
+import com.woojik.aircallai.tools.ToolActivityPhraser
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class ConversationEngine(
     private var provider: AIProvider,
+    private val activityBus: ToolActivityBus? = null,
 ) {
     private val _state = MutableStateFlow<ConversationState>(ConversationState.Idle)
     val state: StateFlow<ConversationState> = _state.asStateFlow()
     private val _transcript = MutableStateFlow<List<ChatMessage>>(emptyList())
     val transcript: StateFlow<List<ChatMessage>> = _transcript.asStateFlow()
+
+    /**
+     * 진행 내레이션: 도구 실행 중 실시간으로 바뀌는 한 줄 안내 문장.
+     * UI는 Processing 상태에서 이 값을 진행 표시로 노출하고, 음성 모드에서는 낮은 볼륨으로 날독할 수 있다.
+     * null이면 표시할 진행 문장이 없는 상태다.
+     */
+    private val _activity = MutableStateFlow<String?>(null)
+    val activity: StateFlow<String?> = _activity.asStateFlow()
+
     val activeProvider: AIProvider get() = provider
+
+    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    init {
+        if (activityBus != null) {
+            activityScope.launch {
+                activityBus.events.collect { event ->
+                    if (_state.value is ConversationState.Processing) {
+                        _activity.value = ToolActivityPhraser.text(event)
+                    }
+                }
+            }
+        }
+    }
 
     fun updateProvider(next: AIProvider) {
         if (_state.value is ConversationState.Processing) return
@@ -53,6 +83,7 @@ class ConversationEngine(
         val active = provider
         val userMessage = ChatMessage(ChatMessage.Role.USER, text)
         _transcript.update { it + userMessage }
+        _activity.value = null
         _state.value = ConversationState.Processing(userMessage)
 
         try {
@@ -96,6 +127,7 @@ class ConversationEngine(
     }
 
     fun markIdle() {
+        _activity.value = null
         _state.update { if (it is ConversationState.Speaking) ConversationState.Idle else it }
     }
 
@@ -104,6 +136,7 @@ class ConversationEngine(
 
     fun reset() {
         _transcript.value = emptyList()
+        _activity.value = null
         _state.value = ConversationState.Idle
     }
 
