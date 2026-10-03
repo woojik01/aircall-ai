@@ -56,6 +56,7 @@ fun SettingsScreen(
     var modelInput by remember { mutableStateOf(settings.cloudModel()) }
     var status by remember { mutableStateOf<String?>(null) }
     var githubDeviceCode by remember { mutableStateOf<String?>(null) }
+    var githubConnecting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -199,7 +200,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("GitHub 인증 코드", style = MaterialTheme.typography.labelLarge)
                         Text(code, style = MaterialTheme.typography.headlineSmall)
-                        Text("브라우저에서 이 코드를 입력하고 승인을 마치면 앱이 자동으로 연결됩니다.")
+                        Text("브라우저에서 이 코드를 입력하고 승인한 뒤 AirCall AI로 돌아오면 연결이 완료됩니다.")
                     }
                 }
             }
@@ -213,14 +214,21 @@ fun SettingsScreen(
                 Row(modifier = Modifier.padding(top = 8.dp)) {
                     Button(
                         onClick = {
+                            githubConnecting = true
                             scope.launch {
-                                githubDeviceCode = null
-                                status = onConnectGitHub { code -> githubDeviceCode = code }
+                                try {
+                                    githubDeviceCode = null
+                                    status = onConnectGitHub { code -> githubDeviceCode = code }
+                                } finally {
+                                    githubConnecting = false
+                                }
                             }
                         },
-                    ) { Text("GitHub로 로그인") }
+                        enabled = !githubConnecting,
+                    ) { Text(if (githubConnecting) "GitHub 승인 대기 중" else "GitHub로 로그인") }
                     OutlinedButton(
                         onClick = onDisconnectGitHub,
+                        enabled = !githubConnecting,
                         modifier = Modifier.padding(start = 8.dp),
                     ) { Text("연결 해제") }
                 }

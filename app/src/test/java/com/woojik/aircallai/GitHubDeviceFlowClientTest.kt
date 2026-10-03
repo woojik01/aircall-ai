@@ -110,6 +110,44 @@ class GitHubDeviceFlowClientTest {
     }
 
     @Test
+    fun transportFailureCanRecoverUsingTheSameDeviceCode() = runTest {
+        var polls = 0
+        val http = FakeHttp { url, form ->
+            if (url.endsWith("/device/code")) {
+                200 to deviceCodeBody
+            } else {
+                assertEquals("DEV123", form["device_code"])
+                polls += 1
+                if (polls == 1) -1 to "UnknownHostException: Unable to resolve host"
+                else 200 to """{"access_token":"gho_recovered"}"""
+            }
+        }
+        val c = client(http)
+        val session = c.startDeviceFlow()!!
+        val failed = c.pollToken(session) as GitHubDeviceFlowClient.PollResult.Failed
+        assertTrue(failed.retryable)
+        val success = c.pollToken(session) as GitHubDeviceFlowClient.PollResult.Success
+        assertEquals("gho_recovered", success.tokens.accessToken)
+        assertEquals(1, http.calls.count { it.first.endsWith("/device/code") })
+    }
+
+    @Test
+    fun authorizationDenialAndTlsFailureAreNotRetried() = runTest {
+        for (response in listOf(
+            200 to """{"error":"access_denied"}""",
+            200 to """{"error":"expired_token"}""",
+            -1 to "SSLHandshakeException: Certificate verification failed",
+        )) {
+            val http = FakeHttp { url, _ ->
+                if (url.endsWith("/device/code")) 200 to deviceCodeBody else response
+            }
+            val c = client(http)
+            val failure = c.pollToken(c.startDeviceFlow()!!) as GitHubDeviceFlowClient.PollResult.Failed
+            assertEquals(false, failure.retryable)
+        }
+    }
+
+    @Test
     fun refreshIsNotSupported() = runTest {
         val http = FakeHttp { _, _ -> 200 to deviceCodeBody }
         val c = client(http)

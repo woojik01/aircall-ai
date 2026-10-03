@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -40,6 +41,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models / privacy.
@@ -172,23 +175,41 @@ class MainActivity : ComponentActivity() {
             appGraph.accountRepository.mark("github", ConnectionStatus.ERROR, errorMessage = reason)
             return reason
         }
-        var intervalSeconds = session.intervalSeconds
+        var intervalSeconds = session.intervalSeconds.coerceAtLeast(1)
+        var consecutiveNetworkFailures = 0
         while (System.currentTimeMillis() < session.expiresAtMs) {
+            // Opening the browser backgrounds this Activity. Background data restrictions
+            // must not turn browser authorization into a permanent login failure.
+            val remainingMs = session.expiresAtMs - System.currentTimeMillis()
+            if (remainingMs <= 0) break
+            val ready = withTimeoutOrNull(remainingMs) {
+                delay(intervalSeconds * 1000L)
+                lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
+                true
+            } ?: false
+            if (!ready || System.currentTimeMillis() >= session.expiresAtMs) break
             when (val result = appGraph.githubAuth.pollToken(session)) {
                 is GitHubDeviceFlowClient.PollResult.Success -> {
                     appGraph.accountRepository.connect("github", result.tokens, null, System.currentTimeMillis())
                     return "GitHub 계정이 연결되었습니다."
                 }
                 is GitHubDeviceFlowClient.PollResult.Failed -> {
+                    if (result.retryable && consecutiveNetworkFailures < 3) {
+                        consecutiveNetworkFailures += 1
+                        // Retry after 5, 10, then 20 seconds, without shortening
+                        // any interval already required by GitHub.
+                        intervalSeconds = maxOf(intervalSeconds, 5 shl (consecutiveNetworkFailures - 1))
+                        continue
+                    }
                     appGraph.accountRepository.mark("github", ConnectionStatus.ERROR, errorMessage = result.reason)
                     return result.reason
                 }
                 is GitHubDeviceFlowClient.PollResult.SlowDown -> {
                     // GitHub requests +5 seconds for each slow_down, cumulatively.
                     intervalSeconds = maxOf(intervalSeconds + 5, result.intervalSeconds)
-                    delay(intervalSeconds * 1000L)
+                    consecutiveNetworkFailures = 0
                 }
-                GitHubDeviceFlowClient.PollResult.Pending -> delay(intervalSeconds * 1000L)
+                GitHubDeviceFlowClient.PollResult.Pending -> consecutiveNetworkFailures = 0
             }
         }
         val reason = "기기 인증 시간이 만료되었습니다. 다시 연결해 주세요."

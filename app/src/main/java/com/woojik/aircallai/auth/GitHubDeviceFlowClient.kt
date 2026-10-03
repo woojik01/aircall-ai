@@ -38,7 +38,7 @@ class GitHubDeviceFlowClient(
         data class SlowDown(val intervalSeconds: Int) : PollResult
 
         /** 만료·거부·오류. 재시도 필요. */
-        data class Failed(val reason: String) : PollResult
+        data class Failed(val reason: String, val retryable: Boolean = false) : PollResult
     }
 
     /** 기존 호출자 호환을 위한 기기 코드 발급 API. */
@@ -112,6 +112,10 @@ class GitHubDeviceFlowClient(
             status == -1 -> PollResult.Failed(
                 "GitHub 토큰 확인 중 HTTP 응답을 받지 못했습니다: " +
                     (body.ifBlank { "네트워크, DNS 또는 TLS 연결을 확인해 주세요." }.take(180)),
+                retryable = body.startsWith("UnknownHostException:") ||
+                    body.startsWith("SocketTimeoutException:") ||
+                    body.startsWith("ConnectException:") ||
+                    body.startsWith("SocketException:"),
             )
             else -> PollResult.Failed("GitHub 인증이 실패했습니다 (HTTP $status" +
                 (error?.let { ", $it" } ?: "") + ").")
