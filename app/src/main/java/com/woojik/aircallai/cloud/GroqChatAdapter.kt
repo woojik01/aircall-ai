@@ -20,15 +20,19 @@ import org.json.JSONObject
  * - PRD-05: 음성으로 재생되는 대화 특성상 자연스러운 구어체 페르소나를
  *   시스템 프롬프트로 함께 보낸다 (이모지/특수문자는 TTS에서 소리내지 못하므로 금지).
  */
-class HttpCloudApiAdapter : CloudApiAdapter {
+class HttpCloudApiAdapter(
+    private val connect: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
+) : CloudApiAdapter {
 
     override suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String =
         withContext(Dispatchers.IO) {
             if (baseUrl.isBlank()) {
                 throw AIProviderException(ProviderErrorKind.API_ERROR, "endpoint not configured")
             }
-            val connection = try {
-                val conn = URL(baseUrl).openConnection() as HttpURLConnection
+            var connection: HttpURLConnection? = null
+            try {
+                val conn = connect(baseUrl)
+                connection = conn
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 15_000
                 conn.readTimeout = 30_000
@@ -36,24 +40,20 @@ class HttpCloudApiAdapter : CloudApiAdapter {
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.setRequestProperty("Authorization", "Bearer " + apiKey)
                 conn.outputStream.use { it.write(buildBody(model, history).toByteArray(Charsets.UTF_8)) }
-                conn
-            } catch (e: IOException) {
-                throw AIProviderException(ProviderErrorKind.NETWORK)
-            }
-
-            val code = try {
-                connection.responseCode
-            } catch (e: IOException) {
-                throw AIProviderException(ProviderErrorKind.NETWORK)
-            }        
-            when {
-                code in 200..299 -> {
-                    val body = connection.inputStream.bufferedReader().use { it.readText() }
-                    parseAssistantText(body)
+                val code = conn.responseCode
+                when {
+                    code in 200..299 -> {
+                        val body = conn.inputStream.bufferedReader().use { it.readText() }
+                        parseAssistantText(body)
+                    }
+                    code == 401 || code == 403 -> throw AIProviderException(ProviderErrorKind.AUTH_FAILED)
+                    code == 429 -> throw AIProviderException(ProviderErrorKind.QUOTA_EXCEEDED)
+                    else -> throw AIProviderException(ProviderErrorKind.API_ERROR, "HTTP " + code)
                 }
-                code == 401 || code == 403 -> throw AIProviderException(ProviderErrorKind.AUTH_FAILED)
-                code == 429 -> throw AIProviderException(ProviderErrorKind.QUOTA_EXCEEDED)
-                else -> throw AIProviderException(ProviderErrorKind.API_ERROR, "HTTP " + code)
+            } catch (e: IOException) {
+                throw AIProviderException(ProviderErrorKind.NETWORK)
+            } finally {
+                connection?.disconnect()
             }
         }
 
@@ -67,7 +67,11 @@ class HttpCloudApiAdapter : CloudApiAdapter {
         history.forEach { m ->
             messages.put(
                 JSONObject()
-                    .put("role", if (m.role == ChatMessage.Role.USER) "user" else "assistant")
+                    .put("role", when (m.role) {
+                        ChatMessage.Role.USER -> "user"
+                        ChatMessage.Role.ASSISTANT -> "assistant"
+                        ChatMessage.Role.SYSTEM -> "system"
+                    })
                     .put("content", m.content)
             )
         }

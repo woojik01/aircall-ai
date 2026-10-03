@@ -7,6 +7,7 @@ import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.ai.provider.ProviderErrorKind
 import com.woojik.aircallai.ai.provider.ProviderType
 import com.woojik.aircallai.core.storage.CredentialManager
+import kotlinx.coroutines.CancellationException
 
 /**
  * PRD-04 Cloud Mode:
@@ -35,6 +36,8 @@ class CloudAIProvider(
         val endpoint = endpointProvider()
         val text = try {
             apiAdapter.chat(apiKey, endpoint.baseUrl, endpoint.model, history)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: AIProviderException) {
             throw e
         } catch (t: Throwable) {
