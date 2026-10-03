@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
             } catch (e: ApiException) {
                 appGraph.accountRepository.mark(
                     "gmail", ConnectionStatus.ERROR,
-                    errorMessage = "Google 인증 오류 (코드 ${e.statusCode}): ${e.status.message ?: "인증을 완료하지 못했습니다"}. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 계정을 추가해야 합니다.",
+                    errorMessage = "Google 인증 오류 (코드 ${e.statusCode}): ${e.message ?: "인증을 완료하지 못했습니다"}. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 계정을 추가해야 합니다.",
                 )
             } catch (e: Exception) {
                 appGraph.accountRepository.mark(
