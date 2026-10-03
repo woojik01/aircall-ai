@@ -39,6 +39,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- PRD-09: Google OAuth 콜백 (com.woojik.aircallai://oauth2redirect). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="com.woojik.aircallai"
+                    android:host="oauth2redirect" />
+            </intent-filter>
         </activity>
 
         <!-- PRD-05: 백그라운드 대화 세션. 지속 알림으로 마이크 사용을 표시한다. -->
