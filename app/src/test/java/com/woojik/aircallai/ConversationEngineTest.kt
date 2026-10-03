@@ -7,6 +7,9 @@ import com.woojik.aircallai.ai.provider.NoopAIProvider
 import com.woojik.aircallai.ai.provider.ProviderType
 import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.conversation.ConversationState
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -15,6 +18,63 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConversationEngineTest {
+
+    @Test
+    fun overlappingRequestIsRejectedWithoutChangingHistory() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val provider = object : AIProvider by NoopAIProvider() {
+            override suspend fun respond(history: List<ChatMessage>): AIResponse {
+                gate.await()
+                return NoopAIProvider().respond(history)
+            }
+        }
+        val engine = ConversationEngine(provider)
+        val first = launch { engine.submitUserMessage("first") }
+        runCurrent()
+        assertEquals(false, engine.submitUserMessage("second"))
+        assertEquals(listOf("first"), engine.transcript.value.map { it.content })
+        gate.complete(Unit)
+        first.join()
+        assertEquals(2, engine.transcript.value.size)
+    }
+
+    @Test
+    fun resetDiscardsLateResponse() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val provider = object : AIProvider by NoopAIProvider() {
+            override suspend fun respond(history: List<ChatMessage>): AIResponse {
+                gate.await()
+                return NoopAIProvider().respond(history)
+            }
+        }
+        val engine = ConversationEngine(provider)
+        val turn = launch { engine.submitUserMessage("old") }
+        runCurrent()
+        engine.reset()
+        gate.complete(Unit)
+        turn.join()
+        assertTrue(engine.transcript.value.isEmpty())
+        assertTrue(engine.state.value is ConversationState.Idle)
+    }
+
+    @Test
+    fun cancelledTurnReturnsToIdleAndAllowsAnotherRequest() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val provider = object : AIProvider by NoopAIProvider() {
+            override suspend fun respond(history: List<ChatMessage>): AIResponse {
+                gate.await()
+                return NoopAIProvider().respond(history)
+            }
+        }
+        val engine = ConversationEngine(provider)
+        val turn = launch { engine.submitUserMessage("old") }
+        runCurrent()
+        turn.cancel()
+        turn.join()
+        assertTrue(engine.state.value is ConversationState.Idle)
+        engine.updateProvider(NoopAIProvider())
+        assertTrue(engine.submitUserMessage("new"))
+    }
 
     @Test(expected = CancellationException::class)
     fun cancellationIsNotReportedAsModelFailure() = runTest {

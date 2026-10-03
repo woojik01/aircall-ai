@@ -81,8 +81,7 @@ class MainViewModel(
     fun sendText(text: String) {
         if (text.isBlank()) return
         scope.launch {
-            repository.engine.submitUserMessage(text)
-            repository.engine.markIdle()
+            if (repository.engine.submitUserMessage(text)) repository.engine.markIdle()
         }
     }
 
