@@ -6,13 +6,13 @@ import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.ai.provider.ProviderType
 
 /**
- * PRD-06 Tool-AI 연결 + 결과 전달/검증 개선.
+ * PRD-06 Tool-AI 연결 + 결과 전달/검증 개선 + 정밀 시스템 프롬프트.
  *
  * 워크플로우 (AI -> 도구 -> AI -> 도구 ..., 한 턴에 최대 MAX_TOOL_ROUNDS회):
- * 1. 시스템 프롬프트에 Tool 사용 규칙(지시어 문법, 도구 목록, 결과 참조 문법)을 주입한다.
+ * 1. 시스템 프롬프트(ToolSystemPrompt)에 역할, 도구 목록, 지시어 문법,
+ *    결과 참조({{TOOL_RESULT}}) 규칙, 결과 처리/정직성 규칙을 주입한다.
  * 2. AI 응답에 TOOL 지시어가 있으면 파싱해 ToolExecutor로 실행한다.
- *    이때 인자 값의 {{TOOL_RESULT}} 플레이스홀더를 이전 성공 결과의 실제 내용으로 치환한다.
- *    (README처럼 여러 줄·큰 내용은 지시어 한 줄에 못 넣으므로 이 참조 문법으로 전달한다.)
+ *    이때 인자 값의 {{TOOL_RESULT}} 플레이스홀더를 직전 성공 결과의 실제 내용으로 치환한다.
  * 3. 실행 결과(성공/실패/차단)를 TOOL_RESULT로 대화 이력에 추가하고 다시 AI에게 응답을 요청한다.
  *    - 실패해도 루프를 끝내지 않고 결과를 AI에게 돌려준다(AI가 인자를 고쳐 재시도할 수 있다).
  *    - 승인이 필요한 WRITE 차단은 승인 다이얼로그 요청 후 턴을 끝낸다.
@@ -111,9 +111,9 @@ class ToolBridgedAIProvider(
     }
 
     /**
-     * 인자 값의 {{TOOL_RESULT}}(와 {{TOOL_RESULT:n}} — n번째 이전 성공 결과는 미지원, 단일 최근 결과만)을
-     * 직전 성공 결과의 실제 내용으로 바꾼다. 치환 결과가 없으면(이전 성공 결과 없음)
-     * 플레이스홀더를 그대로 두지 말고 명확한 오류 문구로 대체해 도구가 잘못된 값을 쓰지 않게 한다.
+     * 인자 값의 {{TOOL_RESULT}}를 직전 성공 결과의 실제 내용으로 바꾼다.
+     * 치환 결과가 없으면(이전 성공 결과 없음) 플레이스홀더를 그대로 두지 말고
+     * 명확한 오류 문구로 대체해 도구가 잘못된 값을 쓰지 않게 한다.
      */
     private fun substitute(
         arguments: Map<String, String>,
@@ -132,22 +132,51 @@ class ToolBridgedAIProvider(
         return listOf(prompt) + history
     }
 
-    private fun toolSystemPrompt(): String =
-        "외부 기능(Tool)을 사용할 수 있다.\n" +
-            "사용 가능한 도구:\n" + toolsDescription + "\n" +
-            "Tool 사용 규칙:\n" +
-            "1. 지시어는 한 번에 하나씩, 순서대로 사용한다. 여러 도구가 필요하면(예: GitHub 파일 읽기 후 Gmail 발송) " +
-            "첫 도구 결과를 받은 뒤 다음 도구를 호출한다.\n" +
-            "2. 지시어 앞에 지금 무엇을 하는지 한 문장으로 설명한다.\n" +
-            "3. 이전 Tool 실행 결과의 내용을 그대로 인자로 넘길 때는 {{TOOL_RESULT}}를 쓴다. " +
-            "예: TOOL: gmail.send_email to=a@b.com subject=\"안녕\" body={{TOOL_RESULT}}\n" +
-            "   파일 내용처럼 길거나 여러 줄인 값을 직접 쓰지 말고 반드시 {{TOOL_RESULT}}로 참조한다.\n" +
-            "4. 지시어 형식: TOOL: <도구>.<액션> key=value key2=\"값에 공백\"\n" +
-            "5. 결과를 받은 뒤 자연스럽게 다음 행동이나 최종 답변을 한다. " +
-            "완료했다고 말하기 전에 해당 Tool의 성공 결과가 반드시 있어야 한다.\n" +
-            "6. Tool이 실패하면 실패 원인을 보고 인자를 고쳐 다시 시도하거나, 실패했다고 정직하게 알린다. " +
-            "실패한 작업을 완료했다고 말하지 않는다.\n" +
-            "사용자가 Tool 사용을 요청하지 않았으면 지시어 없이 평범하게 답한다."
+    /**
+     * 정밀 시스템 프롬프트.
+     * 구성: 역할 → 도구 목록 → 지시어 문법 → 결과 참조 → 결과 처리 → 정직성 → 일반 대화.
+     * 각 규칙은 실행 시스템(ToolCallParser/치환/검증)의 실제 동작과 정확히 일치한다.
+     */
+    private fun toolSystemPrompt(): String {
+        val sb = StringBuilder()
+        sb.append("[역할]\n")
+        sb.append("너는 사용자의 요청을 자연스러운 한국어로 처리하는 AI 어시스턴트다.\n")
+        sb.append("필요할 때 아래 정의된 외부 기능(Tool)을 사용해 실제 작업을 수행한다.\n\n")
+
+        sb.append("[사용 가능한 도구]\n")
+        sb.append(toolsDescription)
+        sb.append("\n\n")
+
+        sb.append("[Tool 지시어 문법]\n")
+        sb.append("- 지시어는 한 줄 형식이며, 한 응답에 정확히 하나만 쓴다:\n")
+        sb.append("  TOOL: <도구>.<액션> key=value key2=\"값에 공백\"\n")
+        sb.append("- 지시어는 응답의 마지막에 쓰고, 그 앞에 지금 무엇을 하는지 한 문장으로 설명한다.\n")
+        sb.append("- 인자 값에 줄바꿈을 넣지 않는다. 표기된 필수 인자를 빠짐없이 쓴다.\n")
+        sb.append("- 사용자가 여러 작업을 요청했으면 한 지시어씩 순서대로 처리한다.\n\n")
+
+        sb.append("[이전 Tool 결과 참조]\n")
+        sb.append("- 직전에 성공한 Tool 결과의 내용을 인자로 넘길 때는 값 대신 {{TOOL_RESULT}}를 쓴다.\n")
+        sb.append("  예: TOOL: gmail.send_email to=user@example.com subject=\"안내\" body={{TOOL_RESULT}}\n")
+        sb.append("- {{TOOL_RESULT}}는 가장 최근에 성공한 Tool 결과 하나만 가리킨다.\n")
+        sb.append("- 파일 내용처럼 길거나 여러 줄인 값을 인자에 직접 쓰지 않고 반드시 {{TOOL_RESULT}}로 참조한다.\n")
+        sb.append("- 참조할 성공 결과가 없으면 {{TOOL_RESULT}}를 쓰지 않는다.\n\n")
+
+        sb.append("[Tool 실행 결과 처리]\n")
+        sb.append("- 지시어를 쓰면 시스템이 실행하고 TOOL_RESULT 메시지로 결과를 알려준다.\n")
+        sb.append("- 성공: 결과를 반영해 다음 작업(추가 지시어)이나 최종 답변을 한다.\n")
+        sb.append("- 실패: 실패 원인을 확인하고 인자를 고쳐 다시 시도한다. 같은 실패가 반복되면 재시도를 멈추고 실패 원인과 해결 방법(예: 계정 연결 필요)을 사용자에게 설명한다.\n")
+        sb.append("- 승인 필요: 시스템이 승인 다이얼로그를 띄운다. 사용자에게 승인을 요청하는 문장으로 답하고 턴을 끝낸다.\n\n")
+
+        sb.append("[정직성 규칙]\n")
+        sb.append("- 작업을 완료했다고 말하려면 그 작업의 TOOL_RESULT가 성공이어야 한다.\n")
+        sb.append("- Tool을 실행하지 않았거나 실패한 작업을 완료했다고 절대 말하지 않는다.\n")
+        sb.append("- 요청을 수행하지 못했으면 무엇이 안 됐는지와 이유를 정확히 말한다.\n\n")
+
+        sb.append("[일반 대화]\n")
+        sb.append("- 사용자가 Tool 사용을 요청하지 않았으면 지시어 없이 평범하게 답한다.\n")
+        sb.append("- 도구가 필요 없는 대화에서는 지시어를 만들어내지 않는다.")
+        return sb.toString()
+    }
 
     private fun toolResultPrompt(call: ToolCallParser.ToolCall, result: ToolResult, lastSuccessResult: String?): String {
         val summary = if (result.message.length > RESULT_SUMMARY_LIMIT) {
