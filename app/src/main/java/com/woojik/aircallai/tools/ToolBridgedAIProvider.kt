@@ -163,12 +163,13 @@ class ToolBridgedAIProvider(
         sb.append("도구 없이 수행할 수 있는 실제 작업은 없다. 실행 없이 결과를 상상해 답하지 않는다.\n")
         sb.append("일반 질문·대화·지식 설명은 도구 없이 답한다.\n\n")
 
-        sb.append("[Tool 지시어 문법]\n")
-        sb.append("- 지시어는 한 줄 형식이며, 한 응답에 정확히 하나만 쓴다:\n")
-        sb.append("  TOOL: <도구>.<액션> key=value key2=\"값에 공백\"\n")
-        sb.append("- 지시어는 응답의 마지막에 쓰고, 그 앞에 지금 무엇을 하는지 한 문장으로 설명한다.\n")
-        sb.append("- 인자 값에 줄바꿈을 넣지 않는다. 표기된 필수 인자를 빠짐없이 쓴다.\n")
-        sb.append("- 사용자가 여러 작업을 요청했으면 한 지시어씩 순서대로 처리한다.\n\n")
+        sb.append("[Tool 지시어 문법]\\n")
+        sb.append("- Tool 호출은 반드시 JSON 한 개로 출력한다:\\n")
+        sb.append("  TOOL_CALL: {\\\"tool\\\":\\\"github\\\",\\\"action\\\":\\\"read_repository\\\",\\\"arguments\\\":{\\\"owner\\\":\\\"woojik01\\\",\\\"repo\\\":\\\"aircall-ai\\\"}}\\n")
+        sb.append("- tool, action, arguments 필드를 반드시 포함하고 arguments는 JSON object로 쓴다.\\n")
+        sb.append("- 문자열은 올바른 JSON escaping을 사용한다. 긴 본문과 줄바꿈도 JSON 문자열로 표현한다.\\n")
+        sb.append("- 한 응답에는 TOOL_CALL을 정확히 하나만 쓴다. 여러 작업은 결과를 받은 뒤 다음 TOOL_CALL로 순차 실행한다.\\n")
+        sb.append("- 기존 TOOL: key=value 형식은 호환용이며 새 호출에서는 사용하지 않는다.\\n\\n")
 
         sb.append("[이전 Tool 결과 참조]\n")
         sb.append("- 직전에 성공한 Tool 결과의 내용을 인자로 넘길 때는 값 대신 {{TOOL_RESULT}}를 쓴다.\n")
@@ -230,7 +231,7 @@ class ToolBridgedAIProvider(
                 "Tool을 실행하지 않고 완료했다고 말하는 것은 거짓이다."
         }
         parts += "실패한 작업이나 수행하지 못한 작업을 완료했다고 절대 말하지 말고, " +
-            "TOOL 지시어로 다시 시도하거나(TOOL: <도구>.<액션> ...), " +
+            "TOOL_CALL JSON으로 다시 시도하거나, " +
             "수행할 수 없는 이유를 사용자에게 정확히 설명한다."
         return "검증:\n" + parts.joinToString("\n")
     }
