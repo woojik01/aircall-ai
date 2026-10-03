@@ -1,0 +1,54 @@
+name: Fix corrupted sources
+on:
+  push:
+    branches: [prd-09-google-android-client]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixes
+        run: |
+          python3 - <<'EOF'
+          import pathlib
+          base = pathlib.Path('app/src/main/java/com/woojik/aircallai')
+          fixes = {
+              'ui/AppNav.kt': [
+                  ('PollResult.Pendi\nng', 'PollResult.Pending'),
+                  ('READ_CAL\nENDAR,', 'READ_CALENDAR,'),
+                  ('onM\nodeChanged = {', 'onModeChanged = {'),
+                  ('\u1244\u1252\uc815\uc5d0\uc11c Gi\ntHub', '\u1244\u1252\uc815\uc5d0\uc11c GitHub'),
+              ],
+              'ui/SettingsPane.kt': [
+                  ('\uc554\ud638\ud654\ub418\uc5b4 \uc800\n\uc7a5\ub418\uba70', '\uc554\ud638\ud654\ub418\uc5b4 \uc800\uc7a5\ub418\uba70'),
+                  ('setGoogleOAuthClien\ntId(', 'setGoogleOAuthClientId('),
+                  ('style = Mate\nrialTheme', 'style = MaterialTheme'),
+              ],
+              'auth/GoogleOAuthClient.kt': [
+                  ('\\s*:', '\\\\s*:'),
+                  ('(-?\\d+)', '(-?\\\\d+)'),
+              ],
+          }
+          changed = []
+          for rel, subs in fixes.items():
+              p = base / rel
+              s = p.read_text()
+              orig = s
+              for a, b in subs:
+                  if a in s:
+                      s = s.replace(a, b)
+                  else:
+                      print('NOT FOUND in', rel, ':', repr(a))
+              if s != orig:
+                  p.write_text(s)
+                  changed.append(rel)
+          print('changed:', changed)
+          EOF
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || (git commit -m "fix: 소스 파일 줄바꿈/이스케이프 손상 복구" && git push)
