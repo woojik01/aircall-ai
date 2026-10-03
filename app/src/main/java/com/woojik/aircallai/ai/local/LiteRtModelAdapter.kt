@@ -56,12 +56,35 @@ class LiteRtModelAdapter(
     override suspend fun generate(history: List<ChatMessage>): String {
         val model = selectedModel() ?: throw AIProviderException(ProviderErrorKind.MODEL_NOT_INSTALLED)
         requireAvailable(model)
-        return localErrors(ProviderErrorKind.INFERENCE_FAILED) {
-            runtime.withModel(modelFile(model)) { backend ->
-                backend.generate(history).ifBlank {
-                    throw AIProviderException(ProviderErrorKind.INFERENCE_FAILED)
+        val file = modelFile(model)
+        val memoryInfo = ActivityManager.MemoryInfo().also { info ->
+            context.getSystemService(ActivityManager::class.java)?.getMemoryInfo(info)
+        }
+        SecureLog.d(
+            "LiteRtAdapter",
+            "inference start model=" + model.id +
+                " fileBytes=" + file.length() +
+                " historyMessages=" + history.size +
+                " availMemMb=" + (memoryInfo.availMem / (1024L * 1024L)) +
+                " lowMemory=" + memoryInfo.lowMemory,
+        )
+        return try {
+            localErrors(ProviderErrorKind.INFERENCE_FAILED) {
+                runtime.withModel(file) { backend ->
+                    backend.generate(history).ifBlank {
+                        throw AIProviderException(ProviderErrorKind.INFERENCE_FAILED)
+                    }
                 }
             }
+        } catch (t: Throwable) {
+            SecureLog.e(
+                "LiteRtAdapter",
+                "inference failed model=" + model.id +
+                    " exception=" + t.javaClass.name +
+                    " message=" + (t.message ?: "<none>"),
+                t,
+            )
+            throw t
         }
     }
 
@@ -86,6 +109,12 @@ private inline fun <T> localErrors(kind: ProviderErrorKind, block: () -> T): T =
 } catch (e: LinkageError) {
     throw AIProviderException(ProviderErrorKind.UNSUPPORTED_DEVICE)
 } catch (e: Exception) {
-    SecureLog.d("LiteRtAdapter", "local inference failed: " + e.javaClass.simpleName)
+    SecureLog.e(
+        "LiteRtAdapter",
+        "local operation failed kind=" + kind.name +
+            " exception=" + e.javaClass.name +
+            " message=" + (e.message ?: "<none>"),
+        e,
+    )
     throw AIProviderException(kind)
 }
