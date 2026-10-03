@@ -60,13 +60,34 @@ open class GmailApiClient(
             connection.doOutput = true
             connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
             val code = connection.responseCode
+            val responseBody = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
             connection.disconnect()
             when (code) {
-                in 200..299 -> ToolResult(true, "메일을 보냈습니다")
-                401, 403 -> ToolResult(false, "Gmail 인증에 실패했습니다")
-                else -> ToolResult(false, "Gmail 요청에 실패했습니다")
+                in 200..299 -> {
+                    val messageId = runCatching {
+                        org.json.JSONObject(responseBody).optString("id")
+                    }.getOrDefault("")
+                    ToolResult(
+                        true,
+                        if (messageId.isBlank()) {
+                            "Gmail API가 발송 요청을 접수했습니다."
+                        } else {
+                            "Gmail API가 발송 요청을 접수했습니다 (message ID: $messageId)."
+                        },
+                    )
+                }
+                401 -> ToolResult(false, "Gmail 토큰이 만료되었거나 유효하지 않습니다. Google 계정을 다시 연결해 주세요.")
+                403 -> ToolResult(false, gmailError(responseBody, "Gmail 발송 권한이 없습니다. gmail.send 권한을 다시 승인해 주세요."))
+                else -> ToolResult(false, gmailError(responseBody, "Gmail 요청이 실패했습니다 (HTTP $code)."))
             }
-        }.getOrElse { ToolResult(false, "Gmail 연결에 실패했습니다") }
+        }.getOrElse { error ->
+            ToolResult(
+                false,
+                "Gmail 네트워크 요청에 실패했습니다: " + error.javaClass.simpleName +
+                    (error.message?.let { " ($it)" } ?: ""),
+            )
+        }
     }
 
     companion object {
@@ -74,6 +95,14 @@ open class GmailApiClient(
         private const val ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 15_000
+
+        private fun gmailError(body: String, fallback: String): String {
+            val message = runCatching {
+                org.json.JSONObject(body).getJSONObject("error").optString("message")
+            }.getOrNull()
+            return if (message.isNullOrBlank()) fallback else "$fallback: $message"
+        }
+
         private val VALID_EMAIL = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
         private val CRLF_PAIR = Regex("\\r\\n")
         private val CRLF = Regex("[\\r\\n]")
