@@ -6,13 +6,12 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** PRD-06 Tool-AI 연결: TOOL 지시어 파싱 검증. */
 class ToolCallParserTest {
 
     @Test
-    fun parsesSimpleCall() {
+    fun parsesStructuredJsonCall() {
         val call = ToolCallParser.parseFirst(
-            "TOOL: github.read_repository owner=woojik01 repo=aircall-ai",
+            """TOOL_CALL: {"tool":"github","action":"read_repository","arguments":{"owner":"woojik01","repo":"aircall-ai"}}""",
         )
         assertNotNull(call)
         assertEquals("github", call!!.toolName)
@@ -22,31 +21,34 @@ class ToolCallParserTest {
     }
 
     @Test
-    fun parsesQuotedValueWithSpaces() {
+    fun structuredJsonPreservesSpacesNewlinesAndQuotes() {
+        val call = ToolCallParser.parseFirst(
+            """작업을 실행합니다.
+TOOL_CALL: {"tool":"gmail","action":"send_email","arguments":{"to":"a@example.com","subject":"테스트 메일","body":"첫 줄\\n둘째 줄 \\"인용\\" {내용}"}}""",
+        )
+        assertNotNull(call)
+        assertEquals("테스트 메일", call!!.arguments["subject"])
+        assertEquals("첫 줄\n둘째 줄 \"인용\" {내용}", call.arguments["body"])
+    }
+
+    @Test
+    fun returnsNullForMalformedStructuredJson() {
+        assertNull(ToolCallParser.parseFirst("""TOOL_CALL: {"tool":"github","action":"""))
+    }
+
+    @Test
+    fun fallsBackToLegacyFormat() {
         val call = ToolCallParser.parseFirst(
             "TOOL: github.create_issue owner=o repo=r title=\"버그: 음성 인식 안 됨\"",
         )
         assertNotNull(call)
-        assertEquals("버그: 음성 인식 안 됨", call!!.arguments["title"])
-    }
-
-    @Test
-    fun findsMarkerInMultilineResponse() {
-        val call = ToolCallParser.parseFirst(
-            "조회해 드리겠습니다.\nTOOL: github.read_repository owner=a repo=b\n끝.",
-        )
-        assertNotNull(call)
-        assertEquals("a", call!!.arguments["owner"])
+        assertEquals("github", call!!.toolName)
+        assertEquals("create_issue", call.action)
+        assertEquals("버그: 음성 인식 안 됨", call.arguments["title"])
     }
 
     @Test
     fun returnsNullWhenNoMarker() {
         assertNull(ToolCallParser.parseFirst("오늘 날씨는 좋습니다."))
-    }
-
-    @Test
-    fun returnsNullForMalformedCall() {
-        assertNull(ToolCallParser.parseFirst("TOOL: "))
-        assertNull(ToolCallParser.parseFirst("TOOL: 잘못된형식"))
     }
 }
