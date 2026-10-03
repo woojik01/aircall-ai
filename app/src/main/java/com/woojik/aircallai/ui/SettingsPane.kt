@@ -46,7 +46,8 @@ fun SettingsScreen(
     onRevokeToolApproval: suspend (String) -> Unit = {},
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
-    var apiKeyInput by remember { mutableStateOf("") }
+    var apiKeyInput by remember { mutableStateOf(
+"") }
     var gitHubTokenInput by remember { mutableStateOf("") }
     var gmailTokenInput by remember { mutableStateOf("") }
     var gitHubClientIdInput by remember { mutableStateOf(settings.githubOAuthClientId()) }
@@ -92,7 +93,8 @@ fun SettingsScreen(
             }
             Text(
                 "모드 변경은 다음 대화부터 적용됩니다.",
-                style = MaterialTheme.typography.bodySmall,
+     
+           style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )
 
@@ -141,7 +143,8 @@ fun SettingsScreen(
                 ) { Text("삭제") }
             }
             Text(
-                "Key는 기기의 Android Keystore로 암호화되어 저장되며 서버로 전송되지 않습니다.",
+                "Key는 기기의 Android Keystore로 암호화되어 저
+장되며 서버로 전송되지 않습니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 16.dp),
             )
@@ -188,7 +191,8 @@ fun SettingsScreen(
                     it,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 4.dp),
-                )
+        
+        )
             }
             Text(
                 "GitHub로 로그인하면 GitHub 인증 화면에서 승인 후 연결됩니다. 저장소 조회는 기본 허용, " +
@@ -235,7 +239,8 @@ fun SettingsScreen(
             )
             Row(modifier = Modifier.padding(top = 4.dp)) {
                 Button(
-                    onClick = {
+             
+       onClick = {
                         settings.setGithubOAuthClientId(gitHubClientIdInput)
                         status = "GitHub Client ID가 저장되었습니다."
                     },
@@ -283,7 +288,8 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 4.dp),
                 )
-            }
+   
+         }
             Text(
                 "Google로 로그인하면 Google 인증 화면에서 계정을 승인합니다. 승인 후 앱으로 돌아오면 " +
                     "연결되고 토큰은 만료 시 자동 갱신됩니다(refresh token). 메일 발송은 사용 시 승인이 필요하며 " +
@@ -320,14 +326,15 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp),
-                label = { Text("Google OAuth Client ID (웹 애플리케이션)") },
+                label = { Text("Google OAuth Client ID (Android)") },
                 placeholder = { Text("....apps.googleusercontent.com") },
                 singleLine = true,
             )
             Row(modifier = Modifier.padding(top = 4.dp)) {
                 Button(
                     onClick = {
-                        settings.setGoogleOAuthClientId(googleClientIdInput)
+                        settings.setGoogleOAuthClien
+tId(googleClientIdInput)
                         status = "Google Client ID가 저장되었습니다."
                     },
                     enabled = googleClientIdInput.isNotBlank(),
@@ -376,7 +383,8 @@ fun SettingsScreen(
             if (calendarPermissionGranted) {
                 Text(
                     "캘린더 권한이 허용되었습니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = Mate
+rialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             } else {
@@ -419,7 +427,8 @@ fun SettingsScreen(
                                 scope.launch {
                                     onRevokeToolApproval(key)
                                     approvals = approvals - key
-                                    status = "승인이 해제되었습니다: " + key
+                    
+                status = "승인이 해제되었습니다: " + key
                                 }
                             },
                         ) { Text("해제") }
