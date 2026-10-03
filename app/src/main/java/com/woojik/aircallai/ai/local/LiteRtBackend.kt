@@ -53,21 +53,76 @@ internal class LiteRtBackend(
         )
 
     private fun createEngine(file: File, cacheDir: File, useGpu: Boolean): Engine {
-        if (!useGpu) return Engine(engineConfig(file, cacheDir, Backend.CPU())).also { it.initialize() }
+        SecureLog.d(
+            "LiteRtBackend",
+            "engine init start fileBytes=" + file.length() + " useGpu=" + useGpu,
+        )
+        if (!useGpu) return try {
+            Engine(engineConfig(file, cacheDir, Backend.CPU())).also {
+                it.initialize()
+                SecureLog.d("LiteRtBackend", "engine init success backend=CPU")
+            }
+        } catch (t: Throwable) {
+            SecureLog.e(
+                "LiteRtBackend",
+                "engine init failed backend=CPU exception=" + t.javaClass.name +
+                    " message=" + (t.message ?: "<none>"),
+                t,
+            )
+            throw t
+        }
         return try {
-            Engine(engineConfig(file, cacheDir, Backend.GPU())).also { it.initialize() }
+            Engine(engineConfig(file, cacheDir, Backend.GPU())).also {
+                it.initialize()
+                SecureLog.d("LiteRtBackend", "engine init success backend=GPU")
+            }
         } catch (t: Throwable) {
             // GPU 미지원 기기/드라이버 오류: CPU로 자동 폴백한다.
-            SecureLog.d("LiteRtBackend", "GPU init failed, falling back to CPU: " + t.javaClass.simpleName)
-            Engine(engineConfig(file, cacheDir, Backend.CPU())).also { it.initialize() }
+            SecureLog.e(
+                "LiteRtBackend",
+                "GPU init failed; falling back to CPU exception=" + t.javaClass.name +
+                    " message=" + (t.message ?: "<none>"),
+                t,
+            )
+            try {
+                Engine(engineConfig(file, cacheDir, Backend.CPU())).also {
+                    it.initialize()
+                    SecureLog.d("LiteRtBackend", "engine init success backend=CPU fallback=true")
+                }
+            } catch (cpuError: Throwable) {
+                SecureLog.e(
+                    "LiteRtBackend",
+                    "CPU fallback init failed exception=" + cpuError.javaClass.name +
+                        " message=" + (cpuError.message ?: "<none>"),
+                    cpuError,
+                )
+                throw cpuError
+            }
         }
     }
 
-    override fun generate(history: List<ChatMessage>): String =
-        engine.createConversation(localConversationConfig(history)).use { conversation ->
-            conversation.sendMessage(history.last().content).contents.contents
-            .filterIsInstance<Content.Text>().joinToString("") { it.text }
+    override fun generate(history: List<ChatMessage>): String {
+        SecureLog.d("LiteRtBackend", "createConversation start historyMessages=" + history.size)
+        return try {
+            engine.createConversation(localConversationConfig(history)).use { conversation ->
+                SecureLog.d("LiteRtBackend", "createConversation success; sendMessage start")
+                val response = conversation.sendMessage(history.last().content)
+                val text = response.contents.contents
+                    .filterIsInstance<Content.Text>().joinToString("") { it.text }
+                SecureLog.d("LiteRtBackend", "sendMessage success responseChars=" + text.length)
+                text
+            }
+        } catch (t: Throwable) {
+            SecureLog.e(
+                "LiteRtBackend",
+                "generation failed exception=" + t.javaClass.name +
+                    " message=" + (t.message ?: "<none>") +
+                    " historyMessages=" + history.size,
+                t,
+            )
+            throw t
         }
+    }
 
     override fun close() = engine.close()
 }
