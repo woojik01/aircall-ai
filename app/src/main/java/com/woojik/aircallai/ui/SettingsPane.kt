@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
  * 로컬 기능 증분: Local 모델 관리(갤러리) 화면으로 이동한다.
  * PRD-08: 개인정보(데이터 흐름) 화면으로 이동한다.
  * PRD-06: GitHub/Gmail 토큰 저장/삭제, 캘린더 권한 요청, 승인된 WRITE 작업 목록 표시/해제.
+ * PRD-09: GitHub/Google OAuth 연결을 기본으로 제공하고 수동 토큰은 고급 입력으로 유지한다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +35,12 @@ fun SettingsScreen(
     onRequestCalendarPermission: () -> Unit = {},
     onSaveGmailToken: suspend (String) -> Unit = {},
     onDeleteGmailToken: suspend () -> Unit = {},
+    githubConnectionStatus: String? = null,
+    gmailConnectionStatus: String? = null,
+    onConnectGitHub: suspend () -> String = { "" },
+    onConnectGoogle: () -> String = { "" },
+    onDisconnectGitHub: () -> Unit = {},
+    onDisconnectGmail: () -> Unit = {},
     toolApprovals: List<String> = emptyList(),
     onRevokeToolApproval: suspend (String) -> Unit = {},
 ) {
@@ -41,6 +48,8 @@ fun SettingsScreen(
     var apiKeyInput by remember { mutableStateOf("") }
     var gitHubTokenInput by remember { mutableStateOf("") }
     var gmailTokenInput by remember { mutableStateOf("") }
+    var gitHubClientIdInput by remember { mutableStateOf(settings.githubOAuthClientId()) }
+    var googleClientIdInput by remember { mutableStateOf(settings.googleOAuthClientId()) }
     var baseUrlInput by remember { mutableStateOf(settings.cloudBaseUrl()) }
     var modelInput by remember { mutableStateOf(settings.cloudModel()) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -171,21 +180,63 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // PRD-06: GitHub 토큰(PAT) 연결. 저장소 조회(READ)와 승인된 생성 작업(WRITE)에 사용된다.
+            // PRD-09: GitHub OAuth 연결(기본) + PAT 수동 입력(고급).
             Text("GitHub 연동", style = MaterialTheme.typography.titleMedium)
+            githubConnectionStatus?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             Text(
-                "GitHub 토큰(PAT)을 저장하면 대화에서 저장소 조회와 Issue/PR 생성을 사용할 수 있습니다. " +
-                    "조회는 기본 허용, Issue/PR 생성은 사용 시 승인이 필요합니다.",
+                "GitHub로 연결하면 GitHub에서 인증을 수행합니다. 저장소 조회는 기본 허용, " +
+                    "Issue/PR 생성은 사용 시 승인이 필요합니다. 토큰은 기기에 암호화 저장됩니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedTextField(
+                value = gitHubClientIdInput,
+                onValueChange = { gitHubClientIdInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text("GitHub OAuth App Client ID") },
+                placeholder = { Text("Iv1.... / Ov23....") },
+                singleLine = true,
+            )
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                Button(
+                    onClick = {
+                        settings.setGithubOAuthClientId(gitHubClientIdInput)
+                        scope.launch {
+                            status = onConnectGitHub()
+                        }
+                    },
+                    enabled = gitHubClientIdInput.isNotBlank(),
+                ) { Text("GitHub로 연결") }
+                OutlinedButton(
+                    onClick = onDisconnectGitHub,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { Text("연결 해제") }
+            }
+            Text(
+                "Client ID는 github.com → Settings → Developer settings → OAuth Apps에서 만든 " +
+                    "앱의 공개 ID입니다(기기 흐름 지원). 비밀값은 앱에 저장하지 않습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                "고급: Personal Access Token 직접 입력",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 12.dp),
             )
             OutlinedTextField(
                 value = gitHubTokenInput,
                 onValueChange = { gitHubTokenInput = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
-                label = { Text("GitHub 토큰 (PAT)") },
+                    .padding(top = 4.dp),
                 placeholder = { Text("ghp_... / github_pat_...") },
                 singleLine = true,
             )
@@ -199,7 +250,7 @@ fun SettingsScreen(
                         }
                     },
                     enabled = gitHubTokenInput.isNotBlank(),
-                ) { Text("저장") }
+                ) { Text("PAT 저장") }
                 OutlinedButton(
                     onClick = {
                         scope.launch {
@@ -210,30 +261,65 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = 8.dp),
                 ) { Text("삭제") }
             }
-            Text(
-                "토큰은 기기의 Android Keystore로 암호화되어 저장되며 로그에 노출되지 않습니다.",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 16.dp),
-            )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // PRD-06: Gmail OAuth 액세스 토큰 등록. 이메일 발송(WRITE)은 Tool 승인 후 실행된다.
+            // PRD-09: Google OAuth 연결(기본) + Gmail 토큰 수동 입력(고급).
             Text("Gmail 연동", style = MaterialTheme.typography.titleMedium)
+            gmailConnectionStatus?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             Text(
-                "Gmail API용 OAuth 액세스 토큰을 저장합니다. 예: Google OAuth Playground에서 " +
-                    "https://mail.google.com/ 스코프으로 발급한 토큰. 토큰은 만료 시 다시 등록해야 하며, " +
-                    "이메일 발송은 사용 시 승인이 필요합니다.",
+                "Google로 연결하면 Google 인증 화면에서 계정을 승인합니다. 메일 발송은 사용 시 승인이 필요하며 " +
+                    "토큰은 만료 시 자동 갱신됩니다(refresh token). 기기에 암호화 저장됩니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedTextField(
+                value = googleClientIdInput,
+                onValueChange = { googleClientIdInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text("Google OAuth Client ID (웹 애플리케이션)") },
+                placeholder = { Text("....apps.googleusercontent.com") },
+                singleLine = true,
+            )
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                Button(
+                    onClick = {
+                        settings.setGoogleOAuthClientId(googleClientIdInput)
+                        status = onConnectGoogle()
+                    },
+                    enabled = googleClientIdInput.isNotBlank(),
+                ) { Text("Google로 연결") }
+                OutlinedButton(
+                    onClick = onDisconnectGmail,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { Text("연결 해제") }
+            }
+            Text(
+                "Google Cloud Console → API 및 서비스 → 사용자 인증 정보에서 OAuth 클라이언트 ID(웹 애플리케이션)를 " +
+                    "만들고 승인된 리디렉션 URI에 com.woojik.aircallai://oauth2redirect 를 등록해야 합니다. " +
+                    "Gmail API가 필요한 계정(작업공간은 제한된 스코프 심사 참고)에서 동작합니다.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                "고급: OAuth 액세스 토큰 직접 입력 (만료 시 재등록 필요)",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 12.dp),
             )
             OutlinedTextField(
                 value = gmailTokenInput,
                 onValueChange = { gmailTokenInput = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
-                label = { Text("Gmail OAuth 액세스 토큰") },
+                    .padding(top = 4.dp),
                 placeholder = { Text("ya29....") },
                 singleLine = true,
             )
@@ -247,7 +333,7 @@ fun SettingsScreen(
                         }
                     },
                     enabled = gmailTokenInput.isNotBlank(),
-                ) { Text("저장") }
+                ) { Text("토큰 저장") }
                 OutlinedButton(
                     onClick = {
                         scope.launch {
@@ -258,11 +344,6 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = 8.dp),
                 ) { Text("삭제") }
             }
-            Text(
-                "토큰은 기기의 Android Keystore로 암호화되어 저장되며 로그에 노출되지 않습니다.",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 16.dp),
-            )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 

@@ -13,13 +13,15 @@
 - 대화에서 Tool을 호출하는 연결(TOOL 지시어 파싱·실행·결과 반영)과 실행 메타데이터 로깅
 - PRD-06 Tool 어댑터 전체: GitHub, Notes(기기 로컬), Calendar(기기 캘린더), Gmail
 - 캘린더 런타임 권한 요청 UI와 Gmail OAuth 토큰 등록 UI
-- PRD-09 Phase 1 인증 추상화: OAuth 상태 모델(NOT_CONNECTED/CONNECTED/…), OAuthProvider 인터페이스,
-  OAuth 자격증명 저장소(갱신 포함), 서비스별 연결 저장소 (GitHub/Google OAuth 연결 UI는 후속 증분)
+- PRD-09 인증 추상화: OAuth 상태 모델·Provider 인터페이스·자격증명 저장소(갱신 포함)·연결 저장소
+- PRD-09 GitHub OAuth 기기 인증(Device Flow) 연결, Google OAuth(Authorization Code + PKCE) 연결,
+  토큰 자동 갱신, 서비스별 연결/해제 UI. 수동 PAT/토큰 입력은 고급 설정으로 유지
 - 개인정보 안내와 Release R8 빌드 구성 (앱 버전 0.2.0)
 
 **실기 검증 필요:** 로컬 모델의 Android 추론 성능과 메모리 사용, 음성 인식·출력,
-화면 회전·복귀·다른 앱 전환·화면 OFF·알림/오버레이·배터리 동작, Release APK 설치.
-캘린더 연동은 실기 검증 완료(2026-10-03). Gmail 실제 발송은 OAuth 자동화(Phase 3) 후 검증.
+화면 회전·복귀·다른 앱 전환·화면 OFF·알림/오버레이·배터리 동작, Release APK 설치,
+GitHub/Google OAuth 실제 연결·해제(각 서비스 OAuth 앱 등록 후 실기 테스트 필요).
+캘린더 연동은 실기 검증 완료(2026-10-03).
 PRD 전체 완료나 출시 준비 완료를 의미하지 않습니다.
 
 ## 로컬 모델 사용법
@@ -48,18 +50,23 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 
 ## Tool 연동 계층
 
-- 설정 → GitHub 연동에서 PAT 등록 (기기 Keystore 암호화 저장)
+- **GitHub 연동(OAuth 기본)**: 설정에서 OAuth App Client ID 등록 → "GitHub로 연결"(기기 인증).
+  브라우저에서 표시된 코드를 입력·승인하면 연결된다. 고급으로 PAT 직접 입력 유지
 - `github` Tool: `read_repository`는 기본 허용, `create_issue`/`create_pull_request`는 승인 필요
+- **Gmail 연동(OAuth 기본)**: 설정에서 Google OAuth Client ID(웹 애플리케이션) 등록 →
+  "Google로 연결". 승인 후 앱으로 돌아오면 연결되고 refresh token으로 만료 시 자동 갱신된다.
+  Google Cloud Console에 리디렉션 URI `com.woojik.aircallai://oauth2redirect` 등록 필요.
+  고급으로 액세스 토큰 직접 입력 유지
 - **Tool-AI 연결**: AI가 `TOOL: <도구>.<액션> key=value` 지시어를 응답하면
   실행 결과를 대화에 반영해 최종 답변한다 (최대 2회 라운드)
 - `notes` Tool: `add_note`(승인 필요), `search_notes`/`list_notes`(기본 허용) — 기기 로컬 저장소 사용
 - `calendar` Tool: `read_upcoming`(기본 허용), `create_event`(승인 필요) — 기기 캘린더 사용.
   **설정 → Calendar 연동에서 캘린더 권한을 허용해야** 일정 조회·등록이 동작한다
-- `gmail` Tool: `send_email`(승인 필요) — **설정 → Gmail 연동에서 Gmail API용 OAuth 액세스 토큰을
-  등록해야** 동작한다. 예: Google OAuth Playground에서 `https://mail.google.com/` 스코프으로
-  발급한 토큰. 액세스 토큰은 만료되므로 주기적으로 재등록해야 한다
+- `gmail` Tool: `send_email`(승인 필요) — Gmail API(messages/send) 호출
 - 승인은 **도구·작업 단위**로 저장된다. 승인 후에는 다른 인자로 같은 작업을 요청해도
   다시 묻지 않으며, 앱 재시작 후에도 유지된다. 설정 → Tool 작업 승인에서 해제할 수 있다.
+- **계정 연결은 서비스별로 독립적**: 연결/해제도 서비스 단위이며 한 서비스 해제가 다른 서비스에 영향을 주지 않는다.
+  OAuth 취소·실패가 앱 사용을 중단하지 않는다
 - **실행 메타데이터 로깅**: 도구/액션/위험도/차단 여부/성공/지연(ms)을 기록한다
   (인자 값은 민감 정보 방지를 위해 미기록, 최근 100건 메모리 + 디버그 로그 요약)
 
@@ -71,6 +78,8 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 - **Cloud:** 대화 텍스트와 인증용 API Key가 설정한 HTTPS API 주소로 전송됩니다. Key는 기기에 암호화 저장됩니다.
 - **Tool:** 실행 시 요청과 인증 토큰이 해당 서비스로 전송됩니다. READ는 기본 허용, WRITE는 승인 후 실행됩니다.
   Notes는 기기에만 저장되고, Calendar는 기기 캘린더를 사용하며, Gmail은 발송 시 Google 서버로 전송됩니다.
+- **계정 연결:** GitHub/Google 인증은 해당 서비스에서 수행되며 access/refresh token은 기기에만 암호화 저장되고
+  AirCall AI 서버(존재하지 않음)로 전송되지 않습니다. 연결하지 않은 외부 서비스에는 접근하지 않습니다.
 
 ## 구조
 
@@ -78,7 +87,7 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 app/src/main/java/com/woojik/aircallai/
   ai/            provider, local(LiteRT-LM·다운로드·검증), cloud
   audio/         Android STT/TTS
-  auth/          PRD-09 OAuth 상태 모델·Provider 인터페이스·자격증명 저장소·연결 저장소
+  auth/          PRD-09 OAuth 상태 모델·GitHub 기기 인증·Google PKCE·자격증명 저장소·연결 저장소
   conversation/  ConversationEngine, VoiceSession, VoiceResponseSanitizer
   core/          로깅·Keystore·자격증명 저장
   session/       세션 상태·제어

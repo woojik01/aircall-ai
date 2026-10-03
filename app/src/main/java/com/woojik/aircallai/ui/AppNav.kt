@@ -3,6 +3,7 @@ package com.woojik.aircallai.ui
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -22,10 +23,19 @@ import androidx.navigation.compose.rememberNavController
 import com.woojik.aircallai.AirCallApp
 import com.woojik.aircallai.AppGraph
 import com.woojik.aircallai.ai.cloud.CloudAIProvider
+import com.woojik.aircallai.auth.ConnectionStatus
+import com.woojik.aircallai.auth.GitHubDeviceFlowClient
+import com.woojik.aircallai.auth.GoogleOAuthClient
+import com.woojik.aircallai.auth.OAuthCallbackResult
 import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
 import com.woojik.aircallai.tools.GitHubApiClient
 import com.woojik.aircallai.tools.GmailApiClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models / privacy.
@@ -37,11 +47,19 @@ import com.woojik.aircallai.tools.GmailApiClient
  * PRD-08: 설정에서 개인정보(데이터 흐름) 화면으로 이동한다.
  * PRD-06: 설정에서 GitHub/Gmail 토큰을 등록/삭제하고, 캘린더 권한을 요청하며,
  * WRITE 작업 승인 다이얼로그를 띄운다.
+ * PRD-09: GitHub는 OAuth 기기 인증, Google은 시스템 브라우저 인증으로 연결한다.
+ * 인증 취소·실패가 앱 사용을 중단하지 않는다.
  */
 class MainActivity : ComponentActivity() {
 
     // 캘린더 권한 상태. 런타임 요청 결과가 설정 화면에 즉시 반영되도록 compose 상태로 관리한다.
     private var calendarGranted by mutableStateOf(false)
+
+    // PRD-09: 진행 중인 Google 인증 요청(state/code_verifier 보관).
+    private var pendingGoogleAuth: GoogleOAuthClient.AuthRequest? = null
+
+    // 인증 콜백 처리 등 화면 밖 코루틴용 스코프.
+    private val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val requestMicPermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -56,29 +74,127 @@ class MainActivity : ComponentActivity() {
             calendarGranted = hasCalendarPermission()
         }
 
+    private fun graph(): AppGraph = (application as AirCallApp).graph
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         calendarGranted = hasCalendarPermission()
-        val graph = (application as AirCallApp).graph
+        val appGraph = graph()
+
+        // PRD-09: 재시작 후 저장된 자격증명 기준으로 연결 상태를 복원한다.
+        uiScope.launch { appGraph.accountRepository.refresh(System.currentTimeMillis()) }
 
         val vm = MainViewModel(
             app = application,
-            repository = graph.sessionRepository,
+            repository = appGraph.sessionRepository,
             isMicPermissionGranted = { hasMicPermission() },
             requestMicPermission = { requestMicPermission() },
             startSession = { startConversationService() },
             stopSession = { sendServiceAction(ConversationService.ACTION_END) },
-            isProviderReady = { graph.providerRouter.current().isReady() },
+            isProviderReady = { appGraph.providerRouter.current().isReady() },
         )
         setContent {
             AirCallUi(
                 vm,
-                graph,
+                appGraph,
                 calendarPermissionGranted = { calendarGranted },
                 requestCalendarPermission = { requestCalendarPermission() },
+                connectGitHub = { connectGitHub() },
+                connectGoogle = { connectGoogle() },
+                disconnectAccount = { provider -> uiScope.launch { appGraph.accountRepository.disconnect(provider) } },
             )
         }
+        // PRD-09: 앱이 인증 콜백으로 실행된 경우(cold start) 처리한다.
+        handleGoogleCallback(intent)
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // PRD-09: Google 인증 후 브라우저에서 돌아온 콜백을 처리한다.
+        handleGoogleCallback(intent)
+    }
+
+    /** PRD-09 Phase 2: GitHub OAuth 기기 인증. user_code를 보여주고 토큰을 폴링한다. */
+    private suspend fun connectGitHub(): String {
+        val appGraph = graph()
+        appGraph.accountRepository.mark("github", ConnectionStatus.CONNECTING)
+        val session = appGraph.githubAuth.startDeviceFlow()
+        if (session == null) {
+            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+            return "GitHub OAuth App Client ID를 먼저 저장해 주세요 (GitHub 연동 섹션)."
+        }
+        openBrowser(session.verificationUri)
+        // 사용자가 브라우저에서 코드를 입력하고 승인할 때까지 폴링한다.
+        while (System.currentTimeMillis() < session.expiresAtMs) {
+            when (val result = appGraph.githubAuth.pollToken(session)) {
+                is GitHubDeviceFlowClient.PollResult.Success -> {
+                    appGraph.accountRepository.connect("github", result.tokens, null, System.currentTimeMillis())
+                    return "GitHub 계정이 연결되었습니다. 코드: " + session.userCode + " 승인 완료."
+                }
+                is GitHubDeviceFlowClient.PollResult.Failed -> {
+                    appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+                    return result.reason
+                }
+                GitHubDeviceFlowClient.PollResult.Pending -> delay(session.intervalSeconds * 1000L)
+            }
+        }
+        appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+        return "기기 인증 시간이 만료되었습니다. 다시 연결해 주세요."
+    }
+
+    /** PRD-09 Phase 3: Google OAuth. 시스템 브라우저로 인증 화면을 연다. */
+    private fun connectGoogle(): String {
+        val appGraph = graph()
+        val request = appGraph.googleAuth.buildAuthRequest(GOOGLE_REDIRECT_URI)
+        if (request == null) {
+            appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
+            return "Google OAuth Client ID를 먼저 저장해 주세요 (Gmail 연동 섹션)."
+        }
+        pendingGoogleAuth = request
+        appGraph.accountRepository.mark("gmail", ConnectionStatus.CONNECTING)
+        return if (openBrowser(request.authUrl)) {
+            "Google 로그인 화면이 열렸습니다. 승인 후 앱으로 돌아오면 연결이 완료됩니다."
+        } else {
+            appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
+            "브라우저를 열 수 없습니다. Chrome 등 브라우저를 설치해 주세요."
+        }
+    }
+
+    /** PRD-09: com.woojik.aircallai://oauth2redirect 콜백을 검증하고 토큰으로 교환한다. */
+    private fun handleGoogleCallback(intent: Intent?) {
+        if (intent == null || intent.action != Intent.ACTION_VIEW) return
+        val data = intent.data ?: return
+        if (data.scheme != "com.woojik.aircallai" || data.host != "oauth2redirect") return
+        val request = pendingGoogleAuth ?: return
+        val appGraph = graph()
+        pendingGoogleAuth = null
+        if (data.getQueryParameter("error") != null) {
+            // 사용자가 취소해도 앱 사용은 계속된다.
+            appGraph.accountRepository.mark("gmail", ConnectionStatus.NOT_CONNECTED)
+            return
+        }
+        val code = data.getQueryParameter("code")
+        val state = data.getQueryParameter("state")
+        val result = appGraph.accountRepository.validateCallback("gmail", "gmail", code, state, request.state)
+        if (result !is OAuthCallbackResult.Success) {
+            appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
+            return
+        }
+        uiScope.launch {
+            val tokens = appGraph.googleAuth.exchangeCode(result.code, request.codeVerifier, GOOGLE_REDIRECT_URI)
+            if (tokens == null) {
+                appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
+            } else {
+                appGraph.accountRepository.connect("gmail", tokens, null, System.currentTimeMillis())
+            }
+        }
+    }
+
+    private fun openBrowser(url: String): Boolean =
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            true
+        }.getOrElse { false }
 
     private fun startConversationService() {
         sendServiceAction(ConversationService.ACTION_START, foreground = true)
@@ -125,6 +241,11 @@ class MainActivity : ComponentActivity() {
         SecureLog.debuggable =
             (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
     }
+
+    companion object {
+        /** Google OAuth 콜백 URI. Google Cloud Console의 OAuth 클라이언트에 등록한다. */
+        const val GOOGLE_REDIRECT_URI = "com.woojik.aircallai://oauth2redirect"
+    }
 }
 
 private object Routes {
@@ -142,6 +263,9 @@ private fun AirCallUi(
     graph: AppGraph,
     calendarPermissionGranted: () -> Boolean,
     requestCalendarPermission: () -> Unit,
+    connectGitHub: suspend () -> String,
+    connectGoogle: () -> String,
+    disconnectAccount: (String) -> Unit,
 ) {
     val navController = rememberNavController()
     val modelScope = rememberCoroutineScope()
@@ -162,6 +286,7 @@ private fun AirCallUi(
         }
         composable(Routes.SETTINGS) {
             // PRD-04/05: 모드 변경 시에도 다음 턴부터 갱신된 provider가 적용된다.
+            val accounts by graph.accountRepository.connections.collectAsState()
             SettingsScreen(
                 settings = graph.settings,
                 onModeChanged = {
@@ -196,6 +321,13 @@ private fun AirCallUi(
                 onDeleteGmailToken = {
                     graph.credentials.delete(GmailApiClient.CREDENTIAL_SERVICE)
                 },
+                // PRD-09: 계정 연결 상태와 OAuth 연결/해제.
+                githubConnectionStatus = accounts["github"]?.let { graph.accountRepository.statusMessage(it) },
+                gmailConnectionStatus = accounts["gmail"]?.let { graph.accountRepository.statusMessage(it) },
+                onConnectGitHub = connectGitHub,
+                onConnectGoogle = connectGoogle,
+                onDisconnectGitHub = { disconnectAccount("github") },
+                onDisconnectGmail = { disconnectAccount("gmail") },
                 // PRD-06 승인 증분: 승인된 WRITE 작업 목록 표시/해제.
                 toolApprovals = graph.toolPermissions.approvedActions(),
                 onRevokeToolApproval = { key ->

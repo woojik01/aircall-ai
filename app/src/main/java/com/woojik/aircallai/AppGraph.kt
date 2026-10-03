@@ -8,6 +8,11 @@ import com.woojik.aircallai.ai.local.LiteRtModelAdapter
 import com.woojik.aircallai.ai.local.ModelDownloadManager
 import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.ProviderRouter
+import com.woojik.aircallai.auth.AccountConnectionRepository
+import com.woojik.aircallai.auth.GitHubDeviceFlowClient
+import com.woojik.aircallai.auth.GoogleOAuthClient
+import com.woojik.aircallai.auth.HttpOAuthPost
+import com.woojik.aircallai.auth.OAuthCredentialStore
 import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.core.security.AndroidKeystoreCrypto
 import com.woojik.aircallai.core.storage.AppStorage
@@ -44,6 +49,8 @@ import kotlinx.coroutines.SupervisorJob
  * PRD-06: GitHub/Notes/Calendar/Gmail Tool과 승인 계층을 그래프에 연결한다.
  * WRITE 승인 상태는 일반 설정에 영속화되어 앱 재시작 후에도 유지된다.
  * Tool-AI 연결: 모든 provider를 ToolBridgedAIProvider로 감싸 Tool 지시어를 처리한다.
+ * PRD-09: GitHub(기기 인증)/Google(PKCE) OAuth 계층과 연결 저장소를 구성한다.
+ * 연결된 토큰은 CredentialManager에 암호화 저장되고 기존 Tool 계층과 동기화된다.
  */
 class AppGraph(context: Context) {
     private val settingsStore = SharedPrefsStore(context)
@@ -77,6 +84,19 @@ class AppGraph(context: Context) {
         executor = toolExecutor,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
+
+    /** PRD-09: OAuth 계층. 토큰은 Keystore 암호화 저장되고 로그에 노출되지 않는다. */
+    val oauthHttp = HttpOAuthPost()
+    val oauthStore = OAuthCredentialStore(credentials)
+    val githubAuth = GitHubDeviceFlowClient(
+        http = oauthHttp,
+        clientIdProvider = { settings.githubOAuthClientId() },
+    )
+    val googleAuth = GoogleOAuthClient(
+        http = oauthHttp,
+        clientIdProvider = { settings.googleOAuthClientId() },
+    )
+    val accountRepository = AccountConnectionRepository(oauthStore, listOf(githubAuth, googleAuth))
 
     /** Tool-AI 연결: AI 응답의 TOOL 지시어를 실행하고 결과를 반영한다. */
     private val toolCatalog =

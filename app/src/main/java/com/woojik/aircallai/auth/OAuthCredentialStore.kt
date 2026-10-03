@@ -8,6 +8,9 @@ import java.util.Base64
  * PRD-02 CredentialManager(Keystore 암호화) 위에 서비스별 연결 데이터를 저장한다.
  * 토큰 직렬화는 Base64 필드 조합을 사용한다(단위 테스트 JVM에서도 동작).
  * 토큰은 어떤 경로(로그/예외 메시지)로도 노출하지 않는다.
+ *
+ * 연결/갱신 시 기존 Tool 계층(GitHubTool/GmailTool)이 읽는 서비스 키(github/gmail)로
+ * access token을 함께 동기화한다. Tool은 OAuth 구현을 몰라도 토큰을 쓸 수 있다.
  */
 class OAuthCredentialStore(
     private val credentials: CredentialManager,
@@ -20,6 +23,9 @@ class OAuthCredentialStore(
         } else {
             credentials.delete(accountKey(provider))
         }
+        // 기존 Tool 계층 호환: 서비스 키에 access token을 평문이 아닌 CredentialManager
+        // 암호화 저장소에 동기화한다(CredentialManager가 저장 시 암호화한다).
+        credentials.save(provider, tokens.accessToken.toByteArray(Charsets.UTF_8))
     }
 
     suspend fun load(provider: String): OAuthTokens? =
@@ -32,6 +38,7 @@ class OAuthCredentialStore(
     suspend fun disconnect(provider: String) {
         credentials.delete(serviceKey(provider))
         credentials.delete(accountKey(provider))
+        credentials.delete(provider)
     }
 
     /**
