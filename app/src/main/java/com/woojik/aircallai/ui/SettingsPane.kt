@@ -206,7 +206,7 @@ fun SettingsScreen(
                 )
             }
             Text(
-                "GitHub로 로그인하면 GitHub 인증 화면에서 승인 후 연결됩니다. 저장소 조회는 기본 허용, +
+                "GitHub로 로그인하면 GitHub 인증 화면에서 승인 후 연결됩니다. 저장소 조회는 기본 허용, " +
                     "Issue/PR 생성은 사용 시 승인이 필요합니다. 토큰은 기기에 암호화 저장됩니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
