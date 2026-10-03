@@ -39,7 +39,9 @@ class HttpOAuthPost(
                     ?.bufferedReader()?.use { it.readText() }.orEmpty()
                 connection.disconnect()
                 code to body
-            }.getOrElse { -1 to "" }
+            }.getOrElse { error ->
+                -1 to (error.javaClass.simpleName + ": " + (error.message ?: "network request failed"))
+            }
         }
 
     companion object {
