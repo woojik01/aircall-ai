@@ -3,7 +3,10 @@ package com.woojik.aircallai.auth
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.net.UnknownHostException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -22,29 +25,58 @@ class HttpOAuthPost(
 ) : OAuthHttpPost {
     override suspend fun postForm(url: String, form: Map<String, String>): Pair<Int, String> =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val connection = URL(url).openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.connectTimeout = connectTimeoutMs
-                connection.readTimeout = readTimeoutMs
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                connection.setRequestProperty("Accept", "application/json")
-                val encoded = form.entries.joinToString("&") {
-                    encode(it.key) + "=" + encode(it.value)
+            var dnsRetries = 0
+            while (true) {
+                try {
+                    return@withContext postFormOnce(url, form)
+                } catch (error: UnknownHostException) {
+                    if (dnsRetries >= MAX_DNS_RETRIES) {
+                        return@withContext -1 to (
+                            error.javaClass.simpleName + ": " +
+                                (error.message ?: "Unable to resolve OAuth server")
+                            )
+                    }
+                    dnsRetries += 1
+                    delay(DNS_RETRY_DELAY_MS * dnsRetries)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    return@withContext -1 to (
+                        error.javaClass.simpleName + ": " +
+                            (error.message ?: "OAuth network request failed")
+                        )
                 }
-                connection.outputStream.use { it.write(encoded.toByteArray(Charsets.UTF_8)) }
-                val code = connection.responseCode
-                val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
-                    ?.bufferedReader()?.use { it.readText() }.orEmpty()
-                connection.disconnect()
-                code to body
-            }.getOrElse { error ->
-                -1 to (error.javaClass.simpleName + ": " + (error.message ?: "network request failed"))
             }
+            @Suppress("UNREACHABLE_CODE")
+            -1 to "OAuth network request failed"
         }
 
+    private fun postFormOnce(url: String, form: Map<String, String>): Pair<Int, String> {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.connectTimeout = connectTimeoutMs
+        connection.readTimeout = readTimeoutMs
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        connection.setRequestProperty("Accept", "application/json")
+        val encoded = form.entries.joinToString("&") {
+            encode(it.key) + "=" + encode(it.value)
+        }
+        return try {
+            connection.outputStream.use { it.write(encoded.toByteArray(Charsets.UTF_8)) }
+            val code = connection.responseCode
+            val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
+            code to body
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     companion object {
+        private const val MAX_DNS_RETRIES = 2
+        private const val DNS_RETRY_DELAY_MS = 750L
+
         fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
     }
 }
