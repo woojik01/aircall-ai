@@ -83,6 +83,26 @@ class SettingsRepository(private val store: SettingsStore) {
         }
     }
 
+    /**
+     * PRD-09 Phase 2: GitHub OAuth App Client ID. 공개 값(비밀이 아님)이므로 일반 설정에
+     * 저장한다. 사용자가 직접 OAuth App을 만들고 Client ID를 붙여넣는다.
+     */
+    fun githubOAuthClientId(): String = store.getString(KEY_GITHUB_OAUTH_CLIENT_ID)?.trim().orEmpty()
+
+    fun setGithubOAuthClientId(clientId: String) {
+        store.putString(KEY_GITHUB_OAUTH_CLIENT_ID, clientId.trim())
+    }
+
+    /**
+     * PRD-09 Phase 3: Google OAuth Client ID(웹 애플리케이션 유형). 공개 값이므로 일반 설정에
+     * 저장한다. Google Cloud Console에서 OAuth 클라이언트를 만들고 등록해야 한다.
+     */
+    fun googleOAuthClientId(): String = store.getString(KEY_GOOGLE_OAUTH_CLIENT_ID)?.trim().orEmpty()
+
+    fun setGoogleOAuthClientId(clientId: String) {
+        store.putString(KEY_GOOGLE_OAUTH_CLIENT_ID, clientId.trim())
+    }
+
     companion object {
         const val MODE_LOCAL = "local"
         const val MODE_CLOUD = "cloud"
@@ -95,5 +115,7 @@ class SettingsRepository(private val store: SettingsStore) {
         private const val KEY_CLOUD_BASE_URL = "cloud_base_url"
         private const val KEY_CLOUD_MODEL = "cloud_model"
         private const val KEY_LOCAL_MODEL = "local_model_id"
+        private const val KEY_GITHUB_OAUTH_CLIENT_ID = "github_oauth_client_id"
+        private const val KEY_GOOGLE_OAUTH_CLIENT_ID = "google_oauth_client_id"
     }
 }
