@@ -38,7 +38,7 @@ fun SettingsScreen(
     onDeleteGmailToken: suspend () -> Unit = {},
     githubConnectionStatus: String? = null,
     gmailConnectionStatus: String? = null,
-    onConnectGitHub: suspend () -> String = { "" },
+    onConnectGitHub: suspend ((String) -> Unit) -> String = { "" },
     onConnectGoogle: () -> String = { "" },
     onDisconnectGitHub: () -> Unit = {},
     onDisconnectGmail: () -> Unit = {},
@@ -55,6 +55,7 @@ fun SettingsScreen(
     var baseUrlInput by remember { mutableStateOf(settings.cloudBaseUrl()) }
     var modelInput by remember { mutableStateOf(settings.cloudModel()) }
     var status by remember { mutableStateOf<String?>(null) }
+    var githubDeviceCode by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -193,6 +194,15 @@ fun SettingsScreen(
         
         )
             }
+            githubDeviceCode?.let { code ->
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("GitHub 인증 코드", style = MaterialTheme.typography.labelLarge)
+                        Text(code, style = MaterialTheme.typography.headlineSmall)
+                        Text("브라우저에서 이 코드를 입력하고 승인을 마치면 앱이 자동으로 연결됩니다.")
+                    }
+                }
+            }
             Text(
                 "GitHub로 로그인하면 GitHub 인증 화면에서 승인 후 연결됩니다. 저장소 조회는 기본 허용, " +
                     "Issue/PR 생성은 사용 시 승인이 필요합니다. 토큰은 기기에 암호화 저장됩니다.",
@@ -204,7 +214,8 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             scope.launch {
-                                status = onConnectGitHub()
+                                githubDeviceCode = null
+                                status = onConnectGitHub { code -> githubDeviceCode = code }
                             }
                         },
                     ) { Text("GitHub로 로그인") }
