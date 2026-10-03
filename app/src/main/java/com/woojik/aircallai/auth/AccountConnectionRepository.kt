@@ -50,7 +50,8 @@ class AccountConnectionRepository(
         update(provider, ConnectionStatus.NOT_CONNECTED, null)
     }
 
-    suspend fun mark(provider: String, status: ConnectionStatus, displayName: String? = null) {
+    /** 화면 표시용 상태 표시. 저장소 접근이 없어 non-suspend다(UI 콜백에서 바로 호출). */
+    fun mark(provider: String, status: ConnectionStatus, displayName: String? = null) {
         val current = states.value[provider] ?: return
         update(
             provider,
