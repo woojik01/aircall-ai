@@ -19,7 +19,9 @@ class LiteRtModelAdapter(
 ) : LocalModelAdapter {
     private val context = context.applicationContext
     private val runtime = LocalInferenceRuntime { file ->
-        localErrors(ProviderErrorKind.LOAD_FAILED) { LiteRtBackend(file, this.context.cacheDir) }
+        localErrors(ProviderErrorKind.LOAD_FAILED) {
+            LiteRtBackend(file, this.context.cacheDir, useGpu = settings.localUseGpu())
+        }
     }
 
     fun selectedModel(): LocalModelInfo? = LocalModelRegistry.byId(settings.localModelId())
