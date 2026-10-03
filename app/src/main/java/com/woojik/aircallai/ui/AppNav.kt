@@ -45,7 +45,8 @@ import kotlinx.coroutines.launch
  * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
  * 로컬 기능 증분: 설정에서 로컬 모델 갤러리(다운로드/적용)로 이동한다.
  * PRD-08: 설정에서 개인정보(데이터 흐름) 화면으로 이동한다.
- * PRD-06: 설정에서 GitHub/Gmail 토큰을 등록/삭제하고, 캘린더 권한을 요청하며,
+ * PRD-06: 설정에서 Gi
+tHub/Gmail 토큰을 등록/삭제하고, 캘린더 권한을 요청하며,
  * WRITE 작업 승인 다이얼로그를 띄운다.
  * PRD-09: GitHub는 OAuth 기기 인증, Google은 시스템 브라우저 인증으로 연결한다.
  * 인증 취소·실패가 앱 사용을 중단하지 않는다.
@@ -94,7 +95,8 @@ class MainActivity : ComponentActivity() {
             isProviderReady = { appGraph.providerRouter.current().isReady() },
         )
         setContent {
-            AirCallUi(
+    
+        AirCallUi(
                 vm,
                 appGraph,
                 calendarPermissionGranted = { calendarGranted },
@@ -135,7 +137,8 @@ class MainActivity : ComponentActivity() {
                     appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
                     return result.reason
                 }
-                GitHubDeviceFlowClient.PollResult.Pending -> delay(session.intervalSeconds * 1000L)
+                GitHubDeviceFlowClient.PollResult.Pendi
+ng -> delay(session.intervalSeconds * 1000L)
             }
         }
         appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
@@ -145,7 +148,9 @@ class MainActivity : ComponentActivity() {
     /** PRD-09 Phase 3: Google OAuth. 시스템 브라우저로 인증 화면을 연다. */
     private fun connectGoogle(): String {
         val appGraph = graph()
-        val request = appGraph.googleAuth.buildAuthRequest(GOOGLE_REDIRECT_URI)
+        // Android 유형 OAuth 클라이언트: 콜백 URI는 Client ID에서 유도된 리버스 스킴을 사용한다.
+        val redirectUri = GoogleOAuthClient.redirectUriFor(appGraph.settings.googleOAuthClientId())
+        val request = if (redirectUri == null) null else appGraph.googleAuth.buildAuthRequest(redirectUri)
         if (request == null) {
             appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
             return "Google OAuth Client ID를 먼저 저장해 주세요 (Gmail 연동 섹션)."
@@ -160,13 +165,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** PRD-09: com.woojik.aircallai://oauth2redirect 콜백을 검증하고 토큰으로 교환한다. */
+    /** PRD-09: Google 콜백(리버스 클라이언트 ID 스킴)을 검증하고 토큰으로 교환한다. */
     private fun handleGoogleCallback(intent: Intent?) {
         if (intent == null || intent.action != Intent.ACTION_VIEW) return
         val data = intent.data ?: return
-        if (data.scheme != "com.woojik.aircallai" || data.host != "oauth2redirect") return
         val request = pendingGoogleAuth ?: return
         val appGraph = graph()
+        // Android 유형 OAuth 클라이언트: 리버스 클라이언트 ID 스킴 콜백만 처리한다.
+        val callbackScheme = GoogleOAuthClient.callbackSchemeFor(appGraph.settings.googleOAuthClientId())
+        if (callbackScheme == null || data.scheme != callbackScheme || data.path != GoogleOAuthClient.CALLBACK_PATH) return
         pendingGoogleAuth = null
         if (data.getQueryParameter("error") != null) {
             // 사용자가 취소해도 앱 사용은 계속된다.
@@ -178,10 +185,16 @@ class MainActivity : ComponentActivity() {
         val result = appGraph.accountRepository.validateCallback("gmail", "gmail", code, state, request.state)
         if (result !is OAuthCallbackResult.Success) {
             appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
-            return
+    
+        return
         }
         uiScope.launch {
-            val tokens = appGraph.googleAuth.exchangeCode(result.code, request.codeVerifier, GOOGLE_REDIRECT_URI)
+            val redirectUri = GoogleOAuthClient.redirectUriFor(appGraph.settings.googleOAuthClientId())
+            val tokens = if (redirectUri == null) {
+                null
+            } else {
+                appGraph.googleAuth.exchangeCode(result.code, request.codeVerifier, redirectUri)
+            }
             if (tokens == null) {
                 appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
             } else {
@@ -230,7 +243,8 @@ class MainActivity : ComponentActivity() {
     private fun requestCalendarPermission() {
         requestCalendarPermissions.launch(
             arrayOf(
-                Manifest.permission.READ_CALENDAR,
+                Manifest.permission.READ_CAL
+ENDAR,
                 Manifest.permission.WRITE_CALENDAR,
             ),
         )
@@ -243,8 +257,8 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /** Google OAuth 콜백 URI. Google Cloud Console의 OAuth 클라이언트에 등록한다. */
-        const val GOOGLE_REDIRECT_URI = "com.woojik.aircallai://oauth2redirect"
+        /** Google OAuth 콜백 스킴은 Client ID(리버스)에서 유도되며 manifest에 빌드 시점 주입된다. */
+        const val GOOGLE_CALLBACK_PATH = GoogleOAuthClient.CALLBACK_PATH
     }
 }
 
@@ -289,7 +303,8 @@ private fun AirCallUi(
             val accounts by graph.accountRepository.connections.collectAsState()
             SettingsScreen(
                 settings = graph.settings,
-                onModeChanged = {
+                onM
+odeChanged = {
                     vm.engine.updateProvider(graph.providerRouter.current())
                     vm.refreshProviderReadiness()
                 },
@@ -324,7 +339,8 @@ private fun AirCallUi(
                 // PRD-09: 계정 연결 상태와 OAuth 연결/해제.
                 githubConnectionStatus = accounts["github"]?.let { graph.accountRepository.statusMessage(it) },
                 gmailConnectionStatus = accounts["gmail"]?.let { graph.accountRepository.statusMessage(it) },
-                onConnectGitHub = connectGitHub,
+         
+       onConnectGitHub = connectGitHub,
                 onConnectGoogle = connectGoogle,
                 onDisconnectGitHub = { disconnectAccount("github") },
                 onDisconnectGmail = { disconnectAccount("gmail") },
