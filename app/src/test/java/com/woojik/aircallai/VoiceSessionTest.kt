@@ -12,6 +12,9 @@ import com.woojik.aircallai.audio.SpeechSynthesizer
 import com.woojik.aircallai.conversation.ConversationEngine
 import com.woojik.aircallai.conversation.ConversationState
 import com.woojik.aircallai.conversation.VoiceSession
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -109,6 +112,47 @@ class VoiceSessionTest {
         session.stopSpeaking()
         assertEquals(1, tts.stopped)
         assertTrue(engine.state.value is ConversationState.Idle)
+    }
+
+    @Test
+    fun cancelledTtsReturnsToIdle() = runTest {
+        val engine = ConversationEngine(NoopAIProvider())
+        val gate = CompletableDeferred<Unit>()
+        val tts = object : SpeechSynthesizer {
+            override suspend fun speak(text: String) { gate.await() }
+            override fun stop() {}
+        }
+        val session = VoiceSession(FakeRecognizer { "hi" }, tts, engine)
+        val turn = launch { session.runOneTurn() }
+        runCurrent()
+        assertTrue(engine.state.value is ConversationState.Speaking)
+        turn.cancel()
+        turn.join()
+        assertTrue(engine.state.value is ConversationState.Idle)
+    }
+
+    @Test
+    fun concurrentVoiceTurnDoesNotRecognizeTwice() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var recognitions = 0
+        val session = VoiceSession(FakeRecognizer {
+            recognitions++
+            gate.await()
+            "hi"
+        }, FakeSynthesizer(), ConversationEngine(NoopAIProvider()))
+        val turn = launch { session.runOneTurn() }
+        runCurrent()
+        session.runOneTurn()
+        assertEquals(1, recognitions)
+        gate.complete(Unit)
+        turn.join()
+    }
+
+    @Test
+    fun metricsRemainBoundedDuringLongCalls() = runTest {
+        val session = VoiceSession(FakeRecognizer { "hi" }, FakeSynthesizer(), ConversationEngine(NoopAIProvider()))
+        repeat(120) { session.runOneTurn() }
+        assertEquals(100, session.metrics.value.size)
     }
 
     @Test
