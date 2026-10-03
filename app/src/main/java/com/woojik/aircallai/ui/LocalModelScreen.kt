@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -55,6 +56,8 @@ fun LocalModelScreen(
     onModelChanged: () -> Unit,
 ) {
     val states by downloadManager.states.collectAsState()
+    val runtimeStatus by adapter.runtimeStatus.collectAsState()
+    var useGpu by remember { mutableStateOf(settings.localUseGpu()) }
     var selectedId by remember { mutableStateOf(settings.localModelId()) }
     var applying by remember { mutableStateOf(false) }
     var hasLegacyFiles by remember { mutableStateOf(downloadManager.hasLegacyFiles()) }
@@ -76,6 +79,27 @@ fun LocalModelScreen(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
+            }
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("GPU 가속")
+                    Switch(checked = useGpu, enabled = !applying, onCheckedChange = { enabled ->
+                        applying = true
+                        scope.launch {
+                            try {
+                                adapter.setGpuEnabled(enabled)
+                                useGpu = enabled
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: AIProviderException) {
+                                status = e.message
+                            } finally { applying = false }
+                        }
+                    })
+                }
+                Text("GPU 사용에 실패하면 CPU로 자동 전환합니다.", style = MaterialTheme.typography.bodySmall)
+                Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
             }
             item {
                 if (hasLegacyFiles) {

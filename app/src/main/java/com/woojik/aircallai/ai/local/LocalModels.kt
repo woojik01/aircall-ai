@@ -16,7 +16,7 @@ data class LocalModelInfo(
 
 object LocalModelRegistry {
 
-    /** LiteRT Community의 Android CPU 모델. revision과 SHA-256으로 다운로드를 검증한다. */
+    /** LiteRT Community의 Android CPU/GPU 모델. revision과 SHA-256으로 다운로드를 검증한다. */
     // New IDs prevent a saved web-model selection from bypassing native load/apply validation.
     val models: List<LocalModelInfo> = listOf(
         LocalModelInfo(
@@ -26,7 +26,7 @@ object LocalModelRegistry {
             downloadUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1/gemma-4-E2B-it.litertlm",
             sizeBytes = 2_588_147_712L,
             minRamMb = 4096,
-            description = "텍스트 응답용 CPU 모델. 속도와 실행 가능 여부는 기기 메모리에 따라 다릅니다.",
+            description = "GPU 가속 및 CPU 전환을 지원하는 텍스트 모델. 속도와 실행 가능 여부는 기기 메모리에 따라 다릅니다.",
             sha256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
         ),
         LocalModelInfo(
@@ -36,7 +36,7 @@ object LocalModelRegistry {
             downloadUrl = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/2eee7ac325f20eb8c9ac1d0e972f7c84663062da/gemma-4-E4B-it.litertlm",
             sizeBytes = 3_659_530_240L,
             minRamMb = 8192,
-            description = "더 큰 텍스트 응답용 CPU 모델. E2B보다 많은 저장 공간과 메모리가 필요합니다.",
+            description = "더 큰 GPU 가속 및 CPU 전환을 지원하는 텍스트 모델. E2B보다 많은 저장 공간과 메모리가 필요합니다.",
             sha256 = "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
         ),
     )

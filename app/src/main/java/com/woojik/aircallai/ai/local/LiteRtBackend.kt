@@ -8,7 +8,8 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import com.woojik.aircallai.ai.provider.ChatMessage
-import com.woojik.aircallai.core.logging.SecureLog
+import com.google.ai.edge.litertlm.SamplerConfig
+import com.google.ai.edge.litertlm.ThinkingConfig
 import java.io.File
 
 /** The runtime applies the model's embedded chat template, preserving actual message roles. */
@@ -27,49 +28,53 @@ internal fun localConversationConfig(history: List<ChatMessage>): ConversationCo
         },
         // Short spoken replies should not include a thinking channel.
         extraContext = mapOf("enable_thinking" to false),
+        thinkingConfig = ThinkingConfig(enableThinking = false),
+        samplerConfig = SamplerConfig(topK = 40, topP = 0.9, temperature = 0.7),
+        maxOutputToken = 256,
     )
 }
 
-/**
- * LiteRT-LM 추론 백엔드.
- *
- * GPU 가속: useGpu가 true면 GPU 백엔드로 초기화를 시도하고, 기기/드라이버가 GPU를
- * 지원하지 않아 초기화에 실패하면 자동으로 CPU로 폴백한다(사용자에게 별도 안내 불필요).
- */
+/** One native engine and one reusable text conversation; owned by the inference worker. */
 internal class LiteRtBackend(
     file: File,
     cacheDir: File,
     useGpu: Boolean = false,
 ) : LocalInferenceBackend {
-
-    private val engine = createEngine(file, cacheDir, useGpu)
-
-    private fun engineConfig(file: File, cacheDir: File, backend: Backend): EngineConfig =
+    private val engine = Engine(
         EngineConfig(
             modelPath = file.absolutePath,
-            backend = backend,
+            backend = if (useGpu) Backend.GPU() else Backend.CPU(
+                threadCount = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
+            ),
             maxNumTokens = 4096,
-            cacheDir = cacheDir.absolutePath,
-        )
+            cacheDir = File(cacheDir, "litert-0.17.1/" + if (useGpu) "gpu" else "cpu")
+                .apply { mkdirs() }.absolutePath,
+        ),
+    ).also { it.initialize() }
 
-    private fun createEngine(file: File, cacheDir: File, useGpu: Boolean): Engine {
-        if (!useGpu) return Engine(engineConfig(file, cacheDir, Backend.CPU())).also { it.initialize() }
-        return try {
-            Engine(engineConfig(file, cacheDir, Backend.GPU())).also { it.initialize() }
-        } catch (t: Exception) {
-            // GPU 미지원 기기/드라이버 오류: CPU로 자동 폴백한다.
-            SecureLog.d("LiteRtBackend", "GPU init failed, falling back to CPU: " + t.javaClass.simpleName)
-            Engine(engineConfig(file, cacheDir, Backend.CPU())).also { it.initialize() }
+    private val conversations = LocalConversationCache { history ->
+        val conversation = engine.createConversation(localConversationConfig(history))
+        object : LocalConversationSession {
+            override fun send(text: String): String =
+                conversation.sendMessage(text, extraContext = mapOf("enable_thinking" to false))
+                    .contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
+            override fun tokenCount() = conversation.getTokenCount()
+            override fun close() = conversation.close()
         }
     }
 
-    override fun generate(history: List<ChatMessage>): String {
-        val bounded = localInferenceHistory(history)
-        return engine.createConversation(localConversationConfig(bounded)).use { conversation ->
-            conversation.sendMessage(bounded.last().content).contents.contents
-                .filterIsInstance<Content.Text>().joinToString("") { it.text }
+    override fun generate(history: List<ChatMessage>): String = conversations.generate(history)
+
+    /** Model apply must test prefill and decode, not just successful engine allocation. */
+    override fun validate() {
+        try {
+            conversations.generate(listOf(ChatMessage(ChatMessage.Role.USER, "안녕")))
+        } finally {
+            conversations.close()
         }
     }
 
-    override fun close() = engine.close()
+    override fun close() {
+        try { conversations.close() } finally { engine.close() }
+    }
 }

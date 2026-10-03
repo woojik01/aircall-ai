@@ -79,7 +79,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Gemma 4 Android 모델은 LiteRT-LM의 .litertlm 형식으로 실행한다.
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.10.2")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.17.1")
     // Google Android AuthorizationClient for Gmail user-data authorization.
     implementation("com.google.android.gms:play-services-auth:21.6.0")
 

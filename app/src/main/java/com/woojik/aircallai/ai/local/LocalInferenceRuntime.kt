@@ -1,26 +1,32 @@
 package com.woojik.aircallai.ai.local
 
 import com.woojik.aircallai.ai.provider.ChatMessage
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.Executors
 
 /** Native engines must never generate, switch models, or close concurrently. */
 interface LocalInferenceBackend : AutoCloseable {
     fun generate(history: List<ChatMessage>): String
+    fun validate() {}
 }
 
 class LocalInferenceRuntime(private val create: (File) -> LocalInferenceBackend) {
+    // Keep initialization, inference and cleanup on one worker for native GPU thread affinity.
+    private val dispatcher = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "AirCall-local-inference").apply { isDaemon = true }
+    }.asCoroutineDispatcher()
     private val mutex = Mutex()
     private var backend: LocalInferenceBackend? = null
-    private var loadedFile: Triple<String, Long, Long>? = null
+    private var loadedFile: List<Any>? = null
 
-    suspend fun <T> withModel(file: File, action: (LocalInferenceBackend) -> T): T =
-        withContext(Dispatchers.IO) {
+    suspend fun <T> withModel(file: File, configurationKey: String = "", action: (LocalInferenceBackend) -> T): T =
+        withContext(dispatcher) {
             mutex.withLock {
-                val identity = Triple(file.absolutePath, file.length(), file.lastModified())
+                val identity = listOf(file.absolutePath, file.length(), file.lastModified(), configurationKey)
                 if (backend == null || loadedFile != identity) {
                     closeCurrent()
                     // Publish only a successfully initialized engine. A failed switch leaves no cache.
@@ -38,7 +44,7 @@ class LocalInferenceRuntime(private val create: (File) -> LocalInferenceBackend)
             }
         }
 
-    suspend fun unload(afterClose: () -> Unit = {}) = withContext(Dispatchers.IO) {
+    suspend fun unload(afterClose: () -> Unit = {}) = withContext(dispatcher) {
         mutex.withLock {
             closeCurrent()
             afterClose()
