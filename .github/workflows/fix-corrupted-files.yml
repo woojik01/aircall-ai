@@ -2,6 +2,7 @@ name: Fix corrupted sources
 on:
   push:
     branches: [prd-09-google-android-client]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -19,7 +20,6 @@ jobs:
                   ('PollResult.Pendi\nng', 'PollResult.Pending'),
                   ('READ_CAL\nENDAR,', 'READ_CALENDAR,'),
                   ('onM\nodeChanged = {', 'onModeChanged = {'),
-                  ('\u1244\u1252\uc815\uc5d0\uc11c Gi\ntHub', '\u1244\u1252\uc815\uc5d0\uc11c GitHub'),
               ],
               'ui/SettingsPane.kt': [
                   ('\uc554\ud638\ud654\ub418\uc5b4 \uc800\n\uc7a5\ub418\uba70', '\uc554\ud638\ud654\ub418\uc5b4 \uc800\uc7a5\ub418\uba70'),
