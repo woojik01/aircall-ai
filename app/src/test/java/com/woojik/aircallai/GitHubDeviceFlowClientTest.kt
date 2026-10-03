@@ -31,6 +31,13 @@ class GitHubDeviceFlowClientTest {
     private fun client(http: OAuthHttpPost, clientId: String = "Iv1.cid") =
         GitHubDeviceFlowClient(http, { clientId }, nowMs = { 1000L })
 
+    /** 기기 코드 발급은 정상 응답, 토큰 폴링은 지정한 오류 본문을 반환하는 fake. */
+    private fun pollingFakeHttp(pollBody: String): FakeHttp =
+        FakeHttp { url, _ ->
+            if (url.endsWith("/device/code")) 200 to deviceCodeBody
+            else 200 to pollBody
+        }
+
     @Test
     fun startDeviceFlowRequiresClientId() = runTest {
         val http = FakeHttp { _, _ -> 200 to deviceCodeBody }
@@ -63,9 +70,7 @@ class GitHubDeviceFlowClientTest {
 
     @Test
     fun pollTokenPendingWhileUserHasNotApproved() = runTest {
-        val http = FakeHttp { _, _ ->
-            200 to "{\"error\":\"authorization_pending\"}"
-        }
+        val http = pollingFakeHttp("{\"error\":\"authorization_pending\"}")
         val session = client(http).startDeviceFlow()!!
         val result = client(http).pollToken(session)
         assertTrue(result is GitHubDeviceFlowClient.PollResult.Pending)
@@ -90,7 +95,7 @@ class GitHubDeviceFlowClientTest {
 
     @Test
     fun pollTokenExpiredCodeIsFailure() = runTest {
-        val http = FakeHttp { _, _ -> 200 to "{\"error\":\"expired_token\"}" }
+        val http = pollingFakeHttp("{\"error\":\"expired_token\"}")
         val session = client(http).startDeviceFlow()!!
         val result = client(http).pollToken(session)
         assertTrue(result is GitHubDeviceFlowClient.PollResult.Failed)
@@ -98,7 +103,7 @@ class GitHubDeviceFlowClientTest {
 
     @Test
     fun pollTokenDeniedIsFailure() = runTest {
-        val http = FakeHttp { _, _ -> 200 to "{\"error\":\"access_denied\"}" }
+        val http = pollingFakeHttp("{\"error\":\"access_denied\"}")
         val session = client(http).startDeviceFlow()!!
         val result = client(http).pollToken(session)
         assertTrue(result is GitHubDeviceFlowClient.PollResult.Failed)
