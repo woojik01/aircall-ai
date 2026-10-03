@@ -120,12 +120,18 @@ class MainActivity : ComponentActivity() {
     private suspend fun connectGitHub(): String {
         val appGraph = graph()
         appGraph.accountRepository.mark("github", ConnectionStatus.CONNECTING)
-        val session = appGraph.githubAuth.startDeviceFlow()
-        if (session == null) {
-            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
-            return "GitHub OAuth App Client ID를 먼저 저장해 주세요 (GitHub 연동 섹션)."
+        val startResult = appGraph.githubAuth.startDeviceFlowDetailed()
+        val session = when (startResult) {
+            is GitHubDeviceFlowClient.StartResult.Success -> startResult.session
+            is GitHubDeviceFlowClient.StartResult.Failed -> {
+                appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+                return startResult.reason
+            }
         }
-        openBrowser(session.verificationUri)
+        if (!openBrowser(session.verificationUri)) {
+            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+            return "GitHub 로그인 페이지를 열 수 없습니다."
+        }
         // 사용자가 브라우저에서 코드를 입력하고 승인할 때까지 폴링한다.
         while (System.currentTimeMillis() < session.expiresAtMs) {
             when (val result = appGraph.githubAuth.pollToken(session)) {
