@@ -88,8 +88,14 @@ class AppGraph(context: Context) {
     /** PRD-09: OAuth 계층. 토큰은 Keystore 암호화 저장되고 로그에 노출되지 않는다. */
     val oauthHttp = HttpOAuthPost()
     val oauthStore = OAuthCredentialStore(credentials)
-    val githubAuth = GitHubDeviceFlowClient(oauthHttp) { settings.githubOAuthClientId() }
-    val googleAuth = GoogleOAuthClient(oauthHttp) { settings.googleOAuthClientId() }
+    val githubAuth = GitHubDeviceFlowClient(
+        http = oauthHttp,
+        clientIdProvider = { settings.githubOAuthClientId() },
+    )
+    val googleAuth = GoogleOAuthClient(
+        http = oauthHttp,
+        clientIdProvider = { settings.googleOAuthClientId() },
+    )
     val accountRepository = AccountConnectionRepository(oauthStore, listOf(githubAuth, googleAuth))
 
     /** Tool-AI 연결: AI 응답의 TOOL 지시어를 실행하고 결과를 반영한다. */

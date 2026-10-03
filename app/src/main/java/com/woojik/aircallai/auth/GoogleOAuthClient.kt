@@ -46,6 +46,12 @@ class GoogleOAuthClient(
         return AuthRequest(url, state, verifier)
     }
 
+    /** 미사용: 인증 시작은 buildAuthRequest + 시스템 브라우저로 수행한다. */
+    override suspend fun startConnect(): OAuthCallbackResult.Rejected? = null
+
+    /** 미사용: 콜백 code 교환은 exchangeCode에서 수행한다(state/PKCE 검증 포함). */
+    override suspend fun handleCallback(provider: String, code: String, state: String?): OAuthTokens? = null
+
     /** 승인된 code를 access/refresh token으로 교환한다. 실패 시 null. */
     suspend fun exchangeCode(code: String, codeVerifier: String, redirectUri: String): OAuthTokens? {
         val clientId = clientIdProvider().trim()
