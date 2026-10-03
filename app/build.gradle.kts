@@ -16,21 +16,12 @@ android {
         versionName = "0.2.0"
 
         // PRD-09 소셜 로그인 UX: OAuth Client ID는 공개값이므로 빌드 시점 기본값으로 제공한다.
-        // gradle.properties에 GITHUB_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_ID 를 1회 설정하면
-        // 앱 사용자는 "GitHub로 로그인" / "Google로 로그인" 버튼만 누르면 된다(고급에서 재정의 가능).
         val githubOAuthClientId = (project.findProperty("GITHUB_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
         val googleOAuthClientId = (project.findProperty("GOOGLE_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
         buildConfigField("String", "GITHUB_OAUTH_CLIENT_ID", "\"$githubOAuthClientId\"")
         buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", "\"$googleOAuthClientId\"")
-
-    } else {
-            "com.woojik.aircallai.invalid"
-        }
-        manifestPlaceholders["googleOAuthRedirectScheme"] = googleCallbackScheme
     }
 
-    // PRD-09: CI가 생성·커밋한 고정 디버그 서명 키. 개발 PC 없이도 SHA-1이 매 빌드 동일하며
-    // Google OAuth(Android 유형) 등록에 필요한 지문이 변하지 않는다. 키가 없으면 기본 동작 유지.
     signingConfigs {
         create("fixedDebug") {
             storeFile = file("debug.keystore")
