@@ -27,6 +27,8 @@ class GitHubDeviceFlowClient(
         data class Success(val tokens: OAuthTokens) : PollResult
 
         /** 사용자 승인 대기 중. interval 후 다시 폴링한다. */
+        data class SlowDown(val intervalSeconds: Int) : PollResult
+
         object Pending : PollResult
 
         /** 만료·거부·오류. 재시도 필요. */
@@ -75,7 +77,10 @@ class GitHubDeviceFlowClient(
                     OAuthTokens(access, null, expiresIn?.let { nowMs() + it * 1000 }),
                 )
             }
-            error == "authorization_pending" || error == "slow_down" -> PollResult.Pending
+            error == "authorization_pending" -> PollResult.Pending
+            error == "slow_down" -> PollResult.SlowDown(
+                extractNumber(body, "interval")?.toInt() ?: (session.intervalSeconds + 5),
+            )
             error == "expired_token" -> PollResult.Failed("기기 인증 코드가 만료되었습니다. 다시 연결해 주세요")
             error == "access_denied" -> PollResult.Failed("GitHub 연결이 거부되었습니다")
             else -> PollResult.Failed("GitHub 인증에 실패했습니다")
@@ -90,7 +95,7 @@ class GitHubDeviceFlowClient(
     override suspend fun handleCallback(provider: String, code: String, state: String?): OAuthTokens? = null
 
     companion object {
-        const val SCOPE = "repo issues"
+        const val SCOPE = "repo"
         private const val DEVICE_CODE_URL = "https://github.com/login/device/code"
         private const val TOKEN_URL = "https://github.com/login/oauth/access_token"
         private const val GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
