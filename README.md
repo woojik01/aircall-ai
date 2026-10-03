@@ -15,7 +15,10 @@
 - 캘린더 런타임 권한 요청 UI와 Gmail OAuth 토큰 등록 UI
 - PRD-09 인증 추상화: OAuth 상태 모델·Provider 인터페이스·자격증명 저장소(갱신 포함)·연결 저장소
 - PRD-09 GitHub OAuth 기기 인증(Device Flow) 연결, Google OAuth(Authorization Code + PKCE) 연결,
-  토큰 자동 갱신, 서비스별 연결/해제 UI. 수동 PAT/토큰 입력은 고급 설정으로 유지
+  토큰 자동 갱신, 서비스별 연결/해제 UI
+- PRD-09 소셜 로그인 UX: "GitHub로 로그인"/"Google로 로그인" 버튼이 기본.
+  OAuth Client ID는 빌드 시점 기본값(BuildConfig)을 사용하며 고급 설정에서 재정의 가능.
+  수동 PAT/토큰 입력은 고급 설정으로 유지
 - 개인정보 안내와 Release R8 빌드 구성 (앱 버전 0.2.0)
 
 **실기 검증 필요:** 로컬 모델의 Android 추론 성능과 메모리 사용, 음성 인식·출력,
@@ -50,11 +53,13 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 
 ## Tool 연동 계층
 
-- **GitHub 연동(OAuth 기본)**: 설정에서 OAuth App Client ID 등록 → "GitHub로 연결"(기기 인증).
-  브라우저에서 표시된 코드를 입력·승인하면 연결된다. 고급으로 PAT 직접 입력 유지
+- **GitHub 연동(소셜 로그인)**: 설정의 **"GitHub로 로그인"** 버튼(기기 인증).
+  브라우저에서 표시된 코드를 입력·승인하면 연결된다. Client ID는 빌드 시점 기본값을 사용하며,
+  없으면 고급 설정에서 1회 등록한다. 고급으로 PAT 직접 입력 유지
 - `github` Tool: `read_repository`는 기본 허용, `create_issue`/`create_pull_request`는 승인 필요
-- **Gmail 연동(OAuth 기본)**: 설정에서 Google OAuth Client ID(웹 애플리케이션) 등록 →
-  "Google로 연결". 승인 후 앱으로 돌아오면 연결되고 refresh token으로 만료 시 자동 갱신된다.
+- **Gmail 연동(소셜 로그인)**: 설정의 **"Google로 로그인"** 버튼.
+  승인 후 앱으로 돌아오면 연결되고 refresh token으로 만료 시 자동 갱신된다.
+  Client ID는 빌드 시점 기본값 또는 고급 설정 등록.
   Google Cloud Console에 리디렉션 URI `com.woojik.aircallai://oauth2redirect` 등록 필요.
   고급으로 액세스 토큰 직접 입력 유지
 - **Tool-AI 연결**: AI가 `TOOL: <도구>.<액션> key=value` 지시어를 응답하면
@@ -69,6 +74,25 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
   OAuth 취소·실패가 앱 사용을 중단하지 않는다
 - **실행 메타데이터 로깅**: 도구/액션/위험도/차단 여부/성공/지연(ms)을 기록한다
   (인자 값은 민감 정보 방지를 위해 미기록, 최근 100건 메모리 + 디버그 로그 요약)
+
+## OAuth 앱 등록 (개발자 1회)
+
+소셜 로그인 버튼은 OAuth Client ID가 앱에 포함되어 있어야 바로 동작한다.
+Client ID는 공개값이므로 빌드에 포함해도 안전하다.
+
+1. **GitHub**: github.com → Settings → Developer settings → OAuth Apps → New OAuth App.
+   앱 이름·홈페이지 URL 입력(콜백 URL은 비워도 됨, 기기 흐름 사용). 발급된 Client ID를 아래에 등록.
+2. **Google**: Google Cloud Console → 프로젝트 생성 → API 및 서비스 → 사용자 인증 정보 →
+   OAuth 클라이언트 ID(웹 애플리케이션) 생성. 승인된 리디렉션 URI에
+   `com.woojik.aircallai://oauth2redirect` 등록. Gmail API 사용 설정 필요.
+3. 빌드 머신의 `~/.gradle/gradle.properties`(또는 CI 시크릿)에 추가:
+
+```properties
+GITHUB_OAUTH_CLIENT_ID=Iv1.xxxx
+GOOGLE_OAUTH_CLIENT_ID=xxxx.apps.googleusercontent.com
+```
+
+등록하지 않고 빌드하면 버튼 대신 안내 문구가 표시되며, 앱의 고급 설정에서도 등록할 수 있다.
 
 ## 개인정보
 
@@ -114,3 +138,4 @@ gradle assembleRelease
 Release는 R8 축소·난독화가 적용된 **서명되지 않은 APK**입니다. 배포용 서명은 별도로 필요합니다.
 CI는 단위 테스트와 Debug APK 빌드를 실행합니다.
 API Key/토큰은 코드·빌드 설정에 넣지 않고 CredentialManager로 저장합니다.
+OAuth Client ID는 공개값이므로 예외적으로 빌드 속성으로 제공합니다(위 "OAuth 앱 등록" 참조).
