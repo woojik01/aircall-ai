@@ -38,7 +38,7 @@ fun SettingsScreen(
     onDeleteGmailToken: suspend () -> Unit = {},
     githubConnectionStatus: String? = null,
     gmailConnectionStatus: String? = null,
-    onConnectGitHub: suspend () -> String = { "" },
+    onConnectGitHub: suspend (onDeviceCodeReady: (String) -> Unit) -> String = { "" },
     onConnectGoogle: () -> String = { "" },
     onDisconnectGitHub: () -> Unit = {},
     onDisconnectGmail: () -> Unit = {},
@@ -55,6 +55,7 @@ fun SettingsScreen(
     var baseUrlInput by remember { mutableStateOf(settings.cloudBaseUrl()) }
     var modelInput by remember { mutableStateOf(settings.cloudModel()) }
     var status by remember { mutableStateOf<String?>(null) }
+    var githubDeviceCode by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -193,8 +194,19 @@ fun SettingsScreen(
         
         )
             }
+            githubDeviceCode?.let { code ->
+                Text(
+                    "GitHub 인증 코드: $code",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    "브라우저에서 GitHub에 로그인한 뒤 이 코드를 입력하고 승인을 완료하세요.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             Text(
-                "GitHub로 로그인하면 GitHub 인증 화면에서 승인 후 연결됩니다. 저장소 조회는 기본 허용, " +
+                "GitHub로 로그인하면 GitHub 인증 화면에서 승인 후 연결됩니다. 저장소 조회는 기본 허용, +
                     "Issue/PR 생성은 사용 시 승인이 필요합니다. 토큰은 기기에 암호화 저장됩니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
@@ -204,7 +216,9 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             scope.launch {
-                                status = onConnectGitHub()
+                                githubDeviceCode = null
+                                status = onConnectGitHub { code -> githubDeviceCode = code }
+                                githubDeviceCode = null
                             }
                         },
                     ) { Text("GitHub로 로그인") }
