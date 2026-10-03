@@ -84,6 +84,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.6.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Android org.json is a stub in local JVM tests; use the reference implementation for parser tests.
+    testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
