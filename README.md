@@ -13,11 +13,13 @@
 - 대화에서 Tool을 호출하는 연결(TOOL 지시어 파싱·실행·결과 반영)과 실행 메타데이터 로깅
 - PRD-06 Tool 어댑터 전체: GitHub, Notes(기기 로컬), Calendar(기기 캘린더), Gmail
 - 캘린더 런타임 권한 요청 UI와 Gmail OAuth 토큰 등록 UI
+- PRD-09 Phase 1 인증 추상화: OAuth 상태 모델(NOT_CONNECTED/CONNECTED/…), OAuthProvider 인터페이스,
+  OAuth 자격증명 저장소(갱신 포함), 서비스별 연결 저장소 (GitHub/Google OAuth 연결 UI는 후속 증분)
 - 개인정보 안내와 Release R8 빌드 구성 (앱 버전 0.2.0)
 
 **실기 검증 필요:** 로컬 모델의 Android 추론 성능과 메모리 사용, 음성 인식·출력,
-화면 회전·복귀·다른 앱 전환·화면 OFF·알림/오버레이·배터리 동작, Release APK 설치,
-Calendar/Gmail 실제 연동(권한 허용·토큰 등록 후 실기 테스트 필요).
+화면 회전·복귀·다른 앱 전환·화면 OFF·알림/오버레이·배터리 동작, Release APK 설치.
+캘린더 연동은 실기 검증 완료(2026-10-03). Gmail 실제 발송은 OAuth 자동화(Phase 3) 후 검증.
 PRD 전체 완료나 출시 준비 완료를 의미하지 않습니다.
 
 ## 로컬 모델 사용법
@@ -76,6 +78,7 @@ Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용�
 app/src/main/java/com/woojik/aircallai/
   ai/            provider, local(LiteRT-LM·다운로드·검증), cloud
   audio/         Android STT/TTS
+  auth/          PRD-09 OAuth 상태 모델·Provider 인터페이스·자격증명 저장소·연결 저장소
   conversation/  ConversationEngine, VoiceSession, VoiceResponseSanitizer
   core/          로깅·Keystore·자격증명 저장
   session/       세션 상태·제어
