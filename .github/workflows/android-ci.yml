@@ -53,6 +53,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+      - name: Show debug SHA-1
+        run: |
+          keytool -list -v \\
+            -keystore ~/.android/debug.keystore \\
+            -alias androiddebugkey \\
+            -storepass android \\
+            -keypass android | grep "SHA1:"
+
       - name: Build debug APK
         timeout-minutes: 5
         run: gradle --no-daemon --console=plain assembleDebug
