@@ -149,13 +149,10 @@ class MainActivity : ComponentActivity() {
     private suspend fun connectGitHub(): String {
         val appGraph = graph()
         appGraph.accountRepository.mark("github", ConnectionStatus.CONNECTING)
-        val startResult = appGraph.githubAuth.startDeviceFlowDetailed()
-        val session = when (startResult) {
-            is GitHubDeviceFlowClient.StartResult.Success -> startResult.session
-            is GitHubDeviceFlowClient.StartResult.Failed -> {
-                appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
-                return startResult.reason
-            }
+        val session = appGraph.githubAuth.startDeviceFlow()
+        if (session == null) {
+            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+            return "GitHub 기기 인증을 시작할 수 없습니다. OAuth Client ID 또는 네트워크를 확인해 주세요."
         }
         if (!openBrowser(session.verificationUri)) {
             appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
