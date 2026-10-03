@@ -38,7 +38,9 @@ class ToolBridgedAIProvider(
     override suspend fun isReady(): Boolean = base.isReady()
 
     override suspend fun respond(history: List<ChatMessage>): AIResponse {
-        val requestHistory = injectSystemPrompt(history)
+        val requestHistory = if (type == ProviderType.LOCAL &&
+            ToolIntent.toolsRequestedIn(history.lastOrNull { it.role == ChatMessage.Role.USER }?.content.orEmpty()).isEmpty()
+        ) history else injectSystemPrompt(history)
         val started = System.currentTimeMillis()
 
         // 이번 턴 사용자 요청에서 필요한 도구 후보(휴리스틱)와 추적 상태.
@@ -149,6 +151,15 @@ class ToolBridgedAIProvider(
      * 각 규칙은 실행 시스템(ToolCallParser/치환/검증)의 실제 동작과 정확히 일치한다.
      */
     private fun toolSystemPrompt(): String {
+        if (type == ProviderType.LOCAL) return """
+            한국어로 짧게 답한다. 실제 작업은 아래 도구로만 수행한다.
+            도구 호출은 응답 마지막 한 줄에 하나만 쓴다:
+            TOOL: <도구>.<액션> key=value key2="공백 있는 값"
+            성공한 TOOL_RESULT가 있어야 완료했다고 말한다. 실패하면 이유를 설명한다.
+            WRITE 작업은 사용자 승인이 필요하다. 이전 성공 결과는 {{TOOL_RESULT}}로 참조한다.
+            일반 대화에는 도구를 쓰지 않는다.
+        """.trimIndent() + "\n" + toolsDescription
+
         val sb = StringBuilder()
         sb.append("[역할]\n")
         sb.append("너는 사용자의 요청을 자연스러운 한국어로 처리하는 AI 어시스턴트다.\n")

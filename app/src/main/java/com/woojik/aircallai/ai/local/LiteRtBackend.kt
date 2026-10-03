@@ -48,7 +48,7 @@ internal class LiteRtBackend(
         EngineConfig(
             modelPath = file.absolutePath,
             backend = backend,
-            maxNumTokens = 2048,
+            maxNumTokens = 4096,
             cacheDir = cacheDir.absolutePath,
         )
 
@@ -56,18 +56,20 @@ internal class LiteRtBackend(
         if (!useGpu) return Engine(engineConfig(file, cacheDir, Backend.CPU())).also { it.initialize() }
         return try {
             Engine(engineConfig(file, cacheDir, Backend.GPU())).also { it.initialize() }
-        } catch (t: Throwable) {
+        } catch (t: Exception) {
             // GPU 미지원 기기/드라이버 오류: CPU로 자동 폴백한다.
             SecureLog.d("LiteRtBackend", "GPU init failed, falling back to CPU: " + t.javaClass.simpleName)
             Engine(engineConfig(file, cacheDir, Backend.CPU())).also { it.initialize() }
         }
     }
 
-    override fun generate(history: List<ChatMessage>): String =
-        engine.createConversation(localConversationConfig(history)).use { conversation ->
-            conversation.sendMessage(history.last().content).contents.contents
-            .filterIsInstance<Content.Text>().joinToString("") { it.text }
+    override fun generate(history: List<ChatMessage>): String {
+        val bounded = localInferenceHistory(history)
+        return engine.createConversation(localConversationConfig(bounded)).use { conversation ->
+            conversation.sendMessage(bounded.last().content).contents.contents
+                .filterIsInstance<Content.Text>().joinToString("") { it.text }
         }
+    }
 
     override fun close() = engine.close()
 }

@@ -27,7 +27,14 @@ class LocalInferenceRuntime(private val create: (File) -> LocalInferenceBackend)
                     backend = create(file)
                     loadedFile = identity
                 }
-                action(checkNotNull(backend))
+                try {
+                    action(checkNotNull(backend))
+                } catch (failure: Throwable) {
+                    // A failed native conversation may leave the engine unusable.
+                    // Preserve the original failure even when cleanup also fails.
+                    try { closeCurrent() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+                    throw failure
+                }
             }
         }
 

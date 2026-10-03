@@ -12,6 +12,19 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 class LocalInferenceRuntimeTest {
+    @Test fun failedInferenceRecreatesEngineOnNextTurn() = runBlocking {
+        val engines = mutableListOf<Backend>()
+        val runtime = LocalInferenceRuntime { Backend().also { engines.add(it) } }
+        try {
+            runtime.withModel(File("same")) { error("native inference failed") }
+            fail("Expected failure")
+        } catch (_: IllegalStateException) { }
+        assertTrue(engines.single().closed)
+        assertEquals("reply", runtime.withModel(File("same")) { it.generate(emptyList()) })
+        assertEquals(2, engines.size)
+        runtime.unload()
+    }
+
     private class Backend : LocalInferenceBackend {
         var closed = false
         override fun generate(history: List<ChatMessage>): String {
