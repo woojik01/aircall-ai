@@ -17,7 +17,15 @@ class InMemorySettingsStore : SettingsStore {
 }
 
 /** Simple general-settings repository (PRD-02 data classification: non-sensitive). */
-class SettingsRepository(private val store: SettingsStore) {
+class SettingsRepository(
+    private val store: SettingsStore,
+    /**
+     * PRD-09 소셜 로그인 UX: 빌드 시점에 등록된 OAuth App Client ID 기본값(BuildConfig).
+     * 공개값이므로 앱에 포함해도 안전하며, 사용자가 고급 설정에서 입력한 값이 우선한다.
+     */
+    private val defaultGithubOAuthClientId: String = "",
+    private val defaultGoogleOAuthClientId: String = "",
+) {
 
     fun aiProviderMode(): String = store.getString(KEY_AI_MODE) ?: MODE_LOCAL
 
@@ -29,6 +37,7 @@ class SettingsRepository(private val store: SettingsStore) {
     /**
      * PRD-04 Cloud Mode: OpenAI-compatible chat completions endpoint.
      * The endpoint is non-sensitive and is stored in general settings.
+     * The actual calls are performed by the app itself.
      *
      * Fresh installations and older installations that never configured an endpoint
      * use Groq's current OpenAI-compatible endpoint by default, so Cloud mode cannot
@@ -85,9 +94,12 @@ class SettingsRepository(private val store: SettingsStore) {
 
     /**
      * PRD-09 Phase 2: GitHub OAuth App Client ID. 공개 값(비밀이 아님)이므로 일반 설정에
-     * 저장한다. 사용자가 직접 OAuth App을 만들고 Client ID를 붙여넣는다.
+     * 저장한다. 값이 없으면 빌드 시점 기본값(BuildConfig)을 사용한다(소셜 로그인 UX).
      */
-    fun githubOAuthClientId(): String = store.getString(KEY_GITHUB_OAUTH_CLIENT_ID)?.trim().orEmpty()
+    fun githubOAuthClientId(): String {
+        val stored = store.getString(KEY_GITHUB_OAUTH_CLIENT_ID)?.trim().orEmpty()
+        return stored.ifEmpty { defaultGithubOAuthClientId.trim() }
+    }
 
     fun setGithubOAuthClientId(clientId: String) {
         store.putString(KEY_GITHUB_OAUTH_CLIENT_ID, clientId.trim())
@@ -95,9 +107,12 @@ class SettingsRepository(private val store: SettingsStore) {
 
     /**
      * PRD-09 Phase 3: Google OAuth Client ID(웹 애플리케이션 유형). 공개 값이므로 일반 설정에
-     * 저장한다. Google Cloud Console에서 OAuth 클라이언트를 만들고 등록해야 한다.
+     * 저장한다. 값이 없으면 빌드 시점 기본값(BuildConfig)을 사용한다(소셜 로그인 UX).
      */
-    fun googleOAuthClientId(): String = store.getString(KEY_GOOGLE_OAUTH_CLIENT_ID)?.trim().orEmpty()
+    fun googleOAuthClientId(): String {
+        val stored = store.getString(KEY_GOOGLE_OAUTH_CLIENT_ID)?.trim().orEmpty()
+        return stored.ifEmpty { defaultGoogleOAuthClientId.trim() }
+    }
 
     fun setGoogleOAuthClientId(clientId: String) {
         store.putString(KEY_GOOGLE_OAUTH_CLIENT_ID, clientId.trim())
