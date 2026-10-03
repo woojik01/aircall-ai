@@ -289,7 +289,7 @@ private fun AirCallUi(
     graph: AppGraph,
     calendarPermissionGranted: () -> Boolean,
     requestCalendarPermission: () -> Unit,
-    connectGitHub: suspend () -> String,
+    connectGitHub: suspend (onDeviceCodeReady: (String) -> Unit) -> String,
     connectGoogle: () -> String,
     disconnectAccount: (String) -> Unit,
 ) {
