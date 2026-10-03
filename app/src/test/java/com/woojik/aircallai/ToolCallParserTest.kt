@@ -24,7 +24,7 @@ class ToolCallParserTest {
     fun structuredJsonPreservesSpacesNewlinesAndQuotes() {
         val call = ToolCallParser.parseFirst(
             """작업을 실행합니다.
-TOOL_CALL: {"tool":"gmail","action":"send_email","arguments":{"to":"a@example.com","subject":"테스트 메일","body":"첫 줄\\n둘째 줄 \\"인용\\" {내용}"}}""",
+TOOL_CALL: {"tool":"gmail","action":"send_email","arguments":{"to":"a@example.com","subject":"테스트 메일","body":"첫 줄\n둘째 줄 \"인용\" {내용}"}}""",
         )
         assertNotNull(call)
         assertEquals("테스트 메일", call!!.arguments["subject"])
