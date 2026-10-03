@@ -58,7 +58,9 @@ class GmailToolTest {
         // base64url 디코딩해 Subject 헤더에 CRLF가 남아 있지 않은지 확인한다.
         val decoded = String(java.util.Base64.getUrlDecoder().decode(raw), Charsets.UTF_8)
         assertFalse(decoded.contains("\r\nBcc"))
-        assertTrue(decoded.contains("Subject: 제목 Bcc: evil@c.com"))
+        val expectedSubject = java.util.Base64.getEncoder()
+            .encodeToString("제목 Bcc: evil@c.com".toByteArray(Charsets.UTF_8))
+        assertTrue(decoded.contains("Subject: =?UTF-8?B?$expectedSubject?="))
     }
 
     @Test
