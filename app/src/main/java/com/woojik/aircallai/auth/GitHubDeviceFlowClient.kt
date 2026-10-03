@@ -42,19 +42,22 @@ class GitHubDeviceFlowClient(
         if (status !in 200..299) {
             val error = extractString(body, "error")
             val description = extractString(body, "error_description")
-            return StartResult.Failed(
-                when (error) {
-                    "device_flow_disabled" ->
-                        "GitHub OAuth App에서 Device Flow가 비활성화되어 있습니다. GitHub Developer settings에서 Enable Device Flow를 켜 주세요."
-                    "incorrect_client_credentials" ->
-                        "GitHub OAuth App Client ID가 올바르지 않습니다."
-                    else -> buildString {
-                        append("GitHub 기기 인증 요청 실패 (HTTP ").append(status).append(")")
+            val reason = when (error) {
+                "device_flow_disabled" ->
+                    "GitHub OAuth App에서 Device Flow가 비활성화되어 있습니다. GitHub Developer settings에서 Enable Device Flow를 켜 주세요."
+                "incorrect_client_credentials" ->
+                    "GitHub OAuth App Client ID가 올바르지 않습니다."
+                else -> {
+                    buildString {
+                        append("GitHub 기기 인증 요청 실패 (HTTP ")
+                        append(status)
+                        append(")")
                         if (!error.isNullOrBlank()) append(": ").append(error)
                         if (!description.isNullOrBlank()) append(" - ").append(description)
-                    },
-                },
-            )
+                    }
+                }
+            }
+            return StartResult.Failed(reason)
         }
 
         val deviceCode = extractString(body, "device_code")
