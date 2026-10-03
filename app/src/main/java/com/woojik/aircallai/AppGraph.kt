@@ -29,6 +29,7 @@ import com.woojik.aircallai.tools.GmailTool
 import com.woojik.aircallai.tools.NotesStore
 import com.woojik.aircallai.tools.NotesTool
 import com.woojik.aircallai.tools.PersistedToolPermissionStore
+import com.woojik.aircallai.tools.ToolActivityBus
 import com.woojik.aircallai.tools.ToolApprovalCoordinator
 import com.woojik.aircallai.tools.ToolBridgedAIProvider
 import com.woojik.aircallai.tools.ToolExecutionLogger
@@ -52,6 +53,8 @@ import kotlinx.coroutines.SupervisorJob
  * PRD-09: GitHub(기기 인증)/Google(PKCE) OAuth 계층과 연결 저장소를 구성한다.
  * 소셜 로그인 UX: OAuth Client ID 기본값은 빌드 시점(BuildConfig)에서 제공한다.
  * 연결된 토큰은 CredentialManager에 암호화 저장되고 기존 Tool 계층과 동기화된다.
+ * 진행 내레이션: ToolActivityBus가 도구 실행 상태를 실시간으로 방송하고
+ * 대화 엔진이 이를 사용자에게 안내 문장으로 노출한다. 도구 조합과 무관하게 동작한다.
  */
 class AppGraph(context: Context) {
     private val settingsStore = SharedPrefsStore(context)
@@ -65,6 +68,12 @@ class AppGraph(context: Context) {
     /** 로컬 모델: LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */
     val localModelAdapter = LiteRtModelAdapter(context, settings)
     val modelDownloadManager = ModelDownloadManager(context)
+
+    /**
+     * 진행 내레이션 버스: 모든 도구 실행의 시작/성공/재시도/실패/승인 필요 이벤트가
+     * 하나의 스트림으로 흐른다. 도구 수와 조합과 무관하다.
+     */
+    val toolActivity = ToolActivityBus()
 
     /** PRD-06: Tool 실행 계층. 각 도구의 인증 정보는 CredentialManager에서만 읽는다. */
     val githubApi = GitHubApiClient(credentials)
@@ -81,6 +90,7 @@ class AppGraph(context: Context) {
             GmailTool(gmailApi),
         ),
         toolPermissions,
+        toolActivity,
     )
 
     /** PRD-06: WRITE 작업 승인 흐름. 승인 상태는 toolPermissions에 영속 저장된다. */
@@ -121,6 +131,7 @@ class AppGraph(context: Context) {
         logger = toolLogger,
         toolsDescription = toolCatalog,
         approvalRequester = { request -> toolApproval.submit(request) },
+        activityBus = toolActivity,
     )
     val cloudProvider: AIProvider = ToolBridgedAIProvider(
         base = CloudAIProvider(
@@ -137,11 +148,12 @@ class AppGraph(context: Context) {
         logger = toolLogger,
         toolsDescription = toolCatalog,
         approvalRequester = { request -> toolApproval.submit(request) },
+        activityBus = toolActivity,
     )
 
     val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)
 
-    val engine = ConversationEngine(providerRouter.current())
+    val engine = ConversationEngine(providerRouter.current(), toolActivity)
 
     /**
      * Android 음성 API(SpeechRecognizer/TTS)는 메인 스레드에서 호출한다.
