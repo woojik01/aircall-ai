@@ -143,9 +143,9 @@ class GoogleOAuthClient(
         }
 
         fun extractString(body: String, key: String): String? =
-            Regex("\"" + key + "\"\\\s*:\s*\"([^\"]*)\"").find(body)?.groupValues?.get(1)
+            Regex("\"" + key + "\"\\s*:\\s*\"([^\\"]*)\"").find(body)?.groupValues?.get(1)
 
         fun extractNumber(body: String, key: String): Long? =
-            Regex("\"" + key + "\"\\\s*:\s*(-?\\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()
+            Regex("\"" + key + "\"\\s*:\\s*(-?\\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()
     }
 }
