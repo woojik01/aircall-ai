@@ -21,9 +21,6 @@ import com.woojik.aircallai.session.SessionController
 import com.woojik.aircallai.session.SessionRepository
 import com.woojik.aircallai.settings.SettingsRepository
 import com.woojik.aircallai.settings.SharedPrefsStore
-import com.woojik.aircallai.tools.AndroidCalendarAdapter
-import com.woojik.aircallai.tools.CalendarAdapter
-import com.woojik.aircallai.tools.CalendarTool
 import com.woojik.aircallai.tools.FileNotesStore
 import com.woojik.aircallai.tools.GitHubApiClient
 import com.woojik.aircallai.tools.GitHubTool
@@ -36,6 +33,9 @@ import com.woojik.aircallai.tools.ToolApprovalCoordinator
 import com.woojik.aircallai.tools.ToolBridgedAIProvider
 import com.woojik.aircallai.tools.ToolExecutionLogger
 import com.woojik.aircallai.tools.ToolExecutor
+import com.woojik.aircallai.tools.AndroidCalendarAdapter
+import com.woojik.aircallai.tools.CalendarAdapter
+import com.woojik.aircallai.tools.CalendarTool
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,11 +50,16 @@ import kotlinx.coroutines.SupervisorJob
  * WRITE 승인 상태는 일반 설정에 영속화되어 앱 재시작 후에도 유지된다.
  * Tool-AI 연결: 모든 provider를 ToolBridgedAIProvider로 감싸 Tool 지시어를 처리한다.
  * PRD-09: GitHub(기기 인증)/Google(PKCE) OAuth 계층과 연결 저장소를 구성한다.
+ * 소셜 로그인 UX: OAuth Client ID 기본값은 빌드 시점(BuildConfig)에서 제공한다.
  * 연결된 토큰은 CredentialManager에 암호화 저장되고 기존 Tool 계층과 동기화된다.
  */
 class AppGraph(context: Context) {
     private val settingsStore = SharedPrefsStore(context)
-    val settings = SettingsRepository(settingsStore)
+    val settings = SettingsRepository(
+        settingsStore,
+        defaultGithubOAuthClientId = BuildConfig.GITHUB_OAUTH_CLIENT_ID,
+        defaultGoogleOAuthClientId = BuildConfig.GOOGLE_OAUTH_CLIENT_ID,
+    )
     val credentials = FileCredentialManager(AppStorage.credentialsDir(context), AndroidKeystoreCrypto())
 
     /** 로컬 모델: LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */

@@ -14,6 +14,14 @@ android {
         targetSdk = 34
         versionCode = 2
         versionName = "0.2.0"
+
+        // PRD-09 소셜 로그인 UX: OAuth Client ID는 공개값이므로 빌드 시점 기본값으로 제공한다.
+        // gradle.properties에 GITHUB_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_ID 를 1회 설정하면
+        // 앱 사용자는 "GitHub로 로그인" / "Google로 로그인" 버튼만 누르면 된다(고급에서 재정의 가능).
+        val githubOAuthClientId = (project.findProperty("GITHUB_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
+        val googleOAuthClientId = (project.findProperty("GOOGLE_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
+        buildConfigField("String", "GITHUB_OAUTH_CLIENT_ID", "\"$githubOAuthClientId\"")
+        buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", "\"$googleOAuthClientId\"")
     }
 
     buildTypes {
@@ -37,6 +45,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
