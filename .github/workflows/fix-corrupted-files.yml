@@ -17,7 +17,7 @@ jobs:
           p = pathlib.Path('app/src/main/java/com/woojik/aircallai/auth/GoogleOAuthClient.kt')
           s = p.read_text()
           good1 = r'            Regex("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"").find(body)?.groupValues?.get(1)'
-          good2 = r'            Regex("\"" + key + "\"\\s*:\\s*(-?\\d+)\"").find(body)?.groupValues?.get(1)?.toLongOrNull()'
+          good2 = r'            Regex("\"" + key + "\"\\s*:\\s*(-?\\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()'
           lines = s.split('\n')
           hits = 0
           for i, l in enumerate(lines):
