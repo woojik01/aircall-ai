@@ -141,7 +141,8 @@ class ToolBridgedAIProvider(
     }
 
     private fun injectSystemPrompt(history: List<ChatMessage>): List<ChatMessage> {
-        val prompt = ChatMessage(ChatMessage.Role.SYSTEM, toolSystemPrompt())
+        val requested = ToolIntent.toolsRequestedIn(history.lastOrNull { it.role == ChatMessage.Role.USER }?.content.orEmpty())
+        val prompt = ChatMessage(ChatMessage.Role.SYSTEM, toolSystemPrompt(requested))
         return listOf(prompt) + history
     }
 
@@ -150,7 +151,7 @@ class ToolBridgedAIProvider(
      * 구성: 역할 → 도구 목록 → 지시어 문법 → 결과 참조 → 결과 처리 → 정직성 → 일반 대화.
      * 각 규칙은 실행 시스템(ToolCallParser/치환/검증)의 실제 동작과 정확히 일치한다.
      */
-    private fun toolSystemPrompt(): String {
+    private fun toolSystemPrompt(requested: Set<String>): String {
         if (type == ProviderType.LOCAL) return """
             한국어로 짧게 답한다. 실제 작업은 아래 도구로만 수행한다.
             도구 호출은 응답 마지막 한 줄에 하나만 쓴다:
@@ -158,7 +159,8 @@ class ToolBridgedAIProvider(
             성공한 TOOL_RESULT가 있어야 완료했다고 말한다. 실패하면 이유를 설명한다.
             WRITE 작업은 사용자 승인이 필요하다. 이전 성공 결과는 {{TOOL_RESULT}}로 참조한다.
             일반 대화에는 도구를 쓰지 않는다.
-        """.trimIndent() + "\n" + toolsDescription
+        """.trimIndent() + "\n" + toolsDescription.lineSequence()
+            .filter { line -> requested.any { line.startsWith("$it.") } }.joinToString("\n")
 
         val sb = StringBuilder()
         sb.append("[역할]\n")
