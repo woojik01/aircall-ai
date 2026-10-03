@@ -18,6 +18,7 @@ data class ConnectionAccount(
     val provider: String,
     val displayName: String?,
     val status: ConnectionStatus,
+    val errorMessage: String? = null,
 )
 
 /**

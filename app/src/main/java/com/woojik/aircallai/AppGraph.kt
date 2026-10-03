@@ -97,15 +97,13 @@ class AppGraph(context: Context) {
         http = oauthHttp,
         clientIdProvider = { settings.githubOAuthClientId() },
     )
-    val googleAuth = GoogleOAuthClient(
-        http = oauthHttp,
-        clientIdProvider = { settings.googleOAuthClientId() },
-    )
+    val googleAuth = GoogleOAuthClient()
     val accountRepository = AccountConnectionRepository(oauthStore, listOf(githubAuth, googleAuth))
 
     /** Tool-AI 연결: AI 응답의 TOOL 지시어를 실행하고 결과를 반영한다. */
     private val toolCatalog =
-        "github.read_repository owner=<소유자> repo=<저장소> — GitHub 저장소를 조회한다\n" +
+        "github.read_repository owner=<소유자> repo=<저장소> — GitHub 저장소 정보를 조회한다\n" +
+            "github.read_file owner=<소유자> repo=<저장소> path=<파일 경로> — 저장소 파일 내용을 읽는다\n" +
             "github.create_issue owner=<소유자> repo=<저장소> title=<제목> [body=<내용>] — Issue를 만든다 (승인 필요)\n" +
             "github.create_pull_request owner=<소유자> repo=<저장소> title=<제목> head=<브랜치> base=<브랜치> — PR을 만든다 (승인 필요)\n" +
             "notes.add_note text=<내용> — 메모를 기기에 저장한다 (승인 필요)\n" +

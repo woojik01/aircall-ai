@@ -16,29 +16,12 @@ android {
         versionName = "0.2.0"
 
         // PRD-09 소셜 로그인 UX: OAuth Client ID는 공개값이므로 빌드 시점 기본값으로 제공한다.
-        // gradle.properties에 GITHUB_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_ID 를 1회 설정하면
-        // 앱 사용자는 "GitHub로 로그인" / "Google로 로그인" 버튼만 누르면 된다(고급에서 재정의 가능).
         val githubOAuthClientId = (project.findProperty("GITHUB_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
         val googleOAuthClientId = (project.findProperty("GOOGLE_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
         buildConfigField("String", "GITHUB_OAUTH_CLIENT_ID", "\"$githubOAuthClientId\"")
         buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", "\"$googleOAuthClientId\"")
-
-        // PRD-09 Google Android 클라이언트: 리버스 클라이언트 ID 스킴을 manifest에 주입한다.
-        // Client ID(<번호>-<해시>.apps.googleusercontent.com)를 뒤집어
-        // com.googleusercontent.apps.<번호>-<해시> 스킴으로 콜백을 받는다.
-        // 미설정 시 대체 스킴(비활성)을 넣어 빌드는 항상 가능하게 한다.
-        val googleCallbackScheme = if (googleOAuthClientId.endsWith(".apps.googleusercontent.com")) {
-            googleOAuthClientId.substringBefore(".apps.googleusercontent.com")
-                .split(".").reversed().joinToString(".")
-                .let { "com.googleusercontent.apps." + it }
-        } else {
-            "com.woojik.aircallai.invalid"
-        }
-        manifestPlaceholders["googleOAuthRedirectScheme"] = googleCallbackScheme
     }
 
-    // PRD-09: CI가 생성·커밋한 고정 디버그 서명 키. 개발 PC 없이도 SHA-1이 매 빌드 동일하며
-    // Google OAuth(Android 유형) 등록에 필요한 지문이 변하지 않는다. 키가 없으면 기본 동작 유지.
     signingConfigs {
         create("fixedDebug") {
             storeFile = file("debug.keystore")
@@ -97,6 +80,8 @@ dependencies {
 
     // Gemma 4 Android 모델은 LiteRT-LM의 .litertlm 형식으로 실행한다.
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.10.2")
+    // Google Android AuthorizationClient for Gmail user-data authorization.
+    implementation("com.google.android.gms:play-services-auth:21.6.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

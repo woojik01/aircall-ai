@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -26,7 +28,10 @@ import com.woojik.aircallai.ai.cloud.CloudAIProvider
 import com.woojik.aircallai.auth.ConnectionStatus
 import com.woojik.aircallai.auth.GitHubDeviceFlowClient
 import com.woojik.aircallai.auth.GoogleOAuthClient
-import com.woojik.aircallai.auth.OAuthCallbackResult
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
 import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
 import com.woojik.aircallai.tools.GitHubApiClient
@@ -36,6 +41,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models / privacy.
@@ -56,8 +63,46 @@ class MainActivity : ComponentActivity() {
     // 캘린더 권한 상태. 런타임 요청 결과가 설정 화면에 즉시 반영되도록 compose 상태로 관리한다.
     private var calendarGranted by mutableStateOf(false)
 
-    // PRD-09: 진행 중인 Google 인증 요청(state/code_verifier 보관).
-    private var pendingGoogleAuth: GoogleOAuthClient.AuthRequest? = null
+    // Google AuthorizationClient 권한 승인 결과를 받는 ActivityResultLauncher.
+    private val startGoogleAuthorization =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            val appGraph = graph()
+            try {
+                val authorizationResult =
+                    Identity.getAuthorizationClient(this)
+                        .getAuthorizationResultFromIntent(result.data)
+                val accessToken = authorizationResult.accessToken
+                if (accessToken.isNullOrBlank()) {
+                    appGraph.accountRepository.mark(
+                        "gmail", ConnectionStatus.ERROR,
+                        errorMessage = "Google이 액세스 토큰을 반환하지 않았습니다 (결과 코드 ${result.resultCode}).",
+                    )
+                    return@registerForActivityResult
+                }
+                uiScope.launch {
+                    appGraph.accountRepository.connect(
+                        "gmail",
+                        com.woojik.aircallai.auth.OAuthTokens(
+                            accessToken = accessToken,
+                            refreshToken = null,
+                            expiresAtEpochMs = System.currentTimeMillis() + 3_600_000L,
+                        ),
+                        null,
+                        System.currentTimeMillis(),
+                    )
+                }
+            } catch (e: ApiException) {
+                appGraph.accountRepository.mark(
+                    "gmail", ConnectionStatus.ERROR,
+                    errorMessage = "Google 인증 오류 (코드 ${e.statusCode}): ${e.message ?: "인증을 완료하지 못했습니다"}. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 계정을 추가해야 합니다.",
+                )
+            } catch (e: Exception) {
+                appGraph.accountRepository.mark(
+                    "gmail", ConnectionStatus.ERROR,
+                    errorMessage = "Google 인증 결과를 처리하지 못했습니다: ${e.message ?: e.javaClass.simpleName}",
+                )
+            }
+        }
 
     // 인증 콜백 처리 등 화면 밖 코루틴용 스코프.
     private val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -82,7 +127,6 @@ class MainActivity : ComponentActivity() {
         calendarGranted = hasCalendarPermission()
         val appGraph = graph()
 
-        // PRD-09: 재시작 후 저장된 자격증명 기준으로 연결 상태를 복원한다.
         uiScope.launch { appGraph.accountRepository.refresh(System.currentTimeMillis()) }
 
         val vm = MainViewModel(
@@ -95,111 +139,155 @@ class MainActivity : ComponentActivity() {
             isProviderReady = { appGraph.providerRouter.current().isReady() },
         )
         setContent {
-    
-        AirCallUi(
+            AirCallUi(
                 vm,
                 appGraph,
                 calendarPermissionGranted = { calendarGranted },
                 requestCalendarPermission = { requestCalendarPermission() },
-                connectGitHub = { connectGitHub() },
+                connectGitHub = { onCode -> connectGitHub(onCode) },
                 connectGoogle = { connectGoogle() },
-                disconnectAccount = { provider -> uiScope.launch { appGraph.accountRepository.disconnect(provider) } },
+                disconnectAccount = { provider ->
+                    uiScope.launch { appGraph.accountRepository.disconnect(provider) }
+                },
             )
         }
-        // PRD-09: 앱이 인증 콜백으로 실행된 경우(cold start) 처리한다.
-        handleGoogleCallback(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // PRD-09: Google 인증 후 브라우저에서 돌아온 콜백을 처리한다.
-        handleGoogleCallback(intent)
     }
 
-    /** PRD-09 Phase 2: GitHub OAuth 기기 인증. user_code를 보여주고 토큰을 폴링한다. */
-    private suspend fun connectGitHub(): String {
+    /** PRD-09 Phase 2: Google과 동일하게 GitHub Device Flow는 기존 방식을 유지한다. */
+    private suspend fun connectGitHub(onDeviceCodeReady: (String) -> Unit): String {
         val appGraph = graph()
         appGraph.accountRepository.mark("github", ConnectionStatus.CONNECTING)
-        val session = appGraph.githubAuth.startDeviceFlow()
-        if (session == null) {
-            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
-            return "GitHub OAuth App Client ID를 먼저 저장해 주세요 (GitHub 연동 섹션)."
+        val start = appGraph.githubAuth.startDeviceFlowDetailed()
+        if (start is GitHubDeviceFlowClient.StartResult.Failed) {
+            appGraph.accountRepository.mark(
+                "github", ConnectionStatus.ERROR, errorMessage = start.reason,
+            )
+            return start.reason
         }
-        openBrowser(session.verificationUri)
-        // 사용자가 브라우저에서 코드를 입력하고 승인할 때까지 폴링한다.
+        val session = (start as GitHubDeviceFlowClient.StartResult.Ready).session
+        onDeviceCodeReady(session.userCode)
+        if (!openBrowser(session.verificationUri)) {
+            val reason = "GitHub 로그인 페이지를 열 수 없습니다."
+            appGraph.accountRepository.mark("github", ConnectionStatus.ERROR, errorMessage = reason)
+            return reason
+        }
+        var intervalSeconds = session.intervalSeconds.coerceAtLeast(1)
+        var consecutiveNetworkFailures = 0
         while (System.currentTimeMillis() < session.expiresAtMs) {
+            // Opening the browser backgrounds this Activity. Background data restrictions
+            // must not turn browser authorization into a permanent login failure.
+            val remainingMs = session.expiresAtMs - System.currentTimeMillis()
+            if (remainingMs <= 0) break
+            val ready = withTimeoutOrNull(remainingMs) {
+                delay(intervalSeconds * 1000L)
+                lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
+                true
+            } ?: false
+            if (!ready || System.currentTimeMillis() >= session.expiresAtMs) break
             when (val result = appGraph.githubAuth.pollToken(session)) {
                 is GitHubDeviceFlowClient.PollResult.Success -> {
                     appGraph.accountRepository.connect("github", result.tokens, null, System.currentTimeMillis())
-                    return "GitHub 계정이 연결되었습니다. 코드: " + session.userCode + " 승인 완료."
+                    return "GitHub 계정이 연결되었습니다."
                 }
                 is GitHubDeviceFlowClient.PollResult.Failed -> {
-                    appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
+                    if (result.retryable && consecutiveNetworkFailures < 3) {
+                        consecutiveNetworkFailures += 1
+                        // Retry after 5, 10, then 20 seconds, without shortening
+                        // any interval already required by GitHub.
+                        intervalSeconds = maxOf(intervalSeconds, 5 shl (consecutiveNetworkFailures - 1))
+                        continue
+                    }
+                    appGraph.accountRepository.mark("github", ConnectionStatus.ERROR, errorMessage = result.reason)
                     return result.reason
                 }
-                GitHubDeviceFlowClient.PollResult.Pending -> delay(session.intervalSeconds * 1000L)
+                is GitHubDeviceFlowClient.PollResult.SlowDown -> {
+                    // GitHub requests +5 seconds for each slow_down, cumulatively.
+                    intervalSeconds = maxOf(intervalSeconds + 5, result.intervalSeconds)
+                    consecutiveNetworkFailures = 0
+                }
+                GitHubDeviceFlowClient.PollResult.Pending -> consecutiveNetworkFailures = 0
             }
         }
-        appGraph.accountRepository.mark("github", ConnectionStatus.ERROR)
-        return "기기 인증 시간이 만료되었습니다. 다시 연결해 주세요."
+        val reason = "기기 인증 시간이 만료되었습니다. 다시 연결해 주세요."
+        appGraph.accountRepository.mark("github", ConnectionStatus.ERROR, errorMessage = reason)
+        return reason
     }
 
-    /** PRD-09 Phase 3: Google OAuth. 시스템 브라우저로 인증 화면을 연다. */
+    /**
+     * Google Android AuthorizationClient를 사용한다.
+     * 브라우저 URL, PKCE, custom URI callback, redirect URI를 앱에서 직접 처리하지 않는다.
+     */
     private fun connectGoogle(): String {
         val appGraph = graph()
-        // Android 유형 OAuth 클라이언트: 콜백 URI는 Client ID에서 유도된 리버스 스킴을 사용한다.
-        val redirectUri = GoogleOAuthClient.redirectUriFor(appGraph.settings.googleOAuthClientId())
-        val request = if (redirectUri == null) null else appGraph.googleAuth.buildAuthRequest(redirectUri)
-        if (request == null) {
+        if (appGraph.settings.googleOAuthClientId().isBlank()) {
             appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
-            return "Google OAuth Client ID를 먼저 저장해 주세요 (Gmail 연동 섹션)."
+            return "Google Android OAuth Client ID가 설정되지 않았습니다."
         }
-        pendingGoogleAuth = request
-        appGraph.accountRepository.mark("gmail", ConnectionStatus.CONNECTING)
-        return if (openBrowser(request.authUrl)) {
-            "Google 로그인 화면이 열렸습니다. 승인 후 앱으로 돌아오면 연결이 완료됩니다."
-        } else {
-            appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
-            "브라우저를 열 수 없습니다. Chrome 등 브라우저를 설치해 주세요."
-        }
-    }
 
-    /** PRD-09: Google 콜백(리버스 클라이언트 ID 스킴)을 검증하고 토큰으로 교환한다. */
-    private fun handleGoogleCallback(intent: Intent?) {
-        if (intent == null || intent.action != Intent.ACTION_VIEW) return
-        val data = intent.data ?: return
-        val request = pendingGoogleAuth ?: return
-        val appGraph = graph()
-        // Android 유형 OAuth 클라이언트: 리버스 클라이언트 ID 스킴 콜백만 처리한다.
-        val callbackScheme = GoogleOAuthClient.callbackSchemeFor(appGraph.settings.googleOAuthClientId())
-        if (callbackScheme == null || data.scheme != callbackScheme || data.path != GoogleOAuthClient.CALLBACK_PATH) return
-        pendingGoogleAuth = null
-        if (data.getQueryParameter("error") != null) {
-            // 사용자가 취소해도 앱 사용은 계속된다.
-            appGraph.accountRepository.mark("gmail", ConnectionStatus.NOT_CONNECTED)
-            return
-        }
-        val code = data.getQueryParameter("code")
-        val state = data.getQueryParameter("state")
-        val result = appGraph.accountRepository.validateCallback("gmail", "gmail", code, state, request.state)
-        if (result !is OAuthCallbackResult.Success) {
-            appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
-    
-        return
-        }
-        uiScope.launch {
-            val redirectUri = GoogleOAuthClient.redirectUriFor(appGraph.settings.googleOAuthClientId())
-            val tokens = if (redirectUri == null) {
-                null
-            } else {
-                appGraph.googleAuth.exchangeCode(result.code, request.codeVerifier, redirectUri)
+        appGraph.accountRepository.mark("gmail", ConnectionStatus.CONNECTING)
+
+        val request = AuthorizationRequest.builder()
+            .setRequestedScopes(
+                listOf(
+                    Scope(GoogleOAuthClient.SCOPE_GMAIL_MODIFY),
+                    Scope(GoogleOAuthClient.SCOPE_GMAIL_SEND),
+                ),
+            )
+            .build()
+
+        Identity.getAuthorizationClient(this)
+            .authorize(request)
+            .addOnSuccessListener { authorizationResult ->
+                if (authorizationResult.hasResolution()) {
+                    val pendingIntent = authorizationResult.pendingIntent
+                    if (pendingIntent == null) {
+                        appGraph.accountRepository.mark(
+                            "gmail", ConnectionStatus.ERROR,
+                            errorMessage = "Google 권한 승인 화면을 시작하지 못했습니다. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 이 계정을 추가해야 합니다.",
+                        )
+                    } else {
+                        startGoogleAuthorization.launch(
+                            IntentSenderRequest.Builder(pendingIntent.intentSender).build(),
+                        )
+                    }
+                } else {
+                    val accessToken = authorizationResult.accessToken
+                    if (accessToken.isNullOrBlank()) {
+                        appGraph.accountRepository.mark(
+                            "gmail", ConnectionStatus.ERROR,
+                            errorMessage = "Google이 Gmail 액세스 토큰을 반환하지 않았습니다. 권한 승인을 확인해 주세요.",
+                        )
+                    } else {
+                        uiScope.launch {
+                            appGraph.accountRepository.connect(
+                                "gmail",
+                                com.woojik.aircallai.auth.OAuthTokens(
+                                    accessToken = accessToken,
+                                    refreshToken = null,
+                                    expiresAtEpochMs = System.currentTimeMillis() + 3_600_000L,
+                                ),
+                                null,
+                                System.currentTimeMillis(),
+                            )
+                        }
+                    }
+                }
             }
-            if (tokens == null) {
-                appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
-            } else {
-                appGraph.accountRepository.connect("gmail", tokens, null, System.currentTimeMillis())
+            .addOnFailureListener { error ->
+                val statusCode = (error as? ApiException)?.statusCode
+                appGraph.accountRepository.mark(
+                    "gmail", ConnectionStatus.ERROR,
+                    errorMessage = "Google 로그인에 실패했습니다" +
+                        (statusCode?.let { " (코드 $it)" } ?: "") +
+                        ": ${error.message ?: error.javaClass.simpleName}. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록을 확인해 주세요.",
+                )
             }
-        }
+
+        return "Google 계정 권한 요청을 시작했습니다."
     }
 
     private fun openBrowser(url: String): Boolean =
@@ -275,7 +363,7 @@ private fun AirCallUi(
     graph: AppGraph,
     calendarPermissionGranted: () -> Boolean,
     requestCalendarPermission: () -> Unit,
-    connectGitHub: suspend () -> String,
+    connectGitHub: suspend ((String) -> Unit) -> String,
     connectGoogle: () -> String,
     disconnectAccount: (String) -> Unit,
 ) {

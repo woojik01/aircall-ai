@@ -72,6 +72,19 @@ class ToolBridgedAIProvider(
                 )
             }
 
+            if (!result.success) {
+                val failure = ChatMessage(
+                    ChatMessage.Role.ASSISTANT,
+                    "요청한 " + call.toolName + "." + call.action +
+                        " 작업이 실패했습니다: " + result.message,
+                )
+                return AIResponse(
+                    message = failure,
+                    providerType = base.type,
+                    latencyMs = System.currentTimeMillis() - started,
+                )
+            }
+
             current = current + response.message +
                 ChatMessage(ChatMessage.Role.USER, toolResultPrompt(call, result))
         }
@@ -87,6 +100,8 @@ class ToolBridgedAIProvider(
     private fun toolSystemPrompt(): String =
         "외부 기능(Tool)을 사용할 수 있다.\n" +
             "사용 가능한 도구:\n" + toolsDescription + "\n" +
+            "메일 발송이나 저장소 변경을 완료했다고 말하기 전에 Tool 실행 성공 결과가 반드시 있어야 한다.\n" +
+            "Tool이 실패하면 실패했다고 그대로 알리고, 실행하지 않았다면 완료했다고 말하지 않는다.\n" +
             "Tool을 사용하려면 응답의 첫 줄에 아래 형식으로 지시어를 쓴다(한 번에 하나):\n" +
             "TOOL: <도구>.<액션> key=value key2=\"값에 공백\"\n" +
             "지시어를 쓰면 시스템이 실행하고 결과를 알려준다. 결과를 받은 뒤 자연스럽게 최종 답변한다.\n" +

@@ -36,12 +36,28 @@ open class GmailApiClient(
     internal fun rawMessage(to: String, subject: String, body: String): String {
         val message = StringBuilder()
             .append("To: ").append(to).append("\r\n")
-            .append("Subject: ").append(sanitizeHeader(subject)).append("\r\n")
+            .append("Subject: ").append(encodeSubject(subject)).append("\r\n")
             .append("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
             .append("\r\n")
             .append(body)
             .toString()
         return Base64.getUrlEncoder().withoutPadding().encodeToString(message.toByteArray(Charsets.UTF_8))
+    }
+
+    /** RFC 2047 encoded-word로 UTF-8 제목을 표현해 Gmail/메일 클라이언트의 문자셋 오해를 막는다. */
+    private fun encodeSubject(value: String): String {
+        val bytes = sanitizeHeader(value).toByteArray(Charsets.UTF_8)
+        val words = mutableListOf<String>()
+        var start = 0
+        while (start < bytes.size) {
+            var end = minOf(start + MAX_SUBJECT_CHUNK_BYTES, bytes.size)
+            while (end < bytes.size && (bytes[end].toInt() and 0xC0) == 0x80) end -= 1
+            if (end == start) end = minOf(start + MAX_SUBJECT_CHUNK_BYTES, bytes.size)
+            val encoded = Base64.getEncoder().encodeToString(bytes.copyOfRange(start, end))
+            words += "=?UTF-8?B?$encoded?="
+            start = end
+        }
+        return words.joinToString(" ")
     }
 
     /** CRLF 쌍은 공백 하나로, 남은 단독 CR/LF도 공백으로 바꿔 헤더 주입을 차단한다. */
@@ -60,13 +76,34 @@ open class GmailApiClient(
             connection.doOutput = true
             connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
             val code = connection.responseCode
+            val responseBody = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
             connection.disconnect()
             when (code) {
-                in 200..299 -> ToolResult(true, "메일을 보냈습니다")
-                401, 403 -> ToolResult(false, "Gmail 인증에 실패했습니다")
-                else -> ToolResult(false, "Gmail 요청에 실패했습니다")
+                in 200..299 -> {
+                    val messageId = runCatching {
+                        org.json.JSONObject(responseBody).optString("id")
+                    }.getOrDefault("")
+                    ToolResult(
+                        true,
+                        if (messageId.isBlank()) {
+                            "Gmail API가 발송 요청을 접수했습니다."
+                        } else {
+                            "Gmail API가 발송 요청을 접수했습니다 (message ID: $messageId)."
+                        },
+                    )
+                }
+                401 -> ToolResult(false, "Gmail 토큰이 만료되었거나 유효하지 않습니다. Google 계정을 다시 연결해 주세요.")
+                403 -> ToolResult(false, gmailError(responseBody, "Gmail 발송 권한이 없습니다. gmail.send 권한을 다시 승인해 주세요."))
+                else -> ToolResult(false, gmailError(responseBody, "Gmail 요청이 실패했습니다 (HTTP $code)."))
             }
-        }.getOrElse { ToolResult(false, "Gmail 연결에 실패했습니다") }
+        }.getOrElse { error ->
+            ToolResult(
+                false,
+                "Gmail 네트워크 요청에 실패했습니다: " + error.javaClass.simpleName +
+                    (error.message?.let { " ($it)" } ?: ""),
+            )
+        }
     }
 
     companion object {
@@ -74,6 +111,15 @@ open class GmailApiClient(
         private const val ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 15_000
+        private const val MAX_SUBJECT_CHUNK_BYTES = 45
+
+        private fun gmailError(body: String, fallback: String): String {
+            val message = runCatching {
+                org.json.JSONObject(body).getJSONObject("error").optString("message")
+            }.getOrNull()
+            return if (message.isNullOrBlank()) fallback else "$fallback: $message"
+        }
+
         private val VALID_EMAIL = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
         private val CRLF_PAIR = Regex("\\r\\n")
         private val CRLF = Regex("[\\r\\n]")

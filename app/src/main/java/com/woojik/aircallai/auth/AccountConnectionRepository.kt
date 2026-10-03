@@ -51,22 +51,34 @@ class AccountConnectionRepository(
     }
 
     /** 화면 표시용 상태 표시. 저장소 접근이 없어 non-suspend다(UI 콜백에서 바로 호출). */
-    fun mark(provider: String, status: ConnectionStatus, displayName: String? = null) {
+    fun mark(
+        provider: String,
+        status: ConnectionStatus,
+        displayName: String? = null,
+        errorMessage: String? = null,
+    ) {
         val current = states.value[provider] ?: return
         update(
             provider,
             status,
             if (displayName != null) displayName else current.displayName,
+            errorMessage,
         )
     }
 
-    private fun update(provider: String, status: ConnectionStatus, displayName: String?) {
+    private fun update(
+        provider: String,
+        status: ConnectionStatus,
+        displayName: String?,
+        errorMessage: String? = null,
+    ) {
         val current = states.value[provider] ?: return
         val updated = states.value.toMutableMap()
         updated[provider] = ConnectionAccount(
             provider = provider,
             displayName = displayName,
             status = status,
+            errorMessage = errorMessage,
         )
         states.value = updated
     }
@@ -85,7 +97,7 @@ class AccountConnectionRepository(
         ConnectionStatus.CONNECTED -> account.provider + " 계정이 연결되어 있습니다."
         ConnectionStatus.EXPIRED -> account.provider + " 로그인이 만료되었습니다. 다시 연결해 주세요."
         ConnectionStatus.REAUTH_REQUIRED -> account.provider + " 재인증이 필요합니다. 다시 연결해 주세요."
-        ConnectionStatus.ERROR -> account.provider + " 연결에 문제가 발생했습니다. 다시 시도해 주세요."
+        ConnectionStatus.ERROR -> account.errorMessage ?: (account.provider + " 연결에 문제가 발생했습니다. 다시 시도해 주세요.")
     }
 
     /**
