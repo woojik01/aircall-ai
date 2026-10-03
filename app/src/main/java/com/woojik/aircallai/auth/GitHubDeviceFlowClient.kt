@@ -22,6 +22,11 @@ class GitHubDeviceFlowClient(
         val expiresAtMs: Long,
     )
 
+    sealed interface StartResult {
+        data class Ready(val session: DeviceSession) : StartResult
+        data class Failed(val reason: String) : StartResult
+    }
+
     sealed interface PollResult {
         /** 승인 완료. 토큰 획득. */
         data class Success(val tokens: OAuthTokens) : PollResult
@@ -29,28 +34,51 @@ class GitHubDeviceFlowClient(
         /** 사용자 승인 대기 중. interval 후 다시 폴링한다. */
         object Pending : PollResult
 
+        /** GitHub가 요청한 폴링 간격 연장. */
+        data class SlowDown(val intervalSeconds: Int) : PollResult
+
         /** 만료·거부·오류. 재시도 필요. */
         data class Failed(val reason: String) : PollResult
     }
 
-    /** 기기 코드 발급을 요청한다. Client ID 미설정·네트워크 실패 시 null. */
-    suspend fun startDeviceFlow(): DeviceSession? {
+    /** 기존 호출자 호환을 위한 기기 코드 발급 API. */
+    suspend fun startDeviceFlow(): DeviceSession? =
+        (startDeviceFlowDetailed() as? StartResult.Ready)?.session
+
+    /** GitHub 응답 오류를 보존해 앱이 구체적인 실패 원인을 보여주도록 한다. */
+    suspend fun startDeviceFlowDetailed(): StartResult {
         val clientId = clientIdProvider().trim()
-        if (clientId.isEmpty()) return null
+        if (clientId.isEmpty()) return StartResult.Failed("GitHub OAuth Client ID가 비어 있습니다.")
         val (status, body) = http.postForm(
             DEVICE_CODE_URL,
             mapOf("client_id" to clientId, "scope" to SCOPE),
         )
-        if (status !in 200..299) return null
-        val deviceCode = extractString(body, "device_code") ?: return null
-        val userCode = extractString(body, "user_code") ?: return null
-        val verificationUri = extractString(body, "verification_uri") ?: return null
-        return DeviceSession(
-            deviceCode = deviceCode,
-            userCode = userCode,
-            verificationUri = verificationUri,
-            intervalSeconds = extractNumber(body, "interval")?.toInt() ?: DEFAULT_INTERVAL_SECONDS,
-            expiresAtMs = nowMs() + (extractNumber(body, "expires_in") ?: DEFAULT_EXPIRES_IN_SECONDS) * 1000,
+        if (status !in 200..299) {
+            val error = extractString(body, "error")
+            return StartResult.Failed(
+                when {
+                    status == -1 -> "GitHub에 연결하지 못했습니다. 네트워크 연결을 확인해 주세요."
+                    error == "device_flow_disabled" -> "GitHub OAuth 앱에서 Device Flow가 비활성화되어 있습니다."
+                    error == "incorrect_client_credentials" -> "GitHub OAuth Client ID가 올바르지 않습니다."
+                    else -> "GitHub 인증 요청이 거부되었습니다 (HTTP $status" +
+                        (error?.let { ", $it" } ?: "") + ")."
+                },
+            )
+        }
+        val deviceCode = extractString(body, "device_code")
+            ?: return StartResult.Failed("GitHub 응답에 device_code가 없습니다.")
+        val userCode = extractString(body, "user_code")
+            ?: return StartResult.Failed("GitHub 응답에 user_code가 없습니다.")
+        val verificationUri = extractString(body, "verification_uri")
+            ?: return StartResult.Failed("GitHub 응답에 verification_uri가 없습니다.")
+        return StartResult.Ready(
+            DeviceSession(
+                deviceCode = deviceCode,
+                userCode = userCode,
+                verificationUri = verificationUri,
+                intervalSeconds = extractNumber(body, "interval")?.toInt() ?: DEFAULT_INTERVAL_SECONDS,
+                expiresAtMs = nowMs() + (extractNumber(body, "expires_in") ?: DEFAULT_EXPIRES_IN_SECONDS) * 1000,
+            ),
         )
     }
 
@@ -75,10 +103,13 @@ class GitHubDeviceFlowClient(
                     OAuthTokens(access, null, expiresIn?.let { nowMs() + it * 1000 }),
                 )
             }
-            error == "authorization_pending" || error == "slow_down" -> PollResult.Pending
+            error == "authorization_pending" -> PollResult.Pending
+            error == "slow_down" -> PollResult.SlowDown(session.intervalSeconds + SLOW_DOWN_INCREMENT_SECONDS)
             error == "expired_token" -> PollResult.Failed("기기 인증 코드가 만료되었습니다. 다시 연결해 주세요")
             error == "access_denied" -> PollResult.Failed("GitHub 연결이 거부되었습니다")
-            else -> PollResult.Failed("GitHub 인증에 실패했습니다")
+            error == "incorrect_client_credentials" -> PollResult.Failed("GitHub OAuth Client ID가 올바르지 않습니다.")
+            else -> PollResult.Failed("GitHub 인증이 실패했습니다 (HTTP $status" +
+                (error?.let { ", $it" } ?: "") + ").")
         }
     }
 
@@ -90,11 +121,12 @@ class GitHubDeviceFlowClient(
     override suspend fun handleCallback(provider: String, code: String, state: String?): OAuthTokens? = null
 
     companion object {
-        const val SCOPE = "repo issues"
+        const val SCOPE = "repo"
         private const val DEVICE_CODE_URL = "https://github.com/login/device/code"
         private const val TOKEN_URL = "https://github.com/login/oauth/access_token"
         private const val GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
         private const val DEFAULT_INTERVAL_SECONDS = 5
+        private const val SLOW_DOWN_INCREMENT_SECONDS = 5
         private const val DEFAULT_EXPIRES_IN_SECONDS = 900L
 
         /** JSON 문자열 필드 추출. 의존성 없이 최소 파싱만 한다. */
