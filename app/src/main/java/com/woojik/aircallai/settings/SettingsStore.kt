@@ -93,6 +93,17 @@ class SettingsRepository(
     }
 
     /**
+     * 로컬 추론 GPU 가속: LiteRT-LM 백엔드를 GPU로 실행할지 여부.
+     * 기본값은 true(켜기). GPU 초기화에 실패한 기기에서는 백엔드가 자동으로 CPU로 폴백한다.
+     * 비민감 값이므로 일반 설정에 저장한다.
+     */
+    fun localUseGpu(): Boolean = store.getString(KEY_LOCAL_USE_GPU)?.trim()?.lowercase() != VALUE_FALSE
+
+    fun setLocalUseGpu(use: Boolean) {
+        store.putString(KEY_LOCAL_USE_GPU, if (use) VALUE_TRUE else VALUE_FALSE)
+    }
+
+    /**
      * PRD-09 Phase 2: GitHub OAuth App Client ID. 공개 값(비밀이 아님)이므로 일반 설정에
      * 저장한다. 값이 없으면 빌드 시점 기본값(BuildConfig)을 사용한다(소셜 로그인 UX).
      */
@@ -130,7 +141,11 @@ class SettingsRepository(
         private const val KEY_CLOUD_BASE_URL = "cloud_base_url"
         private const val KEY_CLOUD_MODEL = "cloud_model"
         private const val KEY_LOCAL_MODEL = "local_model_id"
+        private const val KEY_LOCAL_USE_GPU = "local_use_gpu"
         private const val KEY_GITHUB_OAUTH_CLIENT_ID = "github_oauth_client_id"
         private const val KEY_GOOGLE_OAUTH_CLIENT_ID = "google_oauth_client_id"
+
+        private const val VALUE_TRUE = "true"
+        private const val VALUE_FALSE = "false"
     }
 }
