@@ -57,7 +57,8 @@ class GitHubDeviceFlowClient(
             val error = extractString(body, "error")
             return StartResult.Failed(
                 when {
-                    status == -1 -> "GitHub에 연결하지 못했습니다. 네트워크 연결을 확인해 주세요."
+                    status == -1 -> "GitHub 기기 인증 요청에서 HTTP 응답을 받지 못했습니다: " +
+                        (body.ifBlank { "네트워크, DNS 또는 TLS 연결을 확인해 주세요." }.take(180))
                     error == "device_flow_disabled" -> "GitHub OAuth 앱에서 Device Flow가 비활성화되어 있습니다."
                     error == "incorrect_client_credentials" -> "GitHub OAuth Client ID가 올바르지 않습니다."
                     else -> "GitHub 인증 요청이 거부되었습니다 (HTTP $status" +
@@ -108,6 +109,10 @@ class GitHubDeviceFlowClient(
             error == "expired_token" -> PollResult.Failed("기기 인증 코드가 만료되었습니다. 다시 연결해 주세요")
             error == "access_denied" -> PollResult.Failed("GitHub 연결이 거부되었습니다")
             error == "incorrect_client_credentials" -> PollResult.Failed("GitHub OAuth Client ID가 올바르지 않습니다.")
+            status == -1 -> PollResult.Failed(
+                "GitHub 토큰 확인 중 HTTP 응답을 받지 못했습니다: " +
+                    (body.ifBlank { "네트워크, DNS 또는 TLS 연결을 확인해 주세요." }.take(180)),
+            )
             else -> PollResult.Failed("GitHub 인증이 실패했습니다 (HTTP $status" +
                 (error?.let { ", $it" } ?: "") + ").")
         }
