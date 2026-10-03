@@ -36,12 +36,28 @@ open class GmailApiClient(
     internal fun rawMessage(to: String, subject: String, body: String): String {
         val message = StringBuilder()
             .append("To: ").append(to).append("\r\n")
-            .append("Subject: ").append(sanitizeHeader(subject)).append("\r\n")
+            .append("Subject: ").append(encodeSubject(subject)).append("\r\n")
             .append("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
             .append("\r\n")
             .append(body)
             .toString()
         return Base64.getUrlEncoder().withoutPadding().encodeToString(message.toByteArray(Charsets.UTF_8))
+    }
+
+    /** RFC 2047 encoded-word로 UTF-8 제목을 표현해 Gmail/메일 클라이언트의 문자셋 오해를 막는다. */
+    private fun encodeSubject(value: String): String {
+        val bytes = sanitizeHeader(value).toByteArray(Charsets.UTF_8)
+        val words = mutableListOf<String>()
+        var start = 0
+        while (start < bytes.size) {
+            var end = minOf(start + MAX_SUBJECT_CHUNK_BYTES, bytes.size)
+            while (end < bytes.size && (bytes[end].toInt() and 0xC0) == 0x80) end -= 1
+            if (end == start) end = minOf(start + MAX_SUBJECT_CHUNK_BYTES, bytes.size)
+            val encoded = Base64.getEncoder().encodeToString(bytes.copyOfRange(start, end))
+            words += "=?UTF-8?B?$encoded?="
+            start = end
+        }
+        return words.joinToString(" ")
     }
 
     /** CRLF 쌍은 공백 하나로, 남은 단독 CR/LF도 공백으로 바꿔 헤더 주입을 차단한다. */
@@ -95,6 +111,7 @@ open class GmailApiClient(
         private const val ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
         private const val CONNECT_TIMEOUT_MS = 10_000
         private const val READ_TIMEOUT_MS = 15_000
+        private const val MAX_SUBJECT_CHUNK_BYTES = 45
 
         private fun gmailError(body: String, fallback: String): String {
             val message = runCatching {
