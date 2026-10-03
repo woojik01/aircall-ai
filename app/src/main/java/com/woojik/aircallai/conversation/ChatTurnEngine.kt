@@ -4,6 +4,8 @@ import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.AIProviderException
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.audio.AudioError
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +15,8 @@ import kotlinx.coroutines.flow.update
 class ConversationEngine(
     private var provider: AIProvider,
 ) {
+    private val turnMutex = Mutex()
+    private val revision = AtomicLong()
     private val _state = MutableStateFlow<ConversationState>(ConversationState.Idle)
     val state: StateFlow<ConversationState> = _state.asStateFlow()
     private val _transcript = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -48,8 +52,9 @@ class ConversationEngine(
         _state.update { if (it is ConversationState.Error) ConversationState.Idle else it }
     }
 
-    suspend fun submitUserMessage(text: String, voiceMode: Boolean = false) {
-        if (text.isBlank()) return
+    suspend fun submitUserMessage(text: String, voiceMode: Boolean = false): Boolean {
+        if (text.isBlank() || !turnMutex.tryLock()) return false
+        val turnRevision = revision.get()
         val active = provider
         val userMessage = ChatMessage(ChatMessage.Role.USER, text)
         _transcript.update { it + userMessage }
@@ -62,6 +67,7 @@ class ConversationEngine(
                 _transcript.value
             }
             val response = active.respond(requestHistory)
+            if (revision.get() != turnRevision) return false
             val responseText = if (voiceMode) {
                 VoiceResponseSanitizer.sanitize(response.message.content)
             } else {
@@ -70,19 +76,26 @@ class ConversationEngine(
             val assistantMessage = response.message.copy(content = responseText)
             _transcript.update { it + assistantMessage }
             _state.value = ConversationState.Speaking(assistantMessage)
+            return true
         } catch (e: CancellationException) {
+            if (revision.get() == turnRevision) _state.value = ConversationState.Idle
             throw e
         } catch (e: AIProviderException) {
+            if (revision.get() != turnRevision) return false
             _state.value = ConversationState.Error(
                 ConversationState.ErrorKind.AI_PROVIDER,
                 e.message ?: e.kind.userMessage,
             )
         } catch (t: Throwable) {
+            if (revision.get() != turnRevision) return false
             _state.value = ConversationState.Error(
                 ConversationState.ErrorKind.AI_PROVIDER,
                 t.message ?: "AI 응답 생성 실패",
             )
+        } finally {
+            turnMutex.unlock()
         }
+        return false
     }
 
     fun markSpeaking() {
@@ -103,6 +116,7 @@ class ConversationEngine(
         _transcript.value.lastOrNull { it.role == ChatMessage.Role.ASSISTANT }
 
     fun reset() {
+        revision.incrementAndGet()
         _transcript.value = emptyList()
         _state.value = ConversationState.Idle
     }

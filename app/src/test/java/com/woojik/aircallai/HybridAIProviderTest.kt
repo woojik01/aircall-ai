@@ -17,6 +17,8 @@ import com.woojik.aircallai.core.security.CryptoEngine
 import com.woojik.aircallai.core.storage.FileCredentialManager
 import com.woojik.aircallai.settings.InMemorySettingsStore
 import com.woojik.aircallai.settings.SettingsRepository
+import kotlinx.coroutines.CancellationException
+import com.woojik.aircallai.ai.cloud.CloudApiAdapter
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -114,6 +116,18 @@ class HybridAIProviderTest {
         assertEquals(ProviderType.CLOUD, response.providerType)
         assertTrue(response.message.content.contains("hello"))
         assertEquals(1, api.networkCalls)
+    }
+
+    @Test(expected = CancellationException::class)
+    fun cloudCancellationIsPropagated() = runTest {
+        val cm = credentialManager()
+        cm.save(CloudAIProvider.KEY_SERVICE, "sk-good".toByteArray())
+        val adapter = object : CloudApiAdapter {
+            override suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String =
+                throw CancellationException("ended")
+        }
+        val provider = CloudAIProvider(cm, adapter) { CloudAIProvider.Endpoint("https://example.invalid", "m") }
+        provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "hi")))
     }
 
     @Test

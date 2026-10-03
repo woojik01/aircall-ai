@@ -4,6 +4,8 @@ import com.woojik.aircallai.audio.AudioError
 import com.woojik.aircallai.audio.SpeechRecognizerInterface
 import com.woojik.aircallai.audio.SpeechSynthesizer
 import com.woojik.aircallai.core.logging.SecureLog
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,10 +22,24 @@ class VoiceSession(
         val ttsEndMs: Long,
     )
 
+    private val turnMutex = Mutex()
     private val _metrics = MutableStateFlow<List<TurnMetrics>>(emptyList())
     val metrics: StateFlow<List<TurnMetrics>> = _metrics.asStateFlow()
 
     suspend fun runOneTurn() {
+        if (!turnMutex.tryLock()) return
+        try {
+            runTurn()
+        } catch (e: CancellationException) {
+            engine.stopListening()
+            engine.markIdle()
+            throw e
+        } finally {
+            turnMutex.unlock()
+        }
+    }
+
+    private suspend fun runTurn() {
         engine.startListening()
         val text = try {
             recognizer.recognizeOnce()
@@ -36,7 +52,7 @@ class VoiceSession(
         if (text.isNullOrBlank()) return
 
         val recognitionEnd = System.currentTimeMillis()
-        engine.submitUserMessage(text, voiceMode = true)
+        if (!engine.submitUserMessage(text, voiceMode = true)) return
         val response = (engine.state.value as? ConversationState.Speaking)?.assistantMessage ?: return
         val aiResponseEnd = System.currentTimeMillis()
 
@@ -50,12 +66,12 @@ class VoiceSession(
         val ttsEnd = System.currentTimeMillis()
         engine.markIdle()
 
-        _metrics.value = _metrics.value + TurnMetrics(
+        _metrics.value = (_metrics.value + TurnMetrics(
             recognitionEnd,
             aiResponseEnd,
             ttsStart,
             ttsEnd,
-        )
+        )).takeLast(100)
         SecureLog.d(TAG, "turn complete, aiMs=" + (aiResponseEnd - recognitionEnd) + ", ttsMs=" + (ttsEnd - ttsStart))
     }
 
