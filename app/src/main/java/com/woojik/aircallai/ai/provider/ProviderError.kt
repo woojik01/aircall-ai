@@ -11,7 +11,8 @@ enum class ProviderErrorKind(val userMessage: String) {
     UNSUPPORTED_DEVICE("이 기기는 로컬 AI를 지원하지 않습니다."),
     LOAD_FAILED("로컬 AI 모델을 로드하지 못했습니다. 다른 앱을 닫고 다시 적용하거나 모델을 다시 다운로드해 주세요."),
 
-    INFERENCE_FAILED("로컬 AI 응답 생성에 실패했습니다. 앱을 다시 시작한 뒤 짧은 입력으로 시도해 주세요."),
+    INPUT_TOO_LONG("로컬 모델의 입력 한도를 넘었습니다. 내용을 나눠서 보내 주세요."),
+    INFERENCE_FAILED("로컬 AI 응답 생성에 실패했습니다. 짧은 입력으로 다시 시도해 주세요."),
 
     // Cloud
     NO_KEY("등록된 API Key가 없습니다. 설정에서 Key를 등록해 주세요."),
