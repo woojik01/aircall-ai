@@ -10,10 +10,15 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,6 +39,7 @@ import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.woojik.aircallai.core.logging.SecureLog
 import com.woojik.aircallai.service.ConversationService
+import com.woojik.aircallai.settings.SettingsRepository
 import com.woojik.aircallai.tools.GitHubApiClient
 import com.woojik.aircallai.tools.GmailApiClient
 import kotlinx.coroutines.CoroutineScope
@@ -369,6 +375,16 @@ private fun AirCallUi(
 ) {
     val navController = rememberNavController()
     val modelScope = rememberCoroutineScope()
+    var themeMode by remember { mutableStateOf(graph.settings.themeMode()) }
+    val useDarkTheme = when (themeMode) {
+        SettingsRepository.THEME_LIGHT -> false
+        SettingsRepository.THEME_DARK -> true
+        else -> isSystemInDarkTheme()
+    }
+
+    MaterialTheme(
+        colorScheme = if (useDarkTheme) darkColorScheme() else lightColorScheme(),
+    ) {
     NavHost(navController = navController, startDestination = Routes.MAIN) {
         composable(Routes.MAIN) {
             MainScreen(
@@ -393,6 +409,7 @@ private fun AirCallUi(
                     vm.engine.updateProvider(graph.providerRouter.current())
                     vm.refreshProviderReadiness()
                 },
+                onThemeChanged = { themeMode = it },
                 onSaveApiKey = { key ->
                     graph.credentials.save(CloudAIProvider.KEY_SERVICE, key.toByteArray())
                     vm.engine.updateProvider(graph.providerRouter.current())
@@ -460,6 +477,7 @@ private fun AirCallUi(
             onApprove = { graph.toolApproval.approve() },
             onDeny = { graph.toolApproval.deny() },
         )
+    }
     }
 }
 

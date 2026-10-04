@@ -27,6 +27,16 @@ class SettingsRepository(
     private val defaultGoogleOAuthClientId: String = "",
 ) {
 
+    fun themeMode(): String {
+        val stored = store.getString(KEY_THEME_MODE)
+        return if (stored == THEME_LIGHT || stored == THEME_DARK || stored == THEME_SYSTEM) stored else THEME_SYSTEM
+    }
+
+    fun setThemeMode(mode: String) {
+        require(mode == THEME_LIGHT || mode == THEME_DARK || mode == THEME_SYSTEM) { "unknown theme: " + mode }
+        store.putString(KEY_THEME_MODE, mode)
+    }
+
     fun aiProviderMode(): String = store.getString(KEY_AI_MODE) ?: MODE_LOCAL
 
     fun setAiProviderMode(mode: String) {
@@ -133,11 +143,16 @@ class SettingsRepository(
         const val MODE_LOCAL = "local"
         const val MODE_CLOUD = "cloud"
 
+        const val THEME_SYSTEM = "system"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+
         const val DEFAULT_CLOUD_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
         const val DEFAULT_CLOUD_MODEL = "openai/gpt-oss-120b"
         private const val DEPRECATED_LLAMA_33_MODEL = "llama-3.3-70b-versatile"
 
         private const val KEY_AI_MODE = "ai_provider_mode"
+        private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_CLOUD_BASE_URL = "cloud_base_url"
         private const val KEY_CLOUD_MODEL = "cloud_model"
         private const val KEY_LOCAL_MODEL = "local_model_id"

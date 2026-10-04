@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.util.TypedValue
@@ -60,11 +61,16 @@ class CallOverlayController(
             ).toInt()
         }
 
+        val darkTheme = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        val overlayBackground = if (darkTheme) Color.rgb(32, 33, 36) else Color.WHITE
+        val overlayForeground = if (darkTheme) Color.WHITE else Color.rgb(32, 33, 36)
+
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             background = GradientDrawable().apply {
                 cornerRadius = dp(24).toFloat()
-                setColor(Color.WHITE)
+                setColor(overlayBackground)
             }
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
@@ -74,6 +80,7 @@ class CallOverlayController(
             isAllCaps = false
             minWidth = dp(72)
             minHeight = dp(48)
+            setTextColor(overlayForeground)
             // PRD-07 접근성: 명확한 텍스트 라벨 제공.
             contentDescription = label
         }
