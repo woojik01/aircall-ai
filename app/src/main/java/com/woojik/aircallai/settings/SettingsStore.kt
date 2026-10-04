@@ -27,6 +27,14 @@ class SettingsRepository(
     private val defaultGoogleOAuthClientId: String = "",
 ) {
 
+    fun themeMode(): String = store.getString(KEY_THEME_MODE)
+        ?.takeIf { it in setOf(THEME_LIGHT, THEME_DARK, THEME_SYSTEM) } ?: THEME_SYSTEM
+
+    fun setThemeMode(mode: String) {
+        require(mode in setOf(THEME_LIGHT, THEME_DARK, THEME_SYSTEM))
+        store.putString(KEY_THEME_MODE, mode)
+    }
+
     fun aiProviderMode(): String = store.getString(KEY_AI_MODE) ?: MODE_LOCAL
 
     fun setAiProviderMode(mode: String) {
@@ -130,6 +138,11 @@ class SettingsRepository(
     }
 
     companion object {
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+        const val THEME_SYSTEM = "system"
+        private const val KEY_THEME_MODE = "theme_mode"
+
         const val MODE_LOCAL = "local"
         const val MODE_CLOUD = "cloud"
 

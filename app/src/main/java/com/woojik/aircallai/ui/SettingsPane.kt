@@ -1,6 +1,7 @@
 package com.woojik.aircallai.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -25,6 +26,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     settings: SettingsRepository,
+    themeMode: String = settings.themeMode(),
+    onThemeChanged: (String) -> Unit = { settings.setThemeMode(it) },
     onModeChanged: () -> Unit = {},
     onSaveApiKey: suspend (String) -> Unit,
     onDeleteApiKey: suspend () -> Unit = {},
@@ -69,6 +72,28 @@ fun SettingsScreen(
                 .padding(padding)
                 .padding(16.dp),
         ) {
+            Text("테마", style = MaterialTheme.typography.titleMedium)
+            listOf(
+                SettingsRepository.THEME_LIGHT to "라이트",
+                SettingsRepository.THEME_DARK to "다크",
+                SettingsRepository.THEME_SYSTEM to "시스템",
+            ).forEach { (value, label) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().selectable(
+                        selected = themeMode == value,
+                        role = androidx.compose.ui.semantics.Role.RadioButton,
+                        onClick = { onThemeChanged(value) },
+                    ).padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = themeMode == value, onClick = null)
+                    Text(label, modifier = Modifier.padding(start = 12.dp))
+                }
+            }
+            Text("시스템을 선택하면 기기의 라이트·다크 설정을 따릅니다.",
+                style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
             Text("AI Mode", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(

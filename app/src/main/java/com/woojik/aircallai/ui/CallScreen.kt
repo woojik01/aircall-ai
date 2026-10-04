@@ -176,6 +176,7 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
                     enabled = controls.canEnd,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
                     ),
                     modifier = Modifier
                         .fillMaxWidth(0.7f)

@@ -10,6 +10,7 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -367,6 +368,8 @@ private fun AirCallUi(
     connectGoogle: () -> String,
     disconnectAccount: (String) -> Unit,
 ) {
+    var themeMode by remember(graph.settings) { mutableStateOf(graph.settings.themeMode()) }
+    AirCallTheme(themeMode = themeMode) {
     val navController = rememberNavController()
     val modelScope = rememberCoroutineScope()
     NavHost(navController = navController, startDestination = Routes.MAIN) {
@@ -389,6 +392,11 @@ private fun AirCallUi(
             val accounts by graph.accountRepository.connections.collectAsState()
             SettingsScreen(
                 settings = graph.settings,
+                themeMode = themeMode,
+                onThemeChanged = {
+                    graph.settings.setThemeMode(it)
+                    themeMode = it
+                },
                 onModeChanged = {
                     vm.engine.updateProvider(graph.providerRouter.current())
                     vm.refreshProviderReadiness()
@@ -463,8 +471,10 @@ private fun AirCallUi(
     }
 }
 
+}
+
 @Preview
 @Composable
 private fun AirCallAppPreview() {
-    MainScreen(onOpenCall = {}, onOpenConversation = {}, onOpenSettings = {})
+    AirCallTheme { MainScreen(onOpenCall = {}, onOpenConversation = {}, onOpenSettings = {}) }
 }
