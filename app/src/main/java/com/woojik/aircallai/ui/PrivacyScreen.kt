@@ -42,7 +42,7 @@ fun PrivacyScreen() {
                         Text(notice.title, style = MaterialTheme.typography.titleMedium)
                         Text(
                             notice.detail,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
@@ -50,7 +50,7 @@ fun PrivacyScreen() {
             }
             Text(
                 "문의: 앱 설정의 개발자 연락처 참조",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
