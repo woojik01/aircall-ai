@@ -1,10 +1,12 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val appVersion = java.util.Properties().apply {
+val appVersion = Properties().apply {
     rootProject.file("version.properties").inputStream().use { load(it) }
 }
 val requestedVersionCode = providers.gradleProperty("AIRCALL_VERSION_CODE").orNull

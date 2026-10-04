@@ -43,7 +43,25 @@ jobs:
         run: gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
       - name: Build debug and shrink production code
         timeout-minutes: 10
-        run: gradle --no-daemon --console=plain assembleDebug assembleRelease bundleRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+        env:
+          AIRCALL_KEYSTORE_PATH: ${{ runner.temp }}/ci-test-release.jks
+          AIRCALL_KEYSTORE_PASSWORD: ci-test-only
+          AIRCALL_KEY_ALIAS: ci-test
+          AIRCALL_KEY_PASSWORD: ci-test-only
+          AIRCALL_REQUIRE_RELEASE_SIGNING: 'true'
+        run: |
+          # This disposable test key is only for validating signing. Its APK/AAB is never uploaded.
+          keytool -genkeypair -keystore "$AIRCALL_KEYSTORE_PATH" -storepass:env AIRCALL_KEYSTORE_PASSWORD \
+            -keypass:env AIRCALL_KEY_PASSWORD -alias "$AIRCALL_KEY_ALIAS" -keyalg RSA -keysize 2048 \
+            -validity 2 -dname "CN=CI Test Only"
+          gradle --no-daemon --console=plain assembleDebug assembleRelease bundleRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+          CERT=$(keytool -list -v -keystore "$AIRCALL_KEYSTORE_PATH" -storepass:env AIRCALL_KEYSTORE_PASSWORD | sed -n 's/.*SHA256: //p')
+          python scripts/verify_apk.py app/build/outputs/apk/release/app-release.apk \
+            --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
+            --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
+            --certificate "$CERT" --release --output "$RUNNER_TEMP/test-release-metadata.json"
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/test-aab-signature.txt"
+          grep -q 'jar verified' "$RUNNER_TEMP/test-aab-signature.txt"
       - name: Verify installable development APK
         run: |
           mkdir -p dist
@@ -73,3 +91,6 @@ jobs:
             app/build/test-results/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Remove disposable CI signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ci-test-release.jks"
