@@ -67,8 +67,14 @@ fun SettingsDetail(
                 listOf(SettingsRepository.MODE_LOCAL to "이 기기에서 · 로컬", SettingsRepository.MODE_CLOUD to "클라우드 API").forEach { (value, label) ->
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         RadioButton(selected = mode == value, onClick = {
-                            mode = value; graph.settings.setAiProviderMode(value)
-                            vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
+                            if (mode != value) {
+                                vm.cancelText()
+                                if (graph.sessionController.isRunning) {
+                                    vm.endSession(); status = "AI 설정 변경으로 통화를 종료했습니다. 다시 시작해 주세요."
+                                }
+                                mode = value; graph.settings.setAiProviderMode(value)
+                                vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
+                            }
                         })
                         Text(label, Modifier.weight(1f))
                     }
@@ -90,8 +96,15 @@ fun SettingsDetail(
                 OutlinedTextField(endpoint, { endpoint = it }, Modifier.fillMaxWidth(), label = { Text("API 주소") }, minLines = 2, maxLines = 4)
                 OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("모델명") }, maxLines = 3)
                 Button(onClick = {
+                    val changed = endpoint.trim() != graph.settings.cloudBaseUrl() || model.trim() != graph.settings.cloudModel()
+                    val endedCall = changed && graph.sessionController.isRunning
+                    if (changed) {
+                        vm.cancelText()
+                        if (endedCall) vm.endSession()
+                    }
                     graph.settings.setCloudBaseUrl(endpoint); graph.settings.setCloudModel(model)
-                    vm.refreshProviderReadiness(); status = "연결 정보를 저장했습니다."
+                    vm.refreshProviderReadiness()
+                    status = if (endedCall) "연결 정보를 저장하고 통화를 종료했습니다. 다시 시작해 주세요." else "연결 정보를 저장했습니다."
                 }, enabled = endpoint.startsWith("https://") && model.isNotBlank()) { Text("연결 정보 저장") }
             }
             "accounts" -> {

@@ -26,6 +26,14 @@ class SettingsRepository(
     private val defaultGithubOAuthClientId: String = "",
     private val defaultGoogleOAuthClientId: String = "",
 ) {
+    // Do not migrate old installs to implicit consent. A new endpoint requires a new disclosure.
+    fun hasCloudDisclosure(endpoint: String = cloudBaseUrl()): Boolean = store.getString("privacy_cloud_v1") == endpoint
+    fun acceptCloudDisclosure() = store.putString("privacy_cloud_v1", cloudBaseUrl())
+    fun hasSpeechDisclosure(): Boolean = store.getString("privacy_speech_v1") == "accepted"
+    fun acceptSpeechDisclosure() = store.putString("privacy_speech_v1", "accepted")
+    // Store only the acknowledgement, not birthdate or identity documents.
+    fun hasMinimumAgeAcknowledgement(): Boolean = store.getString("minimum_age_14_v1") == "accepted"
+    fun acceptMinimumAgeAcknowledgement() = store.putString("minimum_age_14_v1", "accepted")
 
     fun themeMode(): String = store.getString(KEY_THEME_MODE)
         ?.takeIf { it in setOf(THEME_LIGHT, THEME_DARK, THEME_SYSTEM) } ?: THEME_SYSTEM

@@ -31,6 +31,8 @@
         android:label="${appLabel}"
         android:icon="@drawable/aircall_ai_icon"
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.AirCallAI">
 

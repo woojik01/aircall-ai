@@ -23,14 +23,19 @@ import com.woojik.aircallai.conversation.ConversationState
 import com.woojik.aircallai.session.SessionStatus
 
 @Composable
-fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Unit) {
+fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Unit,
+    onReport: (String) -> Unit = {}, onSendText: (String) -> Boolean = { vm.sendText(it); true }) {
     val state by vm.state.collectAsState()
     val transcript by vm.transcript.collectAsState()
     val sessionStatus by vm.sessionStatus.collectAsState()
     val listState = rememberLazyListState()
     var input by rememberSaveable(roomId) { mutableStateOf("") }
+    var awaitingConsent by rememberSaveable(roomId) { mutableStateOf(false) }
     val active = sessionStatus == SessionStatus.Running || sessionStatus == SessionStatus.Paused
     LaunchedEffect(roomId, transcript.size) {
+        if (awaitingConsent && transcript.lastOrNull { it.role == ChatMessage.Role.USER }?.content == input.trim()) {
+            input = ""; awaitingConsent = false
+        }
         if (transcript.isNotEmpty()) listState.animateScrollToItem(transcript.lastIndex)
     }
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -64,6 +69,9 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                                 Text(if (user) "나" else "AirCall", style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
                                 androidx.compose.foundation.text.selection.SelectionContainer { Text(message.content, style = MaterialTheme.typography.bodyLarge) }
+                                if (message.role == ChatMessage.Role.ASSISTANT) {
+                                    TextButton(onClick = { onReport(message.content) }) { Text("응답 신고") }
+                                }
                             }
                         }
                     }
@@ -99,7 +107,9 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                 modifier = Modifier.weight(1f), placeholder = { Text("메시지를 입력하세요") },
                 shape = RoundedCornerShape(24.dp), maxLines = 5,
                 textStyle = MaterialTheme.typography.bodyLarge)
-            Button(onClick = { val text = input; input = ""; vm.sendText(text) },
+            Button(onClick = {
+                if (onSendText(input)) { input = ""; awaitingConsent = false } else awaitingConsent = true
+            },
                 enabled = roomId != null && input.isNotBlank() && state !is ConversationState.Processing && !active,
                 contentPadding = PaddingValues(horizontal = 18.dp), modifier = Modifier.heightIn(min = 56.dp)) { Text("전송") }
         }

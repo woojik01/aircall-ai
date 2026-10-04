@@ -54,6 +54,7 @@ import kotlinx.coroutines.SupervisorJob
  * 연결된 토큰은 CredentialManager에 암호화 저장되고 기존 Tool 계층과 동기화된다.
  */
 class AppGraph(context: Context) {
+    val contentReports = com.woojik.aircallai.privacy.ContentReportClient(BuildConfig.AIRCALL_REPORT_ENDPOINT)
     private val settingsStore = SharedPrefsStore(context)
     val settings = SettingsRepository(
         settingsStore,
@@ -117,7 +118,7 @@ class AppGraph(context: Context) {
             "gmail.send_email to=<주소> subject=<제목> body=<내용> — 이메일을 보낸다 (승인 필요)"
 
     val localProvider: AIProvider = ToolBridgedAIProvider(
-        base = LocalAIProvider(localModelAdapter),
+        base = com.woojik.aircallai.privacy.SafetyAIProvider(LocalAIProvider(localModelAdapter)),
         executor = toolExecutor,
         logger = toolLogger,
         toolsDescription = toolCatalog,
@@ -125,16 +126,17 @@ class AppGraph(context: Context) {
         approvalHandler = { request -> toolApproval.awaitResult(request) },
     )
     val cloudProvider: AIProvider = ToolBridgedAIProvider(
-        base = CloudAIProvider(
+        base = com.woojik.aircallai.privacy.SafetyAIProvider(CloudAIProvider(
             credentials = credentials,
             apiAdapter = HttpCloudApiAdapter(),
+            endpointAllowed = { settings.hasCloudDisclosure(it.baseUrl) },
             endpointProvider = {
                 CloudAIProvider.Endpoint(
                     baseUrl = settings.cloudBaseUrl(),
                     model = settings.cloudModel(),
                 )
             },
-        ),
+        )),
         executor = toolExecutor,
         logger = toolLogger,
         toolsDescription = toolCatalog,

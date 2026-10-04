@@ -1,0 +1,33 @@
+name: Prepare Play Documents
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  documents:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
+      AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
+      AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
+      AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
+      AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render policy with real publisher information
+        run: |
+          python scripts/check_play_config.py --policy-output dist/privacy-policy.html
+          cp docs/play/STORE_LISTING.md docs/play/DATA_SAFETY.md docs/play/REVIEW_AND_TEST.md dist/
+          echo '### 게시 전 확인할 문서' >> "$GITHUB_STEP_SUMMARY"
+          echo 'privacy-policy.html을 정한 공개 HTTPS 주소에 게시하세요. 이 워크플로는 웹 게시나 Play 제출을 수행하지 않습니다.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aircall-play-documents
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

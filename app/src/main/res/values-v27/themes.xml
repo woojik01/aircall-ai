@@ -4,8 +4,8 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:windowBackground">#F7F9FF</item>
         <item name="android:statusBarColor">#F7F9FF</item>
-        <!-- API 26 cannot draw dark navigation buttons. Keep their background dark. -->
-        <item name="android:navigationBarColor">#0D1426</item>
+        <item name="android:navigationBarColor">#F7F9FF</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>
