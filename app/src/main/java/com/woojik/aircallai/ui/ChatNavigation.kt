@@ -129,7 +129,12 @@ fun AirCallUi(
                         storageError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
                         if (!ready) {
                             if (storageError == null) LinearProgressIndicator(Modifier.fillMaxWidth())
-                            else TextButton(onClick = { scope.launch { graph.chatRooms.initialize() } }) { Text("기록 다시 읽기") }
+                            else TextButton(onClick = { scope.launch {
+                                graph.chatRooms.initialize()
+                                if (graph.chatRooms.ready.value && graph.chatRooms.activeId.value == null) {
+                                    vm.engine.restore(graph.chatRooms.newRoom().messages)
+                                }
+                            } }) { Text("기록 다시 읽기") }
                         } else NavHost(navController = nav, startDestination = "chat", modifier = Modifier.weight(1f)) {
                             composable("chat") { ConversationScreen(vm, activeId, onOpenCall = { nav.navigate("call") }) }
                             composable("call") { CallScreen(vm, onExit = { nav.popBackStack() }) }

@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity() {
             appGraph.chatRooms.initialize()
             if (appGraph.chatRooms.ready.value && appGraph.chatRooms.activeId.value == null) {
                 model.engine.restore(appGraph.chatRooms.newRoom().messages)
-            } else if (savedInstanceState == null && intent.action == Intent.ACTION_MAIN && !appGraph.sessionController.isRunning) {
+            } else if (appGraph.chatRooms.ready.value && savedInstanceState == null && intent.action == Intent.ACTION_MAIN && !appGraph.sessionController.isRunning) {
                 model.prepareForRoomChange()
                 model.engine.restore(appGraph.chatRooms.newRoom().messages)
             }

@@ -103,7 +103,10 @@ fun SettingsDetail(
                         connecting = true
                         scope.launch {
                             try { status = connectGitHub { deviceCode = it } }
-                            finally { connecting = false }
+                            catch (e: kotlinx.coroutines.CancellationException) {
+                                graph.accountRepository.refresh(System.currentTimeMillis())
+                                throw e
+                            } finally { connecting = false }
                         }
                     }, enabled = !connecting) { Text(if (connecting) "승인 대기 중" else "GitHub로 로그인") }
                     TextButton(onClick = { disconnect("github") }, enabled = !connecting) { Text("연결 해제") }
