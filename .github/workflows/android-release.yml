@@ -38,6 +38,8 @@ jobs:
         with:
           gradle-version: '8.13'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
       - name: Require production signing and restore private keystore
         env:
           AIRCALL_KEYSTORE_BASE64: ${{ secrets.AIRCALL_KEYSTORE_BASE64 }}
@@ -59,7 +61,6 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write(f'AIRCALL_KEYSTORE_PATH={target}\nAIRCALL_REQUIRE_RELEASE_SIGNING=true\n')
           PY
-          sdkmanager "platforms;android-36" "build-tools;35.0.0"
       - name: Tests and signed APK/AAB
         run: |
           python -m unittest discover -s scripts -p 'test_*.py' -v

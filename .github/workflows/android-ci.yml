@@ -29,10 +29,11 @@ jobs:
           gradle-version: '8.13'
       - name: Set up Android SDK command line tools
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
       - name: Prepare Android SDK and stable development identity
         run: |
           test -f app/debug.keystore
-          sdkmanager "platforms;android-36" "build-tools;35.0.0"
           echo "AIRCALL_VERSION_CODE=$((30000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android >> "$GITHUB_STEP_SUMMARY"
       - name: Release verification unit tests
