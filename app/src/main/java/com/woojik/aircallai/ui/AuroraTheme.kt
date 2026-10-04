@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import com.woojik.aircallai.settings.SettingsRepository
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -53,10 +55,24 @@ internal fun airCallColors(dark: Boolean) = if (dark) darkColorScheme(
         errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
     )
 
+internal fun usesDarkTheme(mode: String, systemDark: Boolean): Boolean = when (mode) {
+    SettingsRepository.THEME_LIGHT -> false
+    SettingsRepository.THEME_DARK -> true
+    else -> systemDark
+}
+
 @Composable
-fun AirCallTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    MaterialTheme(colorScheme = airCallColors(dark), typography = AirCallTypography, content = content)
+fun AirCallTheme(
+    themeMode: String = SettingsRepository.THEME_SYSTEM,
+    content: @Composable () -> Unit,
+) {
+    val dark = usesDarkTheme(themeMode, isSystemInDarkTheme())
+    MaterialTheme(colorScheme = airCallColors(dark), typography = AirCallTypography) {
+        // MaterialTheme alone does not supply LocalContentColor. Transparent screens
+        // must inherit a theme-aware foreground instead of Compose's default black.
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground, content = content)
+    }
 }
 
 @Composable

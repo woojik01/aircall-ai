@@ -1,5 +1,6 @@
 package com.woojik.aircallai.ui
 
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,7 +21,7 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingCategory("ai", "AI 및 모델", "로컬 · 클라우드, 모델 다운로드", onOpen)
         SettingCategory("accounts", "도구 및 계정", "GitHub · Google 로그인", onOpen)
-        SettingCategory("appearance", "화면 및 알림", "시스템 테마, 알림 설정", onOpen)
+        SettingCategory("appearance", "화면 및 알림", "라이트 · 다크 · 시스템, 알림 설정", onOpen)
         SettingCategory("permissions", "작업 승인", "허용한 도구 작업 관리", onOpen)
         SettingCategory("privacy", "개인정보", "기기 저장과 데이터 전송 안내", onOpen)
     }
@@ -45,6 +46,8 @@ fun SettingsDetail(
     connectGitHub: suspend ((String) -> Unit) -> String,
     connectGoogle: () -> String, disconnect: (String) -> Unit,
     openNotificationSettings: () -> Unit,
+    themeMode: String,
+    onThemeChanged: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val accounts by graph.accountRepository.connections.collectAsState()
@@ -135,7 +138,29 @@ fun SettingsDetail(
             }
             "appearance" -> {
                 Text("은은한 오로라", style = MaterialTheme.typography.titleLarge)
-                Text("밝은 남색을 강조색으로 사용하며, 기기의 밝은 모드와 어두운 모드에 자동으로 맞춥니다.")
+                Text("밝은 남색 강조색과 오로라 배경을 선택한 테마에 맞춥니다.")
+                Text("테마", style = MaterialTheme.typography.titleMedium)
+                listOf(
+                    SettingsRepository.THEME_LIGHT to "라이트",
+                    SettingsRepository.THEME_DARK to "다크",
+                    SettingsRepository.THEME_SYSTEM to "시스템 설정",
+                ).forEach { (value, label) ->
+                    Row(Modifier.fillMaxWidth().selectable(
+                        selected = themeMode == value,
+                        role = androidx.compose.ui.semantics.Role.RadioButton,
+                        onClick = {
+                            graph.settings.setThemeMode(value)
+                            onThemeChanged(value)
+                        },
+                    ).padding(vertical = 8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        RadioButton(selected = themeMode == value, onClick = null)
+                        Text(label, modifier = Modifier.padding(start = 12.dp),
+                            color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                Text("시스템 설정을 선택하면 기기의 다크 모드 변경을 자동으로 반영합니다.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 HorizontalDivider()
                 Text("알림", style = MaterialTheme.typography.titleMedium)
                 Text("통화 알림에서 일시정지·재개, 음성 출력 음소거, 종료를 사용할 수 있습니다. 모델 다운로드 알림에서는 진행률을 확인하고 취소할 수 있습니다.")

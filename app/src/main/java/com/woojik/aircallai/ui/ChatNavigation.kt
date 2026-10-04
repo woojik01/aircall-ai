@@ -35,6 +35,7 @@ fun AirCallUi(
     connectGoogle: () -> String, disconnectAccount: (String) -> Unit,
     startDownload: (String) -> Unit,
 ) {
+    var themeMode by remember { mutableStateOf(graph.settings.themeMode()) }
     val nav = rememberNavController()
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -65,7 +66,7 @@ fun AirCallUi(
         else openChat()
     }
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
-    AirCallTheme {
+    AirCallTheme(themeMode = themeMode) {
         AuroraBackground {
             ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = ready, drawerContent = {
                 ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 360.dp)) {
@@ -83,6 +84,7 @@ fun AirCallUi(
                         items(rooms, key = { it.id }) { room ->
                             var menu by remember { mutableStateOf(false) }
                             Surface(color = if (room.id == activeId) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                contentColor = if (room.id == activeId) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                                 shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                     Text(room.title, Modifier.weight(1f).clickable { changeRoom(room.id) }.padding(16.dp),
@@ -148,6 +150,7 @@ fun AirCallUi(
                             } }
                             composable("settings/{category}") { target ->
                                 SettingsDetail(target.arguments?.getString("category").orEmpty(), graph, vm,
+                                    themeMode = themeMode, onThemeChanged = { themeMode = it },
                                     onOpenLocalModels = { nav.navigate("models") }, connectGitHub = connectGitHub,
                                     connectGoogle = connectGoogle, disconnect = disconnectAccount,
                                     openNotificationSettings = { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)

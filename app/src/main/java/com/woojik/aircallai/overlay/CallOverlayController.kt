@@ -2,6 +2,11 @@ package com.woojik.aircallai.overlay
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.ComponentCallbacks
+import android.content.SharedPreferences
+import android.content.res.Configuration
+import com.woojik.aircallai.settings.SettingsRepository
+import com.woojik.aircallai.settings.SharedPrefsStore
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -35,6 +40,35 @@ class CallOverlayController(
         val end: String,
     )
 
+    private val settings = SettingsRepository(SharedPrefsStore(context))
+    private val prefs = context.getSharedPreferences("aircall_settings", Context.MODE_PRIVATE)
+    private val themeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == SettingsRepository.KEY_THEME_MODE) refreshTheme()
+    }
+    private val configurationListener = object : ComponentCallbacks {
+        override fun onConfigurationChanged(newConfig: Configuration) { refreshTheme() }
+        override fun onLowMemory() = Unit
+    }
+
+    private fun isDarkTheme(): Boolean = when (settings.themeMode()) {
+        SettingsRepository.THEME_LIGHT -> false
+        SettingsRepository.THEME_DARK -> true
+        else -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    private fun refreshTheme() {
+        val row = rootView ?: return
+        val dark = isDarkTheme()
+        (row.background as? GradientDrawable)?.setColor(if (dark) Color.rgb(18, 28, 48) else Color.WHITE)
+        for (index in 0 until row.childCount) {
+            (row.getChildAt(index) as? Button)?.apply {
+                setTextColor(if (dark) Color.rgb(224, 230, 255) else Color.rgb(24, 33, 58))
+                backgroundTintList = android.content.res.ColorStateList.valueOf(
+                    if (dark) Color.rgb(37, 63, 140) else Color.rgb(237, 241, 255))
+            }
+        }
+    }
+
     private val windowManager = context.getSystemService(WindowManager::class.java)
     private var rootView: LinearLayout? = null
     private var muteButton: Button? = null
@@ -60,7 +94,7 @@ class CallOverlayController(
             ).toInt()
         }
 
-        val dark = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val dark = isDarkTheme()
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -110,6 +144,8 @@ class CallOverlayController(
 
         windowManager.addView(row, params)
         rootView = row
+        prefs.registerOnSharedPreferenceChangeListener(themeListener)
+        context.registerComponentCallbacks(configurationListener)
     }
 
     /** 세션 상태에 맞춰 버튼 라벨/액션을 갱신한다. */
@@ -129,10 +165,11 @@ class CallOverlayController(
 
     fun hide() {
         val row = rootView ?: return
+        prefs.unregisterOnSharedPreferenceChangeListener(themeListener)
+        context.unregisterComponentCallbacks(configurationListener)
         rootView = null
         muteButton = null
         pauseButton = null
         runCatching { windowManager.removeView(row) }
     }
 }
-
