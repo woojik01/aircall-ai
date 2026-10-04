@@ -87,6 +87,8 @@ def verify(apk, build_tools, expected_package, expected_code, expected_digest=No
     if len(digests) != 1:
         raise ValueError("Expected exactly one APK signing certificate")
     digest = normalize_digest(digests[0])
+    if release and digest == "80aa900bdf23c5abde473e24875ce91adbc0882f86f3d3dbd5b42a7e866c5bf4":
+        raise ValueError("The public development certificate cannot sign production APKs")
     if expected_digest and digest != normalize_digest(expected_digest):
         raise ValueError("APK certificate changed: existing installations cannot update")
     if release and not expected_digest:

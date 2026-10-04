@@ -37,6 +37,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
       - name: Require production signing and restore private keystore
         env:
           AIRCALL_KEYSTORE_BASE64: ${{ secrets.AIRCALL_KEYSTORE_BASE64 }}

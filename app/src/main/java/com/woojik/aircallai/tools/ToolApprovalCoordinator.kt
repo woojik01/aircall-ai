@@ -30,7 +30,7 @@ class ToolApprovalCoordinator(
 
     /** Keep the AI turn suspended until the reviewed request actually completes. */
     suspend fun awaitResult(request: ToolRequest): ToolResult = approvalLock.withLock {
-        val result = CompletableDeferred<ToolResult>()
+        val result = CompletableDeferred<ToolResult>(kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job])
         waiting = result
         _pending.value = request
         try { result.await() }
@@ -42,7 +42,7 @@ class ToolApprovalCoordinator(
         }
     }
 
-    /** 승인이 필요한 요청을 UI에 올린다. 이미 대기 중이면 덮어쓴다. */
+    /** 승인이 필요한 요청을 UI에 올린다. 이미 대기 중인 요청을 덮어쓰지 않는다. */
     fun submit(request: ToolRequest) {
         if (_pending.value != null || waiting != null) return
         _pending.value = request
@@ -74,6 +74,7 @@ class ToolApprovalCoordinator(
 
     /** 사용자 거부: 승인 없이 요청을 버린다. */
     fun deny() {
+        if (_pending.value == null) return
         waiting?.complete(ToolResult(false, "사용자가 작업 실행을 거부했습니다"))
         _pending.value = null
     }
