@@ -9,7 +9,9 @@ class ToolExecutor(tools: List<Tool>, private val permissions: ToolPermissionSto
         if (!permissions.isAllowed(tool.name, request.action, risk)) {
             return ToolResult(false, "사용자 승인이 필요한 작업입니다")
         }
-        return runCatching { tool.execute(request) }
-            .getOrElse { ToolResult(false, "도구 실행에 실패했습니다") }
+        return try { tool.execute(request) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { ToolResult(false, "도구 실행에 실패했습니다") }
     }
 }
+

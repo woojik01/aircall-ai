@@ -26,7 +26,7 @@ import com.woojik.aircallai.privacy.PrivacyNotices
 @Composable
 fun PrivacyScreen() {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("개인정보 데이터 흐름") }) },
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
     ) { padding ->
         Column(
             modifier = Modifier
@@ -49,10 +49,11 @@ fun PrivacyScreen() {
                 }
             }
             Text(
-                "문의: 앱 설정의 개발자 연락처 참조",
+                "채팅방 기록은 기기에 암호화해 저장됩니다. 사이드 메뉴에서 방을 삭제하면 해당 기록이 삭제됩니다.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
     }
 }
+

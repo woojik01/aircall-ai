@@ -34,6 +34,7 @@ class GoogleOAuthClient : OAuthProvider {
         // gmail.modify: 읽기 + 메일 상태/라벨 변경 등에 필요한 Gmail 권한.
         // gmail.send: 메일 보내기 권한. 기존 https://mail.google.com/보다 범위를 줄인다.
         const val SCOPE_GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify"
+        const val SCOPE_CALENDAR_EVENTS = "https://www.googleapis.com/auth/calendar.events"
         const val SCOPE_GMAIL_SEND = "https://www.googleapis.com/auth/gmail.send"
 
         // 기존 코드/외부 호출과의 호환을 위해 유지하되 Authorization URL에는 사용하지 않는다.
@@ -50,3 +51,4 @@ class GoogleOAuthClient : OAuthProvider {
         fun callbackSchemeFor(clientId: String): String? = null
     }
 }
+

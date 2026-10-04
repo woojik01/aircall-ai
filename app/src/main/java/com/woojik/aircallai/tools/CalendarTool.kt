@@ -35,14 +35,20 @@ class CalendarTool(
     private val adapter: CalendarAdapter,
 ) : Tool {
     override val name = "calendar"
-    override val description = "기기 캘린더의 일정을 조회하거나 새 일정을 만드는 도구"
+    override val description = "Google 캘린더의 일정을 조회하거나 새 일정을 만드는 도구"
 
     override fun riskFor(action: String) = when (action) {
         "read_upcoming" -> ToolRisk.READ
         else -> ToolRisk.WRITE
     }
 
-    override suspend fun execute(request: ToolRequest): ToolResult {
+    override suspend fun execute(request: ToolRequest): ToolResult = try {
+        executeRequest(request)
+    } catch (e: CalendarAccessException) {
+        ToolResult(false, e.message ?: "Google 캘린더 연결을 확인해 주세요")
+    }
+
+    private suspend fun executeRequest(request: ToolRequest): ToolResult {
         return when (request.action) {
             "read_upcoming" -> {
                 val limit = request.arguments["limit"]?.toIntOrNull() ?: 5
@@ -65,3 +71,4 @@ class CalendarTool(
         }
     }
 }
+

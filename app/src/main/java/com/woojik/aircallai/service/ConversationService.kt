@@ -47,6 +47,7 @@ class ConversationService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    private var foreground = false
     private lateinit var ttsEngine: AndroidSpeechSynthesizerEngine
     private lateinit var session: VoiceSession
 
@@ -108,7 +109,7 @@ class ConversationService : Service() {
                     SecureLog.d(TAG, "mic permission missing; not starting session")
                     repository.controller.end()
                     stopSelf()
-                    return START_STICKY
+                    return START_NOT_STICKY
                 }
                 startInForeground()
                 if (!repository.controller.isRunning) {
@@ -117,7 +118,7 @@ class ConversationService : Service() {
             }
             ACTION_PAUSE -> repository.controller.pause()
             ACTION_RESUME -> repository.controller.resume()
-            ACTION_MUTE -> repository.controller.setMuted(true)
+            ACTION_MUTE -> { repository.controller.setMuted(true); session.stopSpeaking() }
             ACTION_UNMUTE -> repository.controller.setMuted(false)
             ACTION_END -> endSession()
             else -> {
@@ -127,7 +128,7 @@ class ConversationService : Service() {
                 stopSelf()
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     /** 한 턴 = STT -> AI -> TTS. 재생 완료 후 잠깐 쉬어 불필요한 CPU 사용을 줄인다 (PRD-05). */
@@ -140,6 +141,8 @@ class ConversationService : Service() {
         session.stopSpeaking()
         repository.controller.end()
         overlay.hide()
+        foreground = false
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
@@ -155,6 +158,7 @@ class ConversationService : Service() {
             0
         }
         ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), type)
+        foreground = true
     }
 
     private fun hasMicPermission(): Boolean =
@@ -171,6 +175,7 @@ class ConversationService : Service() {
     }
 
     private fun updateNotification() {
+        if (!foreground) return
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, buildNotification())
     }
@@ -226,12 +231,17 @@ class ConversationService : Service() {
         PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).setAction("aircall.OPEN_CALL")
+                .putExtra(MainActivity.EXTRA_SCREEN, "call")
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
     override fun onDestroy() {
         super.onDestroy()
+        foreground = false
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         overlay.hide()
         repository.audioHooks = null
         repository.controller.end()
@@ -255,3 +265,4 @@ class ConversationService : Service() {
         private const val TAG = "ConversationService"
     }
 }
+
