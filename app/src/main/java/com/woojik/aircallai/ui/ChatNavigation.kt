@@ -72,7 +72,10 @@ fun AirCallUi(
     AirCallTheme(themeMode = themeMode) {
         AuroraBackground {
             ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = ready, drawerContent = {
-                ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 360.dp)) {
+                ModalDrawerSheet(
+                    modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 360.dp),
+                    windowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout),
+                ) {
                     Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Image(painterResource(R.drawable.aircall_ai_icon), "AirCall AI 아이콘",
                             Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)))
@@ -112,8 +115,19 @@ fun AirCallUi(
                         } })
                 }
             }) {
-                Scaffold(containerColor = Color.Transparent, topBar = {
-                    Surface(color = Color.Transparent) {
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout),
+                    topBar = {
+                    // A custom top bar must handle its own top inset; Scaffold only
+                    // forwards the measured bar height to the screen content.
+                    Surface(
+                        color = Color.Transparent,
+                        modifier = Modifier.windowInsetsPadding(
+                            WindowInsets.systemBars.union(WindowInsets.displayCutout)
+                                .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                        ),
+                    ) {
                         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             TextButton(onClick = {
@@ -135,7 +149,9 @@ fun AirCallUi(
                         }
                     }
                 }) { padding ->
-                    Column(Modifier.fillMaxSize().padding(padding)) {
+                    // Consume Scaffold padding so nested screens do not apply system
+                    // bar insets twice; their IME padding still handles the keyboard.
+                    Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
                         storageError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
                         taskEvents.lastOrNull { it.roomId == activeId }?.let { task ->
                             Text(task.summary, color = if (task.status == com.woojik.aircallai.tools.ToolExecutionStatus.FAILED)
