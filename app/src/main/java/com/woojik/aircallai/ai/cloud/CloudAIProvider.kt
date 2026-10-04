@@ -17,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 class CloudAIProvider(
     private val credentials: CredentialManager,
     private val apiAdapter: CloudApiAdapter,
+    private val endpointAllowed: (Endpoint) -> Boolean = { true },
     private val endpointProvider: () -> Endpoint,
 ) : AIProvider {
 
@@ -34,6 +35,8 @@ class CloudAIProvider(
             ?: throw AIProviderException(ProviderErrorKind.NO_KEY)
 
         val endpoint = endpointProvider()
+        // Check the captured destination immediately before the adapter can transmit data.
+        if (!endpointAllowed(endpoint)) throw AIProviderException(ProviderErrorKind.CONSENT_REQUIRED)
         val text = try {
             apiAdapter.chat(apiKey, endpoint.baseUrl, endpoint.model, history)
         } catch (e: CancellationException) {

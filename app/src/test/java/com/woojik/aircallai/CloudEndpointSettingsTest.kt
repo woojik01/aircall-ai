@@ -31,10 +31,12 @@ class CloudEndpointSettingsTest {
     }
 
     private class CapturingAdapter : CloudApiAdapter {
+        var calls = 0
         var apiKey: String? = null
         var baseUrl: String? = null
         var model: String? = null
         override suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String {
+            calls++
             this.apiKey = apiKey
             this.baseUrl = baseUrl
             this.model = model
@@ -111,6 +113,34 @@ class CloudEndpointSettingsTest {
             fail("expected API_ERROR for empty endpoint")
         } catch (e: AIProviderException) {
             assertEquals(ProviderErrorKind.API_ERROR, e.kind)
+        }
+    }
+
+    @Test
+    fun networkRequestsRequireConsentForTheirActualDestination() = runTest {
+        val settings = SettingsRepository(InMemorySettingsStore())
+        val cm = FileCredentialManager(tmp.newFolder(), NoopCrypto())
+        cm.save(CloudAIProvider.KEY_SERVICE, "test-key".toByteArray())
+        val adapter = CapturingAdapter()
+        val provider = CloudAIProvider(cm, adapter,
+            endpointAllowed = { settings.hasCloudDisclosure(it.baseUrl) }) {
+            CloudAIProvider.Endpoint(settings.cloudBaseUrl(), settings.cloudModel())
+        }
+        val history = listOf(ChatMessage(ChatMessage.Role.USER, "private message"))
+        for (destination in listOf(settings.cloudBaseUrl(), "https://different-ai.example.net/v1")) {
+            settings.setCloudBaseUrl(destination)
+            val before = adapter.calls
+            try {
+                provider.respond(history)
+                fail("must not transmit before consent")
+            } catch (e: AIProviderException) {
+                assertEquals(ProviderErrorKind.CONSENT_REQUIRED, e.kind)
+            }
+            assertEquals(before, adapter.calls)
+            settings.acceptCloudDisclosure()
+            provider.respond(history)
+            assertEquals(before + 1, adapter.calls)
+            assertEquals(destination, adapter.baseUrl)
         }
     }
 }

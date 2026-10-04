@@ -15,6 +15,7 @@ enum class ProviderErrorKind(val userMessage: String) {
     INFERENCE_FAILED("로컬 AI 추론에 실패했습니다. 로컬 모델 화면에서 실행 장치와 오류 코드를 확인해 주세요."),
 
     // Cloud
+    CONSENT_REQUIRED("클라우드 데이터 사용 동의가 필요합니다. 채팅을 전송하거나 통화를 다시 시작해 안내를 확인해 주세요."),
     NO_KEY("등록된 API Key가 없습니다. 설정에서 Key를 등록해 주세요."),
     AUTH_FAILED("API Key가 올바르지 않습니다."),
     QUOTA_EXCEEDED("API 사용량 한도를 초과했습니다."),

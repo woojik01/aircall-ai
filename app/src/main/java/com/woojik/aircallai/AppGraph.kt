@@ -129,6 +129,7 @@ class AppGraph(context: Context) {
         base = com.woojik.aircallai.privacy.SafetyAIProvider(CloudAIProvider(
             credentials = credentials,
             apiAdapter = HttpCloudApiAdapter(),
+            endpointAllowed = { settings.hasCloudDisclosure(it.baseUrl) },
             endpointProvider = {
                 CloudAIProvider.Endpoint(
                     baseUrl = settings.cloudBaseUrl(),
