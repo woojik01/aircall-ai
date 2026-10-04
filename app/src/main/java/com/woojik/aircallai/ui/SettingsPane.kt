@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     settings: SettingsRepository,
     onModeChanged: () -> Unit = {},
+    onThemeChanged: (String) -> Unit = {},
     onSaveApiKey: suspend (String) -> Unit,
     onDeleteApiKey: suspend () -> Unit = {},
     onOpenLocalModels: () -> Unit = {},
@@ -46,6 +47,7 @@ fun SettingsScreen(
     onRevokeToolApproval: suspend (String) -> Unit = {},
 ) {
     var mode by remember { mutableStateOf(settings.aiProviderMode()) }
+    var themeMode by remember { mutableStateOf(settings.themeMode()) }
     var apiKeyInput by remember { mutableStateOf(
 "") }
     var gitHubTokenInput by remember { mutableStateOf("") }
@@ -69,6 +71,33 @@ fun SettingsScreen(
                 .padding(padding)
                 .padding(16.dp),
         ) {
+            Text("테마", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "앱 전체의 배경과 모든 텍스트 색상이 선택한 테마에 맞춰 자동으로 변경됩니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
+            listOf(
+                SettingsRepository.THEME_SYSTEM to "시스템 설정",
+                SettingsRepository.THEME_LIGHT to "라이트",
+                SettingsRepository.THEME_DARK to "다크",
+            ).forEach { (value, label) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = themeMode == value,
+                        onClick = {
+                            settings.setThemeMode(value)
+                            themeMode = value
+                            onThemeChanged(value)
+                        },
+                    )
+                    Text(label, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
             Text("AI Mode", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
