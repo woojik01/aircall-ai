@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 
 plugins {
     id("com.android.application")
@@ -8,6 +9,33 @@ plugins {
 
 val appVersion = Properties().apply {
     rootProject.file("version.properties").inputStream().use { load(it) }
+}
+val playProperties = Properties().apply {
+    rootProject.file("config/play.properties").inputStream().use { load(it) }
+}
+fun playValue(name: String): String = (providers.gradleProperty(name).orNull
+    ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+    ?: playProperties.getProperty(name, "")).trim()
+fun javaString(value: String): String = "\"" + value.replace("\\", "\\\\")
+    .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
+val playFieldNames = listOf("AIRCALL_DEVELOPER_NAME", "AIRCALL_SUPPORT_EMAIL",
+    "AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT", "AIRCALL_REPORT_RETENTION_DAYS")
+if (providers.environmentVariable("AIRCALL_REQUIRE_PLAY_CONFIG").orNull == "true") {
+    require(playFieldNames.all { playValue(it).isNotBlank() }) {
+        "Complete config/play.properties or matching Actions variables before a Play release."
+    }
+    listOf("AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT").forEach { name ->
+        val uri = URI(playValue(name))
+        require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) {
+            "$name must be a public HTTPS URL."
+        }
+    }
+    require(playValue("AIRCALL_SUPPORT_EMAIL").matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+"))) {
+        "A real public support email is required."
+    }
+    require(playValue("AIRCALL_REPORT_RETENTION_DAYS").toIntOrNull()?.let { it in 1..365 } == true) {
+        "Report retention must be between 1 and 365 days."
+    }
 }
 val requestedVersionCode = providers.gradleProperty("AIRCALL_VERSION_CODE").orNull
     ?: appVersion.getProperty("versionCode")
@@ -37,6 +65,7 @@ android {
             ?: error("AIRCALL_VERSION_CODE must be an integer between 3 and 2100000000")
         versionName = appVersion.getProperty("versionName")
         manifestPlaceholders["appLabel"] = "AirCall AI"
+        playFieldNames.forEach { name -> buildConfigField("String", name, javaString(playValue(name))) }
 
         // PRD-09 소셜 로그인 UX: OAuth Client ID는 공개값이므로 빌드 시점 기본값으로 제공한다.
         val githubOAuthClientId = (project.findProperty("GITHUB_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()

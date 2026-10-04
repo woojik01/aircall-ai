@@ -39,9 +39,15 @@ jobs:
           keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android >> "$GITHUB_STEP_SUMMARY"
       - name: Release verification unit tests
         run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Report receiver tests
+        run: node --test support/report-receiver/receiver.test.cjs
       - name: Android unit tests
         timeout-minutes: 12
-        run: gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+        run: gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest lintRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+      - name: Download pinned bundletool
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          echo 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  '"$RUNNER_TEMP/bundletool.jar" | sha256sum --check
       - name: Build debug and shrink production code
         timeout-minutes: 10
         env:
@@ -63,6 +69,11 @@ jobs:
             --certificate "$CERT" --release --output "$RUNNER_TEMP/test-release-metadata.json"
           jarsigner -verify app/build/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/test-aab-signature.txt"
           grep -q 'jar verified' "$RUNNER_TEMP/test-aab-signature.txt"
+          python scripts/verify_aab.py app/build/outputs/bundle/release/app-release.aab \
+            --bundletool "$RUNNER_TEMP/bundletool.jar" --certificate "$CERT" \
+            --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
+            --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
+            --output "$RUNNER_TEMP/test-aab-metadata.json"
       - name: Verify installable development APK
         run: |
           mkdir -p dist

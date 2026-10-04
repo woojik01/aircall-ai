@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -52,6 +53,23 @@ fun AirCallUi(
     var editing by remember { mutableStateOf<ChatRoom?>(null) }
     var deleting by remember { mutableStateOf<ChatRoom?>(null) }
     var rename by remember { mutableStateOf("") }
+    var reportResponse by rememberSaveable { mutableStateOf<String?>(null) }
+    var reportOpen by rememberSaveable { mutableStateOf(false) }
+    var pendingText by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingVoice by rememberSaveable { mutableStateOf(false) }
+    val usesCloud = graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD
+    fun report(content: String?) { reportResponse = content?.take(4000); reportOpen = true }
+    fun sendText(text: String) {
+        if (graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD &&
+            !graph.settings.hasCloudDisclosure()) pendingText = text
+        else vm.sendText(text)
+    }
+    fun startVoice() {
+        if (!graph.settings.hasSpeechDisclosure() ||
+            (graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD && !graph.settings.hasCloudDisclosure())) {
+            pendingVoice = true
+        } else vm.onMicTap()
+    }
     fun openChat() { nav.navigate("chat") { popUpTo("chat") { inclusive = true }; launchSingleTop = true } }
     fun changeRoom(id: String? = null) {
         scope.launch {
@@ -168,8 +186,10 @@ fun AirCallUi(
                                 }
                             } }) { Text("기록 다시 읽기") }
                         } else NavHost(navController = nav, startDestination = "chat", modifier = Modifier.weight(1f)) {
-                            composable("chat") { ConversationScreen(vm, activeId, onOpenCall = { nav.navigate("call") }) }
-                            composable("call") { CallScreen(vm, onExit = { nav.popBackStack() }) }
+                            composable("chat") { ConversationScreen(vm, activeId, onOpenCall = { nav.navigate("call") },
+                                onReport = { report(it) }, onSendText = { sendText(it) }) }
+                            composable("call") { CallScreen(vm, onExit = { nav.popBackStack() },
+                                onStartSession = { startVoice() }, onReport = { report(it) }) }
                             composable("settings") { SettingsCategories { category ->
                                 nav.navigate(if (category == "privacy") "privacy" else "settings/$category")
                             } }
@@ -190,7 +210,9 @@ fun AirCallUi(
                                             .putExtra(com.woojik.aircallai.service.ModelDownloadService.EXTRA_MODEL, it.id))
                                     })
                             }
-                            composable("privacy") { PrivacyScreen() }
+                            composable("privacy") { PrivacyScreen(onReport = { report(null) }, onBeforeClearData = {
+                                vm.endSession(); graph.toolApproval.deny()
+                            }) }
                         }
                     }
                 }
@@ -220,6 +242,31 @@ fun AirCallUi(
             }
             val pending by graph.toolApproval.pending.collectAsState()
             pending?.let { ToolApprovalDialog(it, onApprove = { graph.toolApproval.approve() }, onDeny = { graph.toolApproval.deny() }) }
+            if (reportOpen) ContentReportDialog(graph.contentReports, reportResponse, onDismiss = { reportOpen = false })
+            if (pendingText != null || pendingVoice) {
+                val voice = pendingVoice
+                AlertDialog(onDismissRequest = { pendingText = null; pendingVoice = false },
+                    title = { Text(if (voice) "음성 대화의 데이터 사용" else "클라우드로 대화 전송") },
+                    text = { Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (voice) Text("통화를 시작하면 마이크를 사용합니다. Android 음성 인식·출력 서비스의 설정에 따라 " +
+                            "음성과 텍스트가 해당 서비스 제공자에게 전송될 수 있습니다. 앱이 화면 밖에 있거나 화면이 꺼져도 " +
+                            "통화가 진행되는 동안 마이크를 사용할 수 있으며, 알림에서 일시정지하거나 종료할 수 있습니다.")
+                        if (usesCloud) Text("대화 기록과 응답 생성에 필요한 도구 결과가 설정한 AI 서버로 전송됩니다. " +
+                            "API 키는 이 서버의 요청 인증에 사용됩니다. 전송 주소: ${graph.settings.cloudBaseUrl()}")
+                        else if (voice) Text("로컬 모델의 AI 응답 생성은 기기에서 처리됩니다. 음성 서비스와 도구 연동은 별도로 네트워크를 사용할 수 있습니다.")
+                        Text("자세한 내용은 설정의 개인정보 화면에서 확인할 수 있습니다.")
+                    } },
+                    confirmButton = { TextButton(onClick = {
+                        if (usesCloud) graph.settings.acceptCloudDisclosure()
+                        if (voice) graph.settings.acceptSpeechDisclosure()
+                        val text = pendingText
+                        pendingText = null; pendingVoice = false
+                        if (voice) vm.onMicTap() else text?.let { vm.sendText(it) }
+                    }) { Text("동의하고 계속") } },
+                    dismissButton = { TextButton(onClick = { pendingText = null; pendingVoice = false }) { Text("취소") } },
+                )
+            }
         }
     }
 }

@@ -20,7 +20,8 @@ import com.woojik.aircallai.conversation.ConversationState
 import com.woojik.aircallai.session.SessionStatus
 
 @Composable
-fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
+fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
+    onStartSession: () -> Unit = { vm.onMicTap() }, onReport: (String) -> Unit = {}) {
     LaunchedEffect(vm) { vm.refreshProviderReadiness() }
     val state by vm.state.collectAsState()
     val session by vm.sessionStatus.collectAsState()
@@ -37,6 +38,7 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
         Text(label, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         transcript.lastOrNull { it.role == ChatMessage.Role.ASSISTANT }?.let {
             Text(it.content, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+            TextButton(onClick = { onReport(it.content) }) { Text("응답 신고") }
         }
         if (!ready) Text("설정에서 로컬 모델을 적용하거나 클라우드 API를 연결해 주세요.")
         (state as? ConversationState.Error)?.let { Text(it.message, color = MaterialTheme.colorScheme.error) }
@@ -49,7 +51,7 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
             Button(onClick = { vm.endSession(); onExit() }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("통화 종료") }
         } else {
-            Button(onClick = { vm.onMicTap() }, enabled = ready && state !is ConversationState.Processing,
+            Button(onClick = onStartSession, enabled = ready && state !is ConversationState.Processing,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) { Text("통화 시작") }
         }
         Text("다른 앱을 사용하는 동안에도 알림에서 대화를 제어할 수 있어요.",

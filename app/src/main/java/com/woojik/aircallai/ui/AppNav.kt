@@ -294,11 +294,7 @@ class MainActivity : ComponentActivity() {
 
         val request = AuthorizationRequest.builder()
             .setRequestedScopes(
-                listOf(
-                    Scope(GoogleOAuthClient.SCOPE_GMAIL_MODIFY),
-                    Scope(GoogleOAuthClient.SCOPE_GMAIL_SEND),
-                    Scope(GoogleOAuthClient.SCOPE_CALENDAR_EVENTS),
-                ),
+                GoogleOAuthClient.REQUIRED_SCOPES.map { Scope(it) },
             )
             .build()
 
