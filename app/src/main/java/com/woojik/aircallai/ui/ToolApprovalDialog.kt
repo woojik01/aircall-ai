@@ -1,30 +1,37 @@
 package com.woojik.aircallai.ui
 
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.woojik.aircallai.tools.ToolRequest
 
-/**
- * PRD-06: WRITE Tool 작업 승인 다이얼로그.
- * 어떤 도구가 무엇을 하려는지 도구/액션/인자를 사용자에게 그대로 보여준다.
- */
 @Composable
-fun ToolApprovalDialog(
-    request: ToolRequest,
-    onApprove: () -> Unit,
-    onDeny: () -> Unit,
-) {
+fun ToolApprovalDialog(request: ToolRequest, onApprove: () -> Unit, onDeny: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDeny,
-        title = { Text("Tool 작업 승인") },
+        title = { Text("도구 작업 승인") },
         text = {
-            Text(
-                "도구 '" + request.toolName + "'가 '" + request.action + "' 작업을 실행하려 합니다.\n" +
-                    "이 작업은 외부 서비스에 변경을 만들 수 있습니다(WRITE).\n" +
-                    "인자: " + request.arguments.entries.joinToString(", ") { it.key + "=" + it.value },
-            )
+            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("이 작업은 데이터를 저장하거나 외부 서비스의 내용을 변경합니다. 실행할 내용을 확인해 주세요.",
+                    style = MaterialTheme.typography.bodyMedium)
+                Text("${request.toolName} · ${request.action}", style = MaterialTheme.typography.titleSmall)
+                HorizontalDivider()
+                request.arguments.forEach { (key, value) ->
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(key, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        SelectionContainer { Text(value, style = MaterialTheme.typography.bodyLarge) }
+                    }
+                }
+            }
         },
         confirmButton = { TextButton(onClick = onApprove) { Text("승인") } },
         dismissButton = { TextButton(onClick = onDeny) { Text("거부") } },

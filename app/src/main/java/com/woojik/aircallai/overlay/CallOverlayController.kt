@@ -60,11 +60,12 @@ class CallOverlayController(
             ).toInt()
         }
 
+        val dark = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 cornerRadius = dp(24).toFloat()
-                setColor(Color.WHITE)
+                setColor(if (dark) Color.rgb(18, 28, 48) else Color.WHITE)
             }
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
@@ -72,6 +73,14 @@ class CallOverlayController(
         fun button(label: String): Button = Button(context).apply {
             text = label
             isAllCaps = false
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(if (dark) Color.rgb(224, 230, 255) else Color.rgb(24, 33, 58))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(
+                if (dark) Color.rgb(37, 63, 140) else Color.rgb(237, 241, 255),
+            )
+            maxLines = Int.MAX_VALUE
+            setSingleLine(false)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             minWidth = dp(72)
             minHeight = dp(48)
             // PRD-07 접근성: 명확한 텍스트 라벨 제공.
@@ -87,7 +96,7 @@ class CallOverlayController(
         row.addView(endButton)
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            minOf(dp(196), context.resources.displayMetrics.widthPixels - dp(32)),
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -109,6 +118,8 @@ class CallOverlayController(
         muteAction = if (muted) actions.unmute else actions.mute
         pauseButton?.text = if (paused) "재개" else "일시정지"
         muteButton?.text = if (muted) "음소거 해제" else "음소거"
+        pauseButton?.contentDescription = pauseButton?.text
+        muteButton?.contentDescription = muteButton?.text
     }
 
     /** 세션 활성 여부에 따라 오버레이를 띄우거나 내린다. */
@@ -124,3 +135,4 @@ class CallOverlayController(
         runCatching { windowManager.removeView(row) }
     }
 }
+

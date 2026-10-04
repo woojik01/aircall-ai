@@ -1,232 +1,107 @@
 package com.woojik.aircallai.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.woojik.aircallai.R
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.conversation.ConversationState
 import com.woojik.aircallai.session.SessionStatus
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationScreen(vm: MainViewModel) {
+fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Unit) {
     val state by vm.state.collectAsState()
     val transcript by vm.transcript.collectAsState()
     val sessionStatus by vm.sessionStatus.collectAsState()
-    val muted by vm.sessionMuted.collectAsState()
-    var input by remember { mutableStateOf("") }
-    val sessionActive = sessionStatus == SessionStatus.Running || sessionStatus == SessionStatus.Paused
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("대화", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            stateLabel(state),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = stateColor(state),
-                        )
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            Surface(tonalElevation = 3.dp) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = { vm.onMicTap() },
-                            enabled = !sessionActive &&
-                                (state is ConversationState.Idle || state is ConversationState.Error),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-                        ) {
-                            Text(if (sessionStatus == SessionStatus.Ended) "다시 말하기" else "말하기")
-                        }
-                        if (state is ConversationState.Speaking) {
-                            OutlinedButton(onClick = { vm.onStopSpeaking() }) { Text("중지") }
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = input,
-                            onValueChange = { input = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("메시지를 입력하세요") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(18.dp),
-                            textStyle = MaterialTheme.typography.bodyLarge,
-                        )
-                        Button(
-                            onClick = {
-                                val text = input.trim()
-                                input = ""
-                                vm.sendText(text)
-                            },
-                            enabled = input.isNotBlank() && state !is ConversationState.Processing,
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
-                        ) { Text("전송", fontWeight = FontWeight.SemiBold) }
-                    }
-                }
-            }
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            if (state is ConversationState.Error) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = (state as ConversationState.Error).message,
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        TextButton(onClick = { vm.engine.clearError() }) { Text("닫기") }
-                    }
-                }
-            }
-
-            if (sessionActive) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "음성 세션 실행 중",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Row(
-                            modifier = Modifier.padding(top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            if (sessionStatus == SessionStatus.Paused) {
-                                Button(onClick = { vm.resumeSession() }) { Text("재개") }
-                            } else {
-                                OutlinedButton(onClick = { vm.pauseSession() }) { Text("일시정지") }
-                            }
-                            OutlinedButton(onClick = { vm.toggleMute() }) {
-                                Text(if (muted) "음소거 해제" else "음소거")
-                            }
-                            TextButton(onClick = { vm.endSession() }) { Text("종료") }
-                        }
-                    }
-                }
-            }
-
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+    val listState = rememberLazyListState()
+    var input by rememberSaveable(roomId) { mutableStateOf("") }
+    val active = sessionStatus == SessionStatus.Running || sessionStatus == SessionStatus.Paused
+    LaunchedEffect(roomId, transcript.size) {
+        if (transcript.isNotEmpty()) listState.animateScrollToItem(transcript.lastIndex)
+    }
+    Column(Modifier.fillMaxSize().imePadding()) {
+        if (transcript.isEmpty()) {
+            Column(
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                items(transcript) { message ->
-                    ChatBubble(message)
+                Image(painterResource(R.drawable.aircall_ai_icon), "AirCall AI",
+                    Modifier.size(88.dp).clip(RoundedCornerShape(28.dp)))
+                Spacer(Modifier.height(24.dp))
+                Text("어떤 이야기를 나눌까요?", style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center)
+                Spacer(Modifier.height(10.dp))
+                Text("글로 남기거나, 편하게 말해 보세요.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            }
+        } else {
+            LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                itemsIndexed(transcript) { _, message ->
+                    val user = message.role == ChatMessage.Role.USER
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
+                        Surface(
+                            color = if (user) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            contentColor = if (user) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            shape = RoundedCornerShape(22.dp), modifier = Modifier.widthIn(max = 340.dp),
+                        ) {
+                            Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+                                Text(if (user) "나" else "AirCall", style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
+                                androidx.compose.foundation.text.selection.SelectionContainer { Text(message.content, style = MaterialTheme.typography.bodyLarge) }
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ChatBubble(message: ChatMessage) {
-    val isUser = message.role == ChatMessage.Role.USER
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
-    ) {
-        Surface(
-            modifier = Modifier.widthIn(max = 320.dp),
-            color = if (isUser) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            },
-            contentColor = if (isUser) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-            shape = RoundedCornerShape(
-                topStart = 18.dp,
-                topEnd = 18.dp,
-                bottomStart = if (isUser) 18.dp else 5.dp,
-                bottomEnd = if (isUser) 5.dp else 18.dp,
-            ),
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Text(
-                    text = if (isUser) "나" else "AirCall AI",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isUser) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.secondary
-                    },
-                )
-                Text(
-                    text = message.content,
-                    modifier = Modifier.padding(top = 3.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+        if (state is ConversationState.Error) {
+            Surface(color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    Text((state as ConversationState.Error).message, style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { vm.engine.clearError() }) { Text("닫기") }
+                }
             }
         }
+        if (state is ConversationState.Processing) {
+            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text("생각하고 있어요", Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = { vm.cancelText() }) { Text("중지") }
+            }
+        }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.Start) {
+            TextButton(onClick = onOpenCall) { Text(if (active) "진행 중인 통화" else "음성 대화") }
+            Text(vm.engine.activeProvider.displayName, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(value = input, onValueChange = { input = it },
+                modifier = Modifier.weight(1f), placeholder = { Text("메시지를 입력하세요") },
+                shape = RoundedCornerShape(24.dp), maxLines = 5,
+                textStyle = MaterialTheme.typography.bodyLarge)
+            Button(onClick = { val text = input; input = ""; vm.sendText(text) },
+                enabled = roomId != null && input.isNotBlank() && state !is ConversationState.Processing && !active,
+                contentPadding = PaddingValues(horizontal = 18.dp), modifier = Modifier.heightIn(min = 56.dp)) { Text("전송") }
+        }
     }
-}
-
-@Composable
-private fun stateColor(state: ConversationState) = when (state) {
-    is ConversationState.Error -> MaterialTheme.colorScheme.error
-    ConversationState.Listening, is ConversationState.Processing, is ConversationState.Speaking ->
-        MaterialTheme.colorScheme.primary
-    ConversationState.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
-}
-
-private fun stateLabel(state: ConversationState): String = when (state) {
-    ConversationState.Idle -> "대기 중"
-    ConversationState.Listening -> "듣고 있습니다"
-    is ConversationState.Processing -> "생각 중"
-    is ConversationState.Speaking -> "말하는 중"
-    is ConversationState.Error -> "오류"
 }
