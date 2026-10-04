@@ -34,6 +34,7 @@ fun AirCallUi(
     connectGitHub: suspend ((String) -> Unit) -> String,
     connectGoogle: () -> String, disconnectAccount: (String) -> Unit,
     startDownload: (String) -> Unit,
+    requestTaskNotifications: () -> Unit = {},
 ) {
     var themeMode by remember { mutableStateOf(graph.settings.themeMode()) }
     val nav = rememberNavController()
@@ -44,6 +45,8 @@ fun AirCallUi(
     val activeId by graph.chatRooms.activeId.collectAsState()
     val ready by graph.chatRooms.ready.collectAsState()
     val storageError by graph.chatRooms.error.collectAsState()
+    val taskEvents by graph.toolTracker.events.collectAsState()
+    LaunchedEffect(Unit) { requestTaskNotifications() }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "chat"
     var editing by remember { mutableStateOf<ChatRoom?>(null) }
@@ -134,6 +137,12 @@ fun AirCallUi(
                 }) { padding ->
                     Column(Modifier.fillMaxSize().padding(padding)) {
                         storageError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
+                        taskEvents.lastOrNull { it.roomId == activeId }?.let { task ->
+                            Text(task.summary, color = if (task.status == com.woojik.aircallai.tools.ToolExecutionStatus.FAILED)
+                                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                        }
                         if (!ready) {
                             if (storageError == null) LinearProgressIndicator(Modifier.fillMaxWidth())
                             else TextButton(onClick = { scope.launch {

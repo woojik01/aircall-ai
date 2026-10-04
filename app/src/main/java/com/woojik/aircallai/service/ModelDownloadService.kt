@@ -122,6 +122,14 @@ class ModelDownloadService : Service() {
     }
 
     private fun releaseWakeLock() { wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null }
+    // Android 15+ limits dataSync foreground-service time. Stop promptly instead of crashing.
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        scope.cancel()
+        releaseWakeLock()
+        foreground = false
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
     override fun onDestroy() {
         foreground = false
         jobs.keys.toList().forEach { id -> notifications.cancel(notificationId(id)) }

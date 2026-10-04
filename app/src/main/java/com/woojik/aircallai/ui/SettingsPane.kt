@@ -163,8 +163,13 @@ fun SettingsDetail(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 HorizontalDivider()
                 Text("알림", style = MaterialTheme.typography.titleMedium)
-                Text("통화 알림에서 일시정지·재개, 음성 출력 음소거, 종료를 사용할 수 있습니다. 모델 다운로드 알림에서는 진행률을 확인하고 취소할 수 있습니다.")
+                Text("AI 도구 작업을 실제로 실행하면 성공·실패 결과 알림을 보냅니다. 알림을 누르면 해당 채팅방을 엽니다. 통화 알림에서는 일시정지·재개, 음소거, 종료를, 모델 다운로드 알림에서는 진행률 확인과 취소를 사용할 수 있습니다.")
+                Text("알림을 허용하지 않아도 작업 결과는 앱에서 확인할 수 있습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(onClick = openNotificationSettings) { Text("시스템 알림 설정 열기") }
+                HorizontalDivider()
+                Text("앱 정보", style = MaterialTheme.typography.titleMedium)
+                Text("버전 ${com.woojik.aircallai.BuildConfig.VERSION_NAME} (${com.woojik.aircallai.BuildConfig.VERSION_CODE})")
+                Text(if (com.woojik.aircallai.BuildConfig.DEBUG) "개발용 앱" else "정식 배포용 앱")
             }
         }
         status?.let { Text(it, color = MaterialTheme.colorScheme.primary) }

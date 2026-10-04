@@ -132,7 +132,16 @@ class MainActivity : ComponentActivity() {
         openTarget = if (savedInstanceState == null) intent.getStringExtra(EXTRA_SCREEN) ?: "chat" else ""
         uiScope.launch {
             appGraph.chatRooms.initialize()
-            if (appGraph.chatRooms.ready.value && appGraph.chatRooms.activeId.value == null) {
+            val taskRoom = intent.getStringExtra(EXTRA_ROOM_ID)
+            if (appGraph.chatRooms.ready.value && taskRoom != null) {
+                if (appGraph.chatRooms.activeId.value != taskRoom && appGraph.chatRooms.rooms.value.any { it.id == taskRoom }) {
+                    model.prepareForRoomChange()
+                    appGraph.toolApproval.deny()
+                    appGraph.chatRooms.select(taskRoom)?.let { model.engine.restore(it.messages) }
+                } else if (appGraph.chatRooms.activeId.value == null) {
+                    model.engine.restore(appGraph.chatRooms.newRoom().messages)
+                }
+            } else if (appGraph.chatRooms.ready.value && appGraph.chatRooms.activeId.value == null) {
                 model.engine.restore(appGraph.chatRooms.newRoom().messages)
             } else if (appGraph.chatRooms.ready.value && savedInstanceState == null && intent.action == Intent.ACTION_MAIN && !appGraph.sessionController.isRunning) {
                 model.prepareForRoomChange()
@@ -150,6 +159,7 @@ class MainActivity : ComponentActivity() {
                         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                     } else startModelDownload(id)
                 },
+                requestTaskNotifications = { requestTaskNotifications() },
             )
         }
     }
@@ -159,6 +169,21 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         openTarget = intent.getStringExtra(EXTRA_SCREEN) ?: "chat"
         openVersion++
+        val taskRoom = intent.getStringExtra(EXTRA_ROOM_ID)
+        if (taskRoom != null) {
+            uiScope.launch {
+                graph().chatRooms.initialize()
+                if (graph().chatRooms.ready.value && graph().chatRooms.activeId.value != taskRoom) {
+                    val exists = graph().chatRooms.rooms.value.any { it.id == taskRoom }
+                    if (exists) {
+                        vm?.prepareForRoomChange()
+                        graph().toolApproval.deny()
+                        graph().chatRooms.select(taskRoom)?.let { graph().engine.restore(it.messages) }
+                    }
+                }
+            }
+            return
+        }
         if (intent.action == Intent.ACTION_MAIN && !graph().sessionController.isRunning) uiScope.launch {
             graph().chatRooms.initialize()
             if (graph().chatRooms.ready.value) {
@@ -176,6 +201,16 @@ class MainActivity : ComponentActivity() {
     private fun startModelDownload(id: String) {
         ContextCompat.startForegroundService(this, Intent(this, ModelDownloadService::class.java)
             .setAction(ModelDownloadService.ACTION_START).putExtra(ModelDownloadService.EXTRA_MODEL, id))
+    }
+
+    private fun requestTaskNotifications() {
+        if (Build.VERSION.SDK_INT < 33) return
+        val prefs = getSharedPreferences("notification_permission", MODE_PRIVATE)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            !prefs.getBoolean("task_requested", false)) {
+            prefs.edit().putBoolean("task_requested", true).apply()
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     override fun onDestroy() {
@@ -358,6 +393,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SCREEN = "aircall.screen"
+        const val EXTRA_ROOM_ID = "aircall.room"
         /** Google OAuth 콜백 스킴은 Client ID(리버스)에서 유도되며 manifest에 빌드 시점 주입된다. */
         const val GOOGLE_CALLBACK_PATH = GoogleOAuthClient.CALLBACK_PATH
     }

@@ -68,4 +68,27 @@ class ChatRoomRepositoryTest {
         answer.complete(Unit); job.join()
         assertEquals(other, engine.transcript.value)
     }
+
+    @Test fun newRoomAndSwitchingRemoveUnusedDraftsEvenWhenRenamed() = runTest {
+        val repo = ChatRoomRepository(store(), backgroundScope)
+        repo.initialize()
+        val first = repo.newRoom()
+        repo.rename(first.id, "비어 있는 이름 변경 방")
+        val used = repo.newRoom()
+        assertFalse(repo.rooms.value.any { it.id == first.id })
+        repo.updateMessages(listOf(ChatMessage(ChatMessage.Role.USER, "안녕")))
+        val draft = repo.newRoom()
+        repo.select(used.id)
+        assertEquals(listOf(used.id), repo.rooms.value.map { it.id })
+        assertFalse(repo.rooms.value.any { it.id == draft.id })
+    }
+
+    @Test fun restartCleansLegacyEmptyRoomsAndKeepsChatsWithoutAssistantReply() = runTest {
+        val store = store()
+        val used = ChatRoom(messages = listOf(ChatMessage(ChatMessage.Role.USER, "실패한 질문도 보존")))
+        store.write(listOf(ChatRoom(), ChatRoom(messages = listOf(ChatMessage(ChatMessage.Role.SYSTEM, "시스템"))), used))
+        val repo = ChatRoomRepository(store, backgroundScope)
+        repo.initialize()
+        assertEquals(listOf(used), repo.rooms.value)
+    }
 }

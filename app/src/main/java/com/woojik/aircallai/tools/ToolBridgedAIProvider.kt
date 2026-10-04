@@ -30,6 +30,7 @@ class ToolBridgedAIProvider(
     private val toolsDescription: String,
     private val tools: List<Tool> = emptyList(),
     private val approvalRequester: ((ToolRequest) -> Unit)? = null,
+    private val approvalHandler: (suspend (ToolRequest) -> ToolResult)? = null,
 ) : AIProvider {
 
     override val type: ProviderType = base.type
@@ -51,19 +52,31 @@ class ToolBridgedAIProvider(
         var lastSuccessResult: String? = null
         val failedCalls = mutableListOf<String>()
         val succeededTools = mutableSetOf<String>()
+        val writeRequests = mutableSetOf<ToolRequest>()
 
         while (round < MAX_TOOL_ROUNDS) {
             val response = base.respond(current)
             val call = ToolCallParser.parseFirst(response.message.content)
 
             if (call == null) {
+                if (ToolCallParser.hasDirective(response.message.content)) {
+                    round++
+                    current = current + ChatMessage(ChatMessage.Role.USER,
+                        "TOOL_RESULT 실패: 호출 문법이 올바르지 않아 실행하지 않았습니다. 닫힌 따옴표와 key=value 형식을 사용해 한 줄에 하나의 호출만 작성하세요.")
+                    continue
+                }
                 // 지시어 없는 최종 답변: 검증 후 반환한다.
                 val unmetTools = requestedTools.filter { it !in succeededTools }
                 val claimsWithoutEvidence = ToolIntent.claimsCompletion(response.message.content) &&
                     succeededTools.isEmpty() && requestedTools.isNotEmpty()
                 val needsVerify = verifyPass < VERIFY_PASSES &&
                     (failedCalls.isNotEmpty() || unmetTools.isNotEmpty() || claimsWithoutEvidence)
-                if (!needsVerify) return response
+                if (!needsVerify) {
+                    if (failedCalls.isNotEmpty()) return AIResponse(ChatMessage(ChatMessage.Role.ASSISTANT,
+                        "실행하지 못한 작업이 있습니다.\n" + failedCalls.joinToString("\n")), base.type,
+                        System.currentTimeMillis() - started)
+                    return response
+                }
                 verifyPass++
                 current = current + response.message + ChatMessage(
                     ChatMessage.Role.USER,
@@ -77,22 +90,26 @@ class ToolBridgedAIProvider(
             // {{TOOL_RESULT}} 플레이스홀더를 이전 성공 결과의 실제 내용으로 치환한다.
             val request = ToolRequest(call.toolName, call.action, substitute(call.arguments, lastSuccessResult))
             val risk = tools.firstOrNull { it.name == call.toolName }?.riskFor(call.action) ?: ToolRisk.WRITE
+            if (risk != ToolRisk.READ && !writeRequests.add(request)) return AIResponse(
+                ChatMessage(ChatMessage.Role.ASSISTANT, "같은 변경 작업의 반복 실행을 중단했습니다. 이미 실행된 작업은 결과 알림에서 확인해 주세요."),
+                base.type, System.currentTimeMillis() - started)
             val toolStart = System.currentTimeMillis()
-            val result = executor.execute(request)
+            var result = executor.execute(request)
             val blocked = result.message == BLOCKED_MESSAGE
+            if (blocked && approvalHandler != null) result = approvalHandler.invoke(request)
             logger.record(
                 ToolExecutionLogger.Entry(
                     toolName = call.toolName,
                     action = call.action,
                     risk = risk,
-                    blocked = blocked,
+                    blocked = blocked && approvalHandler == null,
                     success = result.success,
                     latencyMs = System.currentTimeMillis() - toolStart,
                     timestampMs = System.currentTimeMillis(),
                 ),
             )
 
-            if (blocked) {
+            if (blocked && approvalHandler == null) {
                 // 승인이 필요한 WRITE 작업: UI에 승인 다이얼로그를 띄우도록 요청을 올린다.
                 approvalRequester?.invoke(request)
                 val userMessage = ChatMessage(
@@ -106,9 +123,14 @@ class ToolBridgedAIProvider(
                 )
             }
 
+            if (result.message == "사용자가 작업 실행을 거부했습니다") return AIResponse(
+                ChatMessage(ChatMessage.Role.ASSISTANT, "승인을 거부하여 해당 작업을 실행하지 않았습니다."),
+                base.type, System.currentTimeMillis() - started)
+
             if (result.success) {
                 lastSuccessResult = result.message
                 succeededTools += call.toolName
+                failedCalls.removeAll { it.startsWith(call.toolName + "." + call.action + " — ") }
             } else {
                 failedCalls += (call.toolName + "." + call.action + " — " + result.message)
             }
@@ -117,8 +139,11 @@ class ToolBridgedAIProvider(
             current = current + response.message +
                 ChatMessage(ChatMessage.Role.USER, toolResultPrompt(call, result))
         }
-        // 라운드 제한 초과: 마지막 응답을 그대로 돌려준다.
-        return base.respond(current)
+        // Never expose an unexecuted TOOL directive or an unchecked completion claim.
+        return AIResponse(ChatMessage(ChatMessage.Role.ASSISTANT,
+            if (succeededTools.isEmpty()) "작업 실행 한도에 도달했습니다. 완료된 작업은 없습니다. 요청을 나누어 다시 시도해 주세요."
+            else "일부 작업은 실행했지만 한도에 도달해 요청 전체를 완료하지 못했습니다. 작업 결과를 확인해 주세요."),
+            base.type, System.currentTimeMillis() - started)
     }
 
     /**

@@ -10,6 +10,9 @@ import com.woojik.aircallai.tools.ToolRequest
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
+import com.woojik.aircallai.tools.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -23,6 +26,37 @@ import org.junit.Test
  * 여기서는 자격증명이 없어 실행 결과가 "인증 없음" 실패로 나오는 것으로 실행 도달을 확인한다.
  */
 class ToolApprovalCoordinatorTest {
+
+    @Test fun suspendedTurnReceivesActualResultAndDoubleTapWritesOnlyOnce() = runTest {
+        var count = 0
+        val tool = object : Tool {
+            override val name = "notes"
+            override val description = "test"
+            override fun riskFor(action: String) = ToolRisk.WRITE
+            override suspend fun execute(request: ToolRequest): ToolResult { count++; return ToolResult(true, "저장됨") }
+        }
+        val permissions = InMemoryToolPermissionStore()
+        val coordinator = ToolApprovalCoordinator(permissions, ToolExecutor(listOf(tool), permissions), this)
+        val result = async { coordinator.awaitResult(ToolRequest("notes", "add_note")) }
+        runCurrent()
+        assertFalse(result.isCompleted)
+        coordinator.approve(); coordinator.approve()
+        advanceUntilIdle()
+        assertEquals(1, count)
+        assertEquals("저장됨", result.await().message)
+    }
+
+    @Test fun cancellingWaitingTurnRemovesApprovalAndDoesNotExecute() = runTest {
+        val coordinator = coordinator(this)
+        val result = async { coordinator.awaitResult(ToolRequest("github", "create_issue")) }
+        runCurrent()
+        result.cancel()
+        advanceUntilIdle()
+        coordinator.approve()
+        advanceUntilIdle()
+        assertNull(coordinator.pending.value)
+        assertNull(coordinator.lastResult.value)
+    }
 
     private object NoCredentials : com.woojik.aircallai.core.storage.CredentialManager {
         override suspend fun save(service: String, credential: ByteArray) {}
