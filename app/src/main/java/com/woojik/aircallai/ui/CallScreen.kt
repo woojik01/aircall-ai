@@ -219,14 +219,14 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit) {
                 ) {
                     Text(
                         text = "백그라운드 중에는 시스템 알림으로 제어합니다. 오버레이 컨트롤 허용(선택)",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                     )
                 }
             } else {
                 Text(
                     text = "백그라운드 제어: 시스템 알림 + 오버레이",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
