@@ -76,14 +76,14 @@ fun LocalModelScreen(
             item {
                 Text(
                     "모델을 다운로드하고 적용하면 AI 응답을 기기에서 생성합니다. 음성 인식·출력의 네트워크 사용 여부는 기기의 음성 서비스에 따라 다릅니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
             item {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("GPU 가속")
+                    Text("GPU 가속", style = MaterialTheme.typography.titleMedium)
                     Switch(checked = useGpu, enabled = !applying, onCheckedChange = { enabled ->
                         applying = true
                         scope.launch {
@@ -98,8 +98,8 @@ fun LocalModelScreen(
                         }
                     })
                 }
-                Text("GPU 사용에 실패하면 CPU로 자동 전환합니다.", style = MaterialTheme.typography.bodySmall)
-                Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
+                Text("GPU 사용에 실패하면 CPU로 자동 전환합니다.", style = MaterialTheme.typography.bodyMedium)
+                Text(runtimeStatus, style = MaterialTheme.typography.bodyMedium)
             }
             item {
                 if (hasLegacyFiles) {
@@ -171,7 +171,7 @@ fun LocalModelScreen(
             item {
                 Text(
                     "모델 파일은 이 기기에만 저장되며 외부로 전송되지 않습니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
@@ -208,13 +208,13 @@ private fun ModelCard(
             }
             Text(
                 model.description,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
             Text(
                 "크기 약 " + formatSizeBytes(model.sizeBytes) +
                     " · RAM 검사 기준 " + (model.minRamMb / 1024) + "GiB 이상",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
 
@@ -229,7 +229,7 @@ private fun ModelCard(
                     )
                     Text(
                         "다운로드 중 " + percent + "%",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -238,7 +238,7 @@ private fun ModelCard(
                     Text(
                         downloadState.message,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
