@@ -10,6 +10,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,7 +25,7 @@ fun MainScreen(
     onOpenSettings: () -> Unit,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("AirCall AI") }) },
+        topBar = { TopAppBar(title = { Text("AirCall AI", style = MaterialTheme.typography.titleLarge) }) },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -33,15 +34,15 @@ fun MainScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Button(onClick = onOpenCall) { Text("📞 통화") }
+            Button(onClick = onOpenCall) { Text("📞 통화", style = MaterialTheme.typography.titleMedium) }
             OutlinedButton(
                 onClick = onOpenConversation,
                 modifier = Modifier.padding(top = 16.dp),
-            ) { Text("💬 텍스트 대화") }
+            ) { Text("💬 텍스트 대화", style = MaterialTheme.typography.titleMedium) }
             OutlinedButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.padding(top = 16.dp),
-            ) { Text("설정") }
+            ) { Text("설정", style = MaterialTheme.typography.titleMedium) }
         }
     }
 }
