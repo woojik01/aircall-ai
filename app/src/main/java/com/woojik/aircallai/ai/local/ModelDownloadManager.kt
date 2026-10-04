@@ -52,7 +52,6 @@ class ModelDownloadManager(
                 updateState(model.id, ModelDownloadState.Completed(model.fileName))
                 return@withContext Result.success(target)
             }
-            if (target.exists() && !target.delete()) throw IOException("기존 모델 파일을 삭제하지 못했습니다")
             updateState(model.id, ModelDownloadState.Downloading(0, model.sizeBytes))
             connection = openFollowingRedirects(model.downloadUrl)
             connections[model.id] = connection
@@ -89,7 +88,9 @@ class ModelDownloadManager(
             }
             currentCoroutineContext().ensureActive()
             // Same-directory rename is atomic; copying to the final path exposes incomplete data.
-            if (!temp.renameTo(target)) throw IOException("모델 파일을 저장하지 못했습니다")
+            java.nio.file.Files.move(temp.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE)
             updateState(model.id, ModelDownloadState.Completed(model.fileName))
             Result.success(target)
         } catch (e: CancellationException) {

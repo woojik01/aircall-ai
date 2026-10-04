@@ -79,6 +79,14 @@ class ModelDownloadManagerTest {
         assertArrayEquals(bytes, manager.targetFile(model).readBytes())
     }
 
+    @Test fun failedReplacementPreservesExistingModelBytes() = runBlocking {
+        val manager = ModelDownloadManager(temp.root) { Connection(byteArrayOf(1)) }
+        val existing = "previous model version".toByteArray()
+        manager.targetFile(model).writeBytes(existing)
+        assertTrue(manager.download(model).isFailure)
+        assertArrayEquals(existing, manager.targetFile(model).readBytes())
+    }
+
     @Test fun concurrentDuplicateDoesNotOpenOrOverwriteFile() = runBlocking {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)

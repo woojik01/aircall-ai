@@ -30,7 +30,9 @@ class AndroidKeystoreCrypto(
         val encrypted = blob.copyOfRange(IV_SIZE, blob.size)
         return try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, iv))
+            // Reading must not replace a missing key with an unrelated new key.
+            val existing = existingKey() ?: return null
+            cipher.init(Cipher.DECRYPT_MODE, existing, GCMParameterSpec(TAG_BITS, iv))
             cipher.doFinal(encrypted)
         } catch (t: Throwable) {
             // Never log the value or the throwable message: may contain key material hints.
@@ -40,8 +42,7 @@ class AndroidKeystoreCrypto(
 
     @Synchronized
     private fun key(): SecretKey {
-        val keyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
-        (keyStore.getEntry(alias, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        existingKey()?.let { return it }
 
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, PROVIDER)
         generator.init(
@@ -52,6 +53,11 @@ class AndroidKeystoreCrypto(
                 .build()
         )
         return generator.generateKey()
+    }
+
+    private fun existingKey(): SecretKey? {
+        val keyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
+        return (keyStore.getEntry(alias, null) as? KeyStore.SecretKeyEntry)?.secretKey
     }
 
     companion object {

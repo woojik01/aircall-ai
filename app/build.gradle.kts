@@ -32,6 +32,7 @@ android {
         applicationId = "com.woojik.aircallai"
         minSdk = 26
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = requestedVersionCode.toIntOrNull()?.takeIf { it in 3..2_100_000_000 }
             ?: error("AIRCALL_VERSION_CODE must be an integer between 3 and 2100000000")
         versionName = appVersion.getProperty("versionName")

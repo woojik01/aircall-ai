@@ -116,4 +116,30 @@ class FileCredentialManagerTest {
         assertArrayEquals("gh".toByteArray(), cm.load("github"))
         assertArrayEquals("gm".toByteArray(), cm.load("gmail"))
     }
+
+    @Test fun failedEncryptionPreservesPreviousCredential() = runTest {
+        val dir = tmp.newFolder("failed-write")
+        val real = AesCryptoEngine()
+        FileCredentialManager(dir, real).save("cloud_ai", "saved-key".toByteArray())
+        val before = dir.resolve("cloud_ai.bin").readBytes()
+        val failing = object : CryptoEngine {
+            override fun encrypt(plain: ByteArray): ByteArray = error("write interrupted")
+            override fun decrypt(blob: ByteArray) = real.decrypt(blob)
+        }
+        try { FileCredentialManager(dir, failing).save("cloud_ai", "new-key".toByteArray()) }
+        catch (_: IllegalStateException) { }
+        assertArrayEquals(before, dir.resolve("cloud_ai.bin").readBytes())
+        assertArrayEquals("saved-key".toByteArray(), FileCredentialManager(dir, real).load("cloud_ai"))
+    }
+
+    @Test fun unreadableCredentialIsNotReplacedByANewKey() = runTest {
+        val dir = tmp.newFolder("wrong-key")
+        FileCredentialManager(dir, AesCryptoEngine()).save("cloud_ai", "saved-key".toByteArray())
+        val before = dir.resolve("cloud_ai.bin").readBytes()
+        var rejected = false
+        try { FileCredentialManager(dir, AesCryptoEngine()).save("cloud_ai", "replacement".toByteArray()) }
+        catch (_: IllegalStateException) { rejected = true }
+        assertTrue(rejected)
+        assertArrayEquals(before, dir.resolve("cloud_ai.bin").readBytes())
+    }
 }
