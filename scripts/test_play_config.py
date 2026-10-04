@@ -1,7 +1,9 @@
 from pathlib import Path
 import tempfile
 import unittest
-from check_play_config import validate, public_https, render_policy
+import json
+from unittest.mock import patch
+from check_play_config import validate, public_https, render_policy, probe
 from verify_aab import verified_bundletool
 
 
@@ -41,6 +43,22 @@ class PlayConfigTest(unittest.TestCase):
             path.write_bytes(b'not the verified tool')
             with self.assertRaises(ValueError):
                 verified_bundletool(path)
+
+    def test_release_probe_requires_confirmed_write_and_cleanup(self):
+        canary = '20000000-0000-4000-8000-000000000002'
+        policy = ('AirCall AI 개인정보처리방침 support@aircall.ai', 'text/html')
+        health = (json.dumps({'protocol': 'aircall-report-v1', 'ready': True, 'retentionDays': 30}), 'application/json')
+        receipts = ({'ok': False}, {'ok': True, 'id': 'wrong', 'cleared': True},
+                    {'ok': True, 'id': canary, 'cleared': False}, {'ok': True, 'id': canary, 'cleared': True})
+        for receipt in receipts:
+            with patch('check_play_config.uuid.uuid4', return_value=canary), \
+                 patch('check_play_config.fetch_public', side_effect=[policy, health, (json.dumps(receipt), 'application/json')]) as fetch:
+                if receipt == receipts[-1]:
+                    probe(self.config())
+                else:
+                    with self.assertRaises(ValueError):
+                        probe(self.config())
+                self.assertEqual({'operation': 'preflight', 'id': canary}, fetch.call_args.args[2])
 
 
 if __name__ == '__main__':

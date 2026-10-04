@@ -10,7 +10,7 @@ function reportSettings_() {
   const spreadsheet = SpreadsheetApp.openById(id);
   const sheet = spreadsheet.getSheetByName('reports');
   if (!sheet) throw new Error('Run setupReports first');
-  return {sheet: sheet, days: days, props: props};
+  return {sheet: sheet, spreadsheet: spreadsheet, days: days, props: props};
 }
 
 function json_(data) {
@@ -41,13 +41,49 @@ function validatedReport_(report) {
 // Prefix every text cell so user input cannot become a spreadsheet formula.
 function literal_(value) { return "'" + String(value); }
 
+function validatedPreflight_(request) {
+  if (Object.keys(request).length !== 2 || request.operation !== 'preflight' || typeof request.id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(request.id)) throw new Error('Invalid preflight');
+  return request;
+}
+
+// Exercise the actual append/flush/read/delete path with a row containing no user information.
+// It does not consume the user-report quota. Only one probe per minute is permitted.
+function preflight_(config, request) {
+  const now = Date.now();
+  const last = Number(config.props.getProperty('PREFLIGHT_LAST_ATTEMPT') || '0');
+  if (now - last < 60000) throw new Error('Preflight rate limited');
+  config.props.setProperty('PREFLIGHT_LAST_ATTEMPT', String(now));
+  const sheet = config.sheet;
+  const find = () => sheet.getLastRow() > 1 ? sheet.getRange(2, 2, sheet.getLastRow() - 1, 1)
+    .createTextFinder(request.id).matchEntireCell(true).findNext() : null;
+  if (find()) throw new Error('Canary ID already exists');
+  let written = false;
+  try {
+    sheet.appendRow([new Date(), literal_(request.id), literal_('_preflight'), literal_('Release write check'),
+      literal_(''), literal_('preflight'), 26]);
+    SpreadsheetApp.flush();
+    const row = find();
+    written = !!row && sheet.getRange(row.getRow(), 2, 1, 2).getValues()[0][1] === '_preflight';
+  } finally {
+    const row = find();
+    if (row) sheet.deleteRow(row.getRow());
+    SpreadsheetApp.flush();
+  }
+  const cleared = !find();
+  return json_(written && cleared ? {ok: true, id: request.id, cleared: true} : {ok: false});
+}
+
 function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
     if (!e || !e.postData || e.postData.contents.length > 30000) return json_({ok: false});
-    const report = validatedReport_(JSON.parse(e.postData.contents));
+    const request = JSON.parse(e.postData.contents);
+    const isPreflight = request && request.operation === 'preflight';
+    const report = isPreflight ? validatedPreflight_(request) : validatedReport_(request);
     if (!lock.tryLock(10000)) return json_({ok: false});
     const config = reportSettings_();
+    if (isPreflight) return preflight_(config, report);
     const sheet = config.sheet;
     // A lost HTTP response can be retried without creating a duplicate report.
     if (sheet.getLastRow() > 1) {

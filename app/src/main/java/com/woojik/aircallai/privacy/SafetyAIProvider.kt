@@ -10,7 +10,7 @@ class SafetyAIProvider(private val base: AIProvider) : AIProvider {
     override suspend fun respond(history: List<ChatMessage>): AIResponse {
         val started = System.currentTimeMillis()
         val input = history.lastOrNull { it.role == ChatMessage.Role.USER }?.content.orEmpty()
-        if (ContentSafety.isExplicitlyProhibited(input)) return refused(started)
+        if (ContentSafety.isExplicitlyProhibited(input) && !ContentSafety.isSafeReportingRequest(input)) return refused(started)
         val policy = if (type == ProviderType.LOCAL) ContentSafety.LOCAL_POLICY else ContentSafety.SYSTEM_POLICY
         val response = base.respond(listOf(ChatMessage(ChatMessage.Role.SYSTEM, policy)) + history)
         return if (ContentSafety.isExplicitlyProhibited(response.message.content)) refused(started) else response
@@ -35,5 +35,11 @@ object ContentSafety {
 """
     private val minor = Regex("(?i)(미성년|아동|어린아이|\\bchild\\b|\\bminor\\b|underage)")
     private val exploitation = Regex("(?i)(포르노|야동|성관계.{0,12}(소설|묘사|장면)|pornograph|sexual.{0,12}(story|scene))")
+    // Match the whole question: appending a reporting phrase to an abusive request is not an exception.
+    private val safeReporting = listOf(
+        Regex("(?:아동|미성년자?|어린아이)\\s*(?:포르노|야동|성착취물)(?:를|을)?\\s*신고\\s*(?:방법|절차)(?:을|를)?\\s*(?:알려\\s*줘|알려주세요|안내해\\s*줘|안내해\\s*주세요)?[?.!]*"),
+        Regex("(?i)(?:how (?:do|can) I|where (?:do|can) I) report (?:child|underage|minor) pornography[?.!]*"),
+    )
+    fun isSafeReportingRequest(text: String): Boolean = safeReporting.any { it.matches(text.trim()) }
     fun isExplicitlyProhibited(text: String): Boolean = minor.containsMatchIn(text) && exploitation.containsMatchIn(text)
 }

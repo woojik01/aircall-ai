@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import uuid
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -73,8 +74,13 @@ def validate(config):
     return config
 
 
-def fetch_public(url, limit):
-    with urlopen(Request(url, headers={'User-Agent': 'AirCall-Play-Preflight/1'}), timeout=20) as response:
+def fetch_public(url, limit, payload=None):
+    headers = {'User-Agent': 'AirCall-Play-Preflight/1'}
+    body = None
+    if payload is not None:
+        body = json.dumps(payload).encode('utf-8')
+        headers['Content-Type'] = 'application/json'
+    with urlopen(Request(url, data=body, headers=headers), timeout=20) as response:
         if not public_https(response.url):
             raise ValueError('Release endpoint redirected to a non-public/non-HTTPS URL')
         payload = response.read(limit + 1)
@@ -97,6 +103,12 @@ def probe(config):
         raise ValueError('Report receiver is not ready; configure private storage and retention trigger')
     if health.get('retentionDays') != int(config['AIRCALL_REPORT_RETENTION_DAYS']):
         raise ValueError('App and receiver disagree on report retention')
+    canary_id = str(uuid.uuid4())
+    receipt_text, _ = fetch_public(config['AIRCALL_REPORT_ENDPOINT'], 8192,
+                                  {'operation': 'preflight', 'id': canary_id})
+    receipt = json.loads(receipt_text)
+    if receipt.get('ok') is not True or receipt.get('id') != canary_id or receipt.get('cleared') is not True:
+        raise ValueError('Report receiver did not confirm the write/read/delete canary')
 
 
 def render_policy(config, template, output):

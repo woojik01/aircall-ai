@@ -74,19 +74,25 @@ fun AirCallUi(
     var reportOpen by rememberSaveable { mutableStateOf(false) }
     var pendingText by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingVoice by rememberSaveable { mutableStateOf(false) }
+    var pendingRoomId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(activeId) {
+        if (pendingRoomId != activeId) {
+            pendingText = null; pendingVoice = false; pendingRoomId = null
+        }
+    }
     val usesCloud = graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD
     fun report(content: String?) { reportResponse = content?.take(4000); reportOpen = true }
     fun sendText(text: String): Boolean {
         if (graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD &&
             !graph.settings.hasCloudDisclosure()) {
-            pendingText = text; return false
+            pendingText = text; pendingRoomId = activeId; return false
         }
         vm.sendText(text); return true
     }
     fun startVoice() {
         if (!graph.settings.hasSpeechDisclosure() ||
             (graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD && !graph.settings.hasCloudDisclosure())) {
-            pendingVoice = true
+            pendingVoice = true; pendingRoomId = activeId
         } else vm.onMicTap()
     }
     fun openChat() { nav.navigate("chat") { popUpTo("chat") { inclusive = true }; launchSingleTop = true } }
@@ -264,7 +270,7 @@ fun AirCallUi(
             if (reportOpen) ContentReportDialog(graph.contentReports, reportResponse, onDismiss = { reportOpen = false })
             if (pendingText != null || pendingVoice) {
                 val voice = pendingVoice
-                AlertDialog(onDismissRequest = { pendingText = null; pendingVoice = false },
+                AlertDialog(onDismissRequest = { pendingText = null; pendingVoice = false; pendingRoomId = null },
                     title = { Text(if (voice) "음성 대화의 데이터 사용" else "클라우드로 대화 전송") },
                     text = { Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -277,13 +283,16 @@ fun AirCallUi(
                         Text("자세한 내용은 설정의 개인정보 화면에서 확인할 수 있습니다.")
                     } },
                     confirmButton = { TextButton(onClick = {
+                        // A notification/deep link can change rooms while this dialog is open.
+                        val resume = pendingRoomId != null && pendingRoomId == graph.chatRooms.activeId.value
+                        val text = pendingText
+                        pendingText = null; pendingVoice = false; pendingRoomId = null
+                        if (!resume) return@TextButton
                         if (usesCloud) graph.settings.acceptCloudDisclosure()
                         if (voice) graph.settings.acceptSpeechDisclosure()
-                        val text = pendingText
-                        pendingText = null; pendingVoice = false
                         if (voice) vm.onMicTap() else text?.let { vm.sendText(it) }
                     }) { Text("동의하고 계속") } },
-                    dismissButton = { TextButton(onClick = { pendingText = null; pendingVoice = false }) { Text("취소") } },
+                    dismissButton = { TextButton(onClick = { pendingText = null; pendingVoice = false; pendingRoomId = null }) { Text("취소") } },
                 )
             }
         }

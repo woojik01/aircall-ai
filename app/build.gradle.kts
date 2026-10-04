@@ -11,7 +11,7 @@ val appVersion = Properties().apply {
     rootProject.file("version.properties").inputStream().use { load(it) }
 }
 val playProperties = Properties().apply {
-    rootProject.file("config/play.properties").inputStream().use { load(it) }
+    rootProject.file("config/play.properties").reader(Charsets.UTF_8).use { load(it) }
 }
 fun playValue(name: String): String = (providers.gradleProperty(name).orNull
     ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
