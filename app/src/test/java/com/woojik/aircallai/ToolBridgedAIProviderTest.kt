@@ -22,8 +22,10 @@ import org.junit.Test
 class ToolBridgedAIProviderTest {
 
     /** 스크립트: respond() 호출마다 미리 정의된 응답을 차례로 반환한다. */
-    private class FakeAIProvider(private val script: List<String>) : AIProvider {
-        override val type = ProviderType.CLOUD
+    private class FakeAIProvider(
+        private val script: List<String>,
+        override val type: ProviderType = ProviderType.CLOUD,
+    ) : AIProvider {
         override val displayName = "fake"
         var callCount = 0
         val receivedHistories = mutableListOf<List<ChatMessage>>()
@@ -98,5 +100,44 @@ class ToolBridgedAIProviderTest {
         assertEquals("read_repository", entry.action)
         assertEquals(false, entry.blocked)
         assertTrue(entry.success)
+    }
+
+    @Test
+    fun localCapabilityQuestionReceivesToolInstructionsWithoutKeywords() = runTest {
+        val fake = FakeAIProvider(listOf("기능을 설명합니다."), ProviderType.LOCAL)
+        val provider = ToolBridgedAIProvider(
+            base = fake,
+            executor = ToolExecutor(listOf(MockGitHubTool()), PersistedToolPermissionStore(InMemorySettingsStore())),
+            logger = ToolExecutionLogger(),
+            toolsDescription = "github.read_repository owner=<소유자> repo=<저장소> — 저장소 조회",
+        )
+        provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "무슨 기능을 할 수 있어?")))
+        val prompt = fake.receivedHistories.single().first()
+        assertEquals(ChatMessage.Role.SYSTEM, prompt.role)
+        assertTrue(prompt.content.contains("github.read_repository"))
+        assertTrue(prompt.content.contains("실행 전 도구를 못 쓴다고 단정하지 않는다"))
+    }
+
+    @Test
+    fun localVoiceRequestKeepsCallSyntaxAndExecutesTool() = runTest {
+        val fake = FakeAIProvider(
+            listOf("TOOL: github.read_repository owner=woojik01 repo=aircall-ai", "조회했습니다."),
+            ProviderType.LOCAL,
+        )
+        val provider = ToolBridgedAIProvider(
+            base = fake,
+            executor = ToolExecutor(listOf(MockGitHubTool()), PersistedToolPermissionStore(InMemorySettingsStore())),
+            logger = ToolExecutionLogger(),
+            toolsDescription = "github.read_repository owner=<소유자> repo=<저장소> — 저장소 조회",
+        )
+        provider.respond(listOf(
+            ChatMessage(ChatMessage.Role.SYSTEM, "최종 답변에는 특수 기호를 사용하지 않는다."),
+            ChatMessage(ChatMessage.Role.USER, "깃허브 저장소 보여줘"),
+        ))
+        val prompt = fake.receivedHistories.first().first().content
+        assertTrue(prompt.contains("TOOL: <도구>.<액션>"))
+        assertTrue(prompt.contains("owner=<소유자>"))
+        assertTrue(prompt.contains("음성 규칙은 최종 답변에만 적용한다"))
+        assertTrue(fake.receivedHistories[1].any { it.content.contains("TOOL_RESULT github.read_repository 성공") })
     }
 }

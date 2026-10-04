@@ -60,7 +60,8 @@ class AppGraph(context: Context) {
         defaultGithubOAuthClientId = BuildConfig.GITHUB_OAUTH_CLIENT_ID,
         defaultGoogleOAuthClientId = BuildConfig.GOOGLE_OAUTH_CLIENT_ID,
     )
-    val credentials = FileCredentialManager(AppStorage.credentialsDir(context), AndroidKeystoreCrypto())
+    private val crypto = AndroidKeystoreCrypto()
+    val credentials = FileCredentialManager(AppStorage.credentialsDir(context), crypto)
 
     /** 로컬 모델: LiteRT-LM (갤러리에서 선택/다운로드한 .litertlm 모델). */
     val localModelAdapter = LiteRtModelAdapter(context, settings)
@@ -70,7 +71,7 @@ class AppGraph(context: Context) {
     val githubApi = GitHubApiClient(credentials)
     val gmailApi = GmailApiClient(credentials)
     val notesStore: NotesStore = FileNotesStore(File(context.filesDir, "tools/notes.txt"))
-    val calendarAdapter: CalendarAdapter = AndroidCalendarAdapter(context)
+    val calendarAdapter: CalendarAdapter = com.woojik.aircallai.tools.GoogleCalendarAdapter(credentials)
     val toolPermissions = PersistedToolPermissionStore(settingsStore)
     val toolLogger = ToolExecutionLogger()
     val toolExecutor = ToolExecutor(
@@ -139,7 +140,13 @@ class AppGraph(context: Context) {
 
     val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)
 
-    val engine = ConversationEngine(providerRouter.current())
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    val chatRooms = com.woojik.aircallai.chat.ChatRoomRepository(
+        com.woojik.aircallai.chat.ChatRoomStore(
+            File(context.filesDir, "chats/rooms.enc"), crypto,
+        ), appScope,
+    )
+    val engine = ConversationEngine(providerRouter.current(), chatRooms::updateMessages)
 
     /**
      * Android 음성 API(SpeechRecognizer/TTS)는 메인 스레드에서 호출한다.
@@ -151,3 +158,4 @@ class AppGraph(context: Context) {
     )
     val sessionRepository = SessionRepository(engine, sessionController)
 }
+

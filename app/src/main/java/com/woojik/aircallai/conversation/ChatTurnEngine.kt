@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.update
 
 class ConversationEngine(
     private var provider: AIProvider,
+    private val onTranscriptChanged: (List<ChatMessage>) -> Unit = {},
 ) {
     private val turnMutex = Mutex()
     private val revision = AtomicLong()
@@ -58,6 +59,7 @@ class ConversationEngine(
         val active = provider
         val userMessage = ChatMessage(ChatMessage.Role.USER, text)
         _transcript.update { it + userMessage }
+        onTranscriptChanged(_transcript.value)
         _state.value = ConversationState.Processing(userMessage)
 
         try {
@@ -75,6 +77,7 @@ class ConversationEngine(
             }
             val assistantMessage = response.message.copy(content = responseText)
             _transcript.update { it + assistantMessage }
+            onTranscriptChanged(_transcript.value)
             _state.value = ConversationState.Speaking(assistantMessage)
             return true
         } catch (e: CancellationException) {
@@ -115,9 +118,11 @@ class ConversationEngine(
     fun latestAssistantMessage(): ChatMessage? =
         _transcript.value.lastOrNull { it.role == ChatMessage.Role.ASSISTANT }
 
-    fun reset() {
+    fun reset() = restore(emptyList())
+
+    fun restore(messages: List<ChatMessage>) {
         revision.incrementAndGet()
-        _transcript.value = emptyList()
+        _transcript.value = messages.toList()
         _state.value = ConversationState.Idle
     }
 
@@ -128,9 +133,11 @@ class ConversationEngine(
 대부분 한두 문장으로 답하고 꼭 필요한 경우에만 더 길게 설명한다.
 사용자의 말을 불필요하게 반복하지 않는다.
 문어체보다 자연스러운 구어체를 사용한다.
-목록 제목 마크다운 코드 인용문 표를 사용하지 않는다.
-이모지와 특수 기호를 사용하지 않는다.
-대화 상대가 바로 들을 내용만 답한다.
+사용자에게 전달하는 최종 답변에는 목록 제목 마크다운 코드 인용문 표를 사용하지 않는다.
+최종 답변에는 이모지와 특수 기호를 사용하지 않는다.
+앱 내부 TOOL 지시어는 음성 표현 규칙의 예외다. 도구 시스템 프롬프트의 호출 문법을 그대로 따른다.
+도구 실행 결과를 받은 뒤 대화 상대가 바로 들을 내용으로 답한다.
 """
     }
 }
+

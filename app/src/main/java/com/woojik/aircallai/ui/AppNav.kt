@@ -10,7 +10,6 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,27 +41,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import com.woojik.aircallai.service.ModelDownloadService
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Single-Activity app. Navigation: main -> call / conversation -> settings -> local models / privacy.
- * PRD-03: 마이크 권한은 필요한 시점에 최소 범위로 요청한다.
- * PRD-04: ProviderRouter가 설정에 따라 Local/Cloud를 고른다.
- * PRD-05: 대화 세션은 Foreground Service가 소유하고 Activity는 상태 통로로만 접근한다.
- * PRD-07: 통화형 UI가 음성 대화의 기본 진입점이다.
- * 로컬 기능 증분: 설정에서 로컬 모델 갤러리(다운로드/적용)로 이동한다.
- * PRD-08: 설정에서 개인정보(데이터 흐름) 화면으로 이동한다.
- * PRD-06: 설정에서 Gi
-tHub/Gmail 토큰을 등록/삭제하고, 캘린더 권한을 요청하며,
- * WRITE 작업 승인 다이얼로그를 띄운다.
- * PRD-09: GitHub는 OAuth 기기 인증, Google은 시스템 브라우저 인증으로 연결한다.
- * 인증 취소·실패가 앱 사용을 중단하지 않는다.
- */
+/** Activity-owned permission and OAuth launchers; chat/settings navigation is in ChatNavigation. */
 class MainActivity : ComponentActivity() {
 
     // 캘린더 권한 상태. 런타임 요청 결과가 설정 화면에 즉시 반영되도록 compose 상태로 관리한다.
-    private var calendarGranted by mutableStateOf(false)
+    private var openTarget by mutableStateOf("chat")
+    private var openVersion by mutableStateOf(0)
+    private var pendingDownload: String? = null
+    private var vm: MainViewModel? = null
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        pendingDownload?.let { startModelDownload(it) }
+        pendingDownload = null
+    }
 
     // Google AuthorizationClient 권한 승인 결과를 받는 ActivityResultLauncher.
     private val startGoogleAuthorization =
@@ -115,22 +110,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    // PRD-06: 기기 캘린더 조회/등록 권한. 설정 → Calendar 연동에서 요청한다.
-    private val requestCalendarPermissions =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            calendarGranted = hasCalendarPermission()
-        }
-
     private fun graph(): AppGraph = (application as AirCallApp).graph
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        calendarGranted = hasCalendarPermission()
+        pendingDownload = savedInstanceState?.getString("pendingDownload")
         val appGraph = graph()
 
         uiScope.launch { appGraph.accountRepository.refresh(System.currentTimeMillis()) }
 
-        val vm = MainViewModel(
+        val model = MainViewModel(
             app = application,
             repository = appGraph.sessionRepository,
             isMicPermissionGranted = { hasMicPermission() },
@@ -139,16 +128,27 @@ class MainActivity : ComponentActivity() {
             stopSession = { sendServiceAction(ConversationService.ACTION_END) },
             isProviderReady = { appGraph.providerRouter.current().isReady() },
         )
+        vm = model
+        openTarget = if (savedInstanceState == null) intent.getStringExtra(EXTRA_SCREEN) ?: "chat" else ""
+        uiScope.launch {
+            appGraph.chatRooms.initialize()
+            if (appGraph.chatRooms.ready.value && appGraph.chatRooms.activeId.value == null) {
+                model.engine.restore(appGraph.chatRooms.newRoom().messages)
+            } else if (appGraph.chatRooms.ready.value && savedInstanceState == null && intent.action == Intent.ACTION_MAIN && !appGraph.sessionController.isRunning) {
+                model.prepareForRoomChange()
+                model.engine.restore(appGraph.chatRooms.newRoom().messages)
+            }
+        }
         setContent {
-            AirCallUi(
-                vm,
-                appGraph,
-                calendarPermissionGranted = { calendarGranted },
-                requestCalendarPermission = { requestCalendarPermission() },
+            AirCallUi(model, appGraph, openTarget, openVersion,
                 connectGitHub = { onCode -> connectGitHub(onCode) },
                 connectGoogle = { connectGoogle() },
-                disconnectAccount = { provider ->
-                    uiScope.launch { appGraph.accountRepository.disconnect(provider) }
+                disconnectAccount = { provider -> uiScope.launch { appGraph.accountRepository.disconnect(provider) } },
+                startDownload = { id ->
+                    if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        pendingDownload = id
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else startModelDownload(id)
                 },
             )
         }
@@ -156,6 +156,32 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
+        openTarget = intent.getStringExtra(EXTRA_SCREEN) ?: "chat"
+        openVersion++
+        if (intent.action == Intent.ACTION_MAIN && !graph().sessionController.isRunning) uiScope.launch {
+            graph().chatRooms.initialize()
+            if (graph().chatRooms.ready.value) {
+                vm?.prepareForRoomChange()
+                graph().engine.restore(graph().chatRooms.newRoom().messages)
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("pendingDownload", pendingDownload)
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun startModelDownload(id: String) {
+        ContextCompat.startForegroundService(this, Intent(this, ModelDownloadService::class.java)
+            .setAction(ModelDownloadService.ACTION_START).putExtra(ModelDownloadService.EXTRA_MODEL, id))
+    }
+
+    override fun onDestroy() {
+        vm?.dispose()
+        uiScope.cancel()
+        super.onDestroy()
     }
 
     /** PRD-09 Phase 2: Google과 동일하게 GitHub Device Flow는 기존 방식을 유지한다. */
@@ -236,6 +262,7 @@ class MainActivity : ComponentActivity() {
                 listOf(
                     Scope(GoogleOAuthClient.SCOPE_GMAIL_MODIFY),
                     Scope(GoogleOAuthClient.SCOPE_GMAIL_SEND),
+                    Scope(GoogleOAuthClient.SCOPE_CALENDAR_EVENTS),
                 ),
             )
             .build()
@@ -323,20 +350,6 @@ class MainActivity : ComponentActivity() {
         requestMicPermissions.launch(permissions.toTypedArray())
     }
 
-    /** PRD-06: 캘린더 조회·등록 권한. */
-    private fun hasCalendarPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR) ==
-            PackageManager.PERMISSION_GRANTED
-
-    private fun requestCalendarPermission() {
-        requestCalendarPermissions.launch(
-            arrayOf(
-                Manifest.permission.READ_CALENDAR,
-                Manifest.permission.WRITE_CALENDAR,
-            ),
-        )
-    }
-
     override fun onStart() {
         super.onStart()
         SecureLog.debuggable =
@@ -344,137 +357,8 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        const val EXTRA_SCREEN = "aircall.screen"
         /** Google OAuth 콜백 스킴은 Client ID(리버스)에서 유도되며 manifest에 빌드 시점 주입된다. */
         const val GOOGLE_CALLBACK_PATH = GoogleOAuthClient.CALLBACK_PATH
     }
-}
-
-private object Routes {
-    const val MAIN = "main"
-    const val CALL = "call"
-    const val CONVERSATION = "conversation"
-    const val SETTINGS = "settings"
-    const val LOCAL_MODELS = "local-models"
-    const val PRIVACY = "privacy"
-}
-
-@Composable
-private fun AirCallUi(
-    vm: MainViewModel,
-    graph: AppGraph,
-    calendarPermissionGranted: () -> Boolean,
-    requestCalendarPermission: () -> Unit,
-    connectGitHub: suspend ((String) -> Unit) -> String,
-    connectGoogle: () -> String,
-    disconnectAccount: (String) -> Unit,
-) {
-    var themeMode by remember(graph.settings) { mutableStateOf(graph.settings.themeMode()) }
-    AirCallTheme(themeMode = themeMode) {
-    val navController = rememberNavController()
-    val modelScope = rememberCoroutineScope()
-    NavHost(navController = navController, startDestination = Routes.MAIN) {
-        composable(Routes.MAIN) {
-            MainScreen(
-                onOpenCall = { navController.navigate(Routes.CALL) },
-                onOpenConversation = { navController.navigate(Routes.CONVERSATION) },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-            )
-        }
-        composable(Routes.CALL) {
-            // PRD-07 통화 화면: 종료 시 메인으로 돌아간다.
-            CallScreen(vm, onExit = { navController.popBackStack() })
-        }
-        composable(Routes.CONVERSATION) {
-            ConversationScreen(vm)
-        }
-        composable(Routes.SETTINGS) {
-            // PRD-04/05: 모드 변경 시에도 다음 턴부터 갱신된 provider가 적용된다.
-            val accounts by graph.accountRepository.connections.collectAsState()
-            SettingsScreen(
-                settings = graph.settings,
-                themeMode = themeMode,
-                onThemeChanged = {
-                    graph.settings.setThemeMode(it)
-                    themeMode = it
-                },
-                onModeChanged = {
-                    vm.engine.updateProvider(graph.providerRouter.current())
-                    vm.refreshProviderReadiness()
-                },
-                onSaveApiKey = { key ->
-                    graph.credentials.save(CloudAIProvider.KEY_SERVICE, key.toByteArray())
-                    vm.engine.updateProvider(graph.providerRouter.current())
-                    vm.refreshProviderReadiness()
-                },
-                onDeleteApiKey = {
-                    graph.credentials.delete(CloudAIProvider.KEY_SERVICE)
-                    vm.refreshProviderReadiness()
-                },
-                onOpenLocalModels = { navController.navigate(Routes.LOCAL_MODELS) },
-                onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
-                // PRD-06: GitHub/Gmail 토큰은 Cloud Key와 동일한 CredentialManager 계층에 보관한다.
-                onSaveGitHubToken = { token ->
-                    graph.credentials.save(GitHubApiClient.CREDENTIAL_SERVICE, token.toByteArray())
-                },
-                onDeleteGitHubToken = {
-                    graph.credentials.delete(GitHubApiClient.CREDENTIAL_SERVICE)
-                },
-                // PRD-06: 기기 캘린더 권한 요청과 상태 표시.
-                calendarPermissionGranted = calendarPermissionGranted(),
-                onRequestCalendarPermission = requestCalendarPermission,
-                // PRD-06: Gmail OAuth 액세스 토큰 등록/삭제.
-                onSaveGmailToken = { token ->
-                    graph.credentials.save(GmailApiClient.CREDENTIAL_SERVICE, token.toByteArray())
-                },
-                onDeleteGmailToken = {
-                    graph.credentials.delete(GmailApiClient.CREDENTIAL_SERVICE)
-                },
-                // PRD-09: 계정 연결 상태와 OAuth 연결/해제.
-                githubConnectionStatus = accounts["github"]?.let { graph.accountRepository.statusMessage(it) },
-                gmailConnectionStatus = accounts["gmail"]?.let { graph.accountRepository.statusMessage(it) },
-         
-       onConnectGitHub = connectGitHub,
-                onConnectGoogle = connectGoogle,
-                onDisconnectGitHub = { disconnectAccount("github") },
-                onDisconnectGmail = { disconnectAccount("gmail") },
-                // PRD-06 승인 증분: 승인된 WRITE 작업 목록 표시/해제.
-                toolApprovals = graph.toolPermissions.approvedActions(),
-                onRevokeToolApproval = { key ->
-                    graph.toolPermissions.revoke(key)
-                },
-            )
-        }
-        composable(Routes.LOCAL_MODELS) {
-            // 로컬 모델 갤러리: 다운로드/적용 후 통화 화면의 Offline 상태가 해소된다.
-            LocalModelScreen(
-                settings = graph.settings,
-                adapter = graph.localModelAdapter,
-                downloadManager = graph.modelDownloadManager,
-                scope = modelScope,
-                onModelChanged = { vm.refreshProviderReadiness() },
-            )
-        }
-        composable(Routes.PRIVACY) {
-            // PRD-08 개인정보 화면: 모드별/Tool별 데이터 흐름을 표시한다.
-            PrivacyScreen()
-        }
-    }
-
-    // PRD-06: WRITE Tool 작업 승인 다이얼로그 — 화면 어디에서든 대기 요청이 있으면 띄운다.
-    val pendingApproval by graph.toolApproval.pending.collectAsState()
-    pendingApproval?.let { request ->
-        ToolApprovalDialog(
-            request = request,
-            onApprove = { graph.toolApproval.approve() },
-            onDeny = { graph.toolApproval.deny() },
-        )
-    }
-}
-
-}
-
-@Preview
-@Composable
-private fun AirCallAppPreview() {
-    AirCallTheme { MainScreen(onOpenCall = {}, onOpenConversation = {}, onOpenSettings = {}) }
 }

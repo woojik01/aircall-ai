@@ -141,7 +141,7 @@ class SettingsRepository(
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
         const val THEME_SYSTEM = "system"
-        private const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_THEME_MODE = "theme_mode"
 
         const val MODE_LOCAL = "local"
         const val MODE_CLOUD = "cloud"
