@@ -6,11 +6,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- PRD-06: 기기 캘린더 일정 조회/등록. 설정 화면에서 요청한다. -->
-    <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
 
     <!-- PRD-05: 백그라운드 음성 대화 (Foreground Service + 지속 알림) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Android 13+: 세션 알림 표시 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -28,6 +29,7 @@
     <application
         android:name=".AirCallApp"
         android:label="AirCall AI"
+        android:icon="@drawable/aircall_ai_icon"
         android:allowBackup="false"
         android:supportsRtl="true"
         android:theme="@style/Theme.AirCallAI">
@@ -38,6 +40,8 @@
 
         <activity
             android:name=".ui.MainActivity"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -50,5 +54,9 @@
             android:name=".service.ConversationService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+        <service android:name=".service.ModelDownloadService"
+            android:exported="false" android:stopWithTask="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
+

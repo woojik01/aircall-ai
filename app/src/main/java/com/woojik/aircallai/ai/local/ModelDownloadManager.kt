@@ -28,6 +28,10 @@ class ModelDownloadManager(
     private val _states = MutableStateFlow<Map<String, ModelDownloadState>>(emptyMap())
     val states: StateFlow<Map<String, ModelDownloadState>> = _states.asStateFlow()
     private val active = mutableSetOf<String>()
+    private val connections = java.util.concurrent.ConcurrentHashMap<String, HttpURLConnection>()
+
+    /** Call on IO after cancelling the job to interrupt a blocking socket read. */
+    fun interrupt(id: String) { connections[id]?.disconnect() }
 
     fun targetFile(model: LocalModelInfo): File = File(modelsDir, model.fileName)
     fun isDownloaded(model: LocalModelInfo): Boolean = isInstalledModel(targetFile(model), model)
@@ -51,12 +55,15 @@ class ModelDownloadManager(
             if (target.exists() && !target.delete()) throw IOException("기존 모델 파일을 삭제하지 못했습니다")
             updateState(model.id, ModelDownloadState.Downloading(0, model.sizeBytes))
             connection = openFollowingRedirects(model.downloadUrl)
+            connections[model.id] = connection
+            currentCoroutineContext().ensureActive()
             val code = connection.responseCode
             if (code != HttpURLConnection.HTTP_OK) throw IOException(httpErrorMessage(code))
             val length = connection.contentLengthLong
             if (length > 0 && length != model.sizeBytes) throw IOException("모델 파일 크기가 일치하지 않습니다")
             val digest = MessageDigest.getInstance("SHA-256")
             var downloaded = 0L
+            var lastProgress = 0L
             connection.inputStream.use { input ->
                 temp.outputStream().use { output ->
                     val buffer = ByteArray(64 * 1024)
@@ -68,7 +75,11 @@ class ModelDownloadManager(
                         if (downloaded > model.sizeBytes) throw IOException("모델 파일 크기가 일치하지 않습니다")
                         output.write(buffer, 0, count)
                         digest.update(buffer, 0, count)
-                        updateState(model.id, ModelDownloadState.Downloading(downloaded, model.sizeBytes))
+                        val now = System.nanoTime()
+                        if (now - lastProgress > 500_000_000L || downloaded == model.sizeBytes) {
+                            updateState(model.id, ModelDownloadState.Downloading(downloaded, model.sizeBytes))
+                            lastProgress = now
+                        }
                     }
                 }
             }
@@ -85,6 +96,10 @@ class ModelDownloadManager(
             updateState(model.id, ModelDownloadState.Idle)
             throw e
         } catch (e: Exception) {
+            if (!currentCoroutineContext()[kotlinx.coroutines.Job]!!.isActive) {
+                updateState(model.id, ModelDownloadState.Idle)
+                currentCoroutineContext().ensureActive()
+            }
             // Do not expose response bodies, signed CDN URLs, or server exception messages.
             val message = if (e is IOException && e.message?.startsWith("모델") == true) {
                 e.message!!
@@ -94,6 +109,7 @@ class ModelDownloadManager(
             updateState(model.id, ModelDownloadState.Failed(message))
             Result.failure(e)
         } finally {
+            connections.remove(model.id)
             connection?.disconnect()
             temp.delete()
             synchronized(active) { active.remove(model.id) }
@@ -173,3 +189,4 @@ internal suspend fun verifyModelFile(file: File, model: LocalModelInfo): Boolean
 }
 
 private fun ByteArray.hex(): String = joinToString("") { "%02x".format(it) }
+

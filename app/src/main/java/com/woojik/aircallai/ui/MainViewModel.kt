@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 
 /**
  * PRD-05: ViewModel은 세션 상태를 SessionRepository(상태 통로)를 통해서만 본다.
@@ -68,7 +70,11 @@ class MainViewModel(
 
     fun resumeSession() = repository.controller.resume()
 
-    fun toggleMute() = repository.controller.setMuted(!repository.muted.value)
+    fun toggleMute() {
+        val muted = !repository.muted.value
+        repository.controller.setMuted(muted)
+        if (muted) repository.stopSpeaking()
+    }
 
     fun endSession() {
         repository.stopSpeaking()
@@ -78,15 +84,31 @@ class MainViewModel(
     /** PRD-03 스펙 유지: TTS 재생 즉시 중지. */
     fun onStopSpeaking() = repository.stopSpeaking()
 
+    private var textJob: Job? = null
+
     fun sendText(text: String) {
         if (text.isBlank()) return
-        scope.launch {
+        textJob = scope.launch {
             if (repository.engine.submitUserMessage(text)) repository.engine.markIdle()
         }
     }
+
+    fun cancelText() { textJob?.cancel(); engine.clearError() }
+
+    suspend fun prepareForRoomChange() {
+        textJob?.cancelAndJoin()
+        if (repository.controller.isRunning) {
+            repository.stopSpeaking()
+            repository.controller.end()
+            stopSession()
+        }
+    }
+
+    fun dispose() { scope.cancel() }
 
     override fun onCleared() {
         super.onCleared()
         scope.cancel()
     }
 }
+
