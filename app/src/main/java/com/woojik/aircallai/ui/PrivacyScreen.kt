@@ -26,7 +26,7 @@ import com.woojik.aircallai.privacy.PrivacyNotices
 @Composable
 fun PrivacyScreen() {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("개인정보 데이터 흐름") }) },
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
     ) { padding ->
         Column(
             modifier = Modifier
@@ -56,3 +56,4 @@ fun PrivacyScreen() {
         }
     }
 }
+

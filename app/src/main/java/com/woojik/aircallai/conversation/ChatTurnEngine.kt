@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.update
 
 class ConversationEngine(
     private var provider: AIProvider,
+    private val onTranscriptChanged: (List<ChatMessage>) -> Unit = {},
 ) {
     private val turnMutex = Mutex()
     private val revision = AtomicLong()
@@ -58,6 +59,7 @@ class ConversationEngine(
         val active = provider
         val userMessage = ChatMessage(ChatMessage.Role.USER, text)
         _transcript.update { it + userMessage }
+        onTranscriptChanged(_transcript.value)
         _state.value = ConversationState.Processing(userMessage)
 
         try {
@@ -75,6 +77,7 @@ class ConversationEngine(
             }
             val assistantMessage = response.message.copy(content = responseText)
             _transcript.update { it + assistantMessage }
+            onTranscriptChanged(_transcript.value)
             _state.value = ConversationState.Speaking(assistantMessage)
             return true
         } catch (e: CancellationException) {
@@ -115,9 +118,11 @@ class ConversationEngine(
     fun latestAssistantMessage(): ChatMessage? =
         _transcript.value.lastOrNull { it.role == ChatMessage.Role.ASSISTANT }
 
-    fun reset() {
+    fun reset() = restore(emptyList())
+
+    fun restore(messages: List<ChatMessage>) {
         revision.incrementAndGet()
-        _transcript.value = emptyList()
+        _transcript.value = messages.toList()
         _state.value = ConversationState.Idle
     }
 
@@ -135,3 +140,4 @@ class ConversationEngine(
 """
     }
 }
+

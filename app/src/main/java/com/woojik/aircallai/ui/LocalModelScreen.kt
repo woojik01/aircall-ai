@@ -54,6 +54,8 @@ fun LocalModelScreen(
     downloadManager: ModelDownloadManager,
     scope: CoroutineScope,
     onModelChanged: () -> Unit,
+    onDownload: (LocalModelInfo) -> Unit,
+    onCancelDownload: (LocalModelInfo) -> Unit,
 ) {
     val states by downloadManager.states.collectAsState()
     val runtimeStatus by adapter.runtimeStatus.collectAsState()
@@ -64,7 +66,7 @@ fun LocalModelScreen(
     var status by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("로컬 모델") }) },
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -75,7 +77,7 @@ fun LocalModelScreen(
         ) {
             item {
                 Text(
-                    "모델을 다운로드하고 적용하면 AI 응답을 기기에서 생성합니다. 음성 인식·출력의 네트워크 사용 여부는 기기의 음성 서비스에 따라 다릅니다.",
+                    "화면을 닫아도 다운로드는 계속됩니다. 알림에서 진행률을 확인하거나 취소할 수 있습니다. 다운로드 후 적용하면 AI 응답을 기기에서 생성합니다. 음성 인식·출력의 네트워크 사용 여부는 기기의 음성 서비스에 따라 다릅니다.",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -125,9 +127,8 @@ fun LocalModelScreen(
                     busy = applying,
                     // 모델별 상태만 이 카드에 전달한다.
                     downloadState = states[model.id] ?: ModelDownloadState.Idle,
-                    onDownload = {
-                        scope.launch { downloadManager.download(model) }
-                    },
+                    onDownload = { onDownload(model) },
+                    onCancelDownload = { onCancelDownload(model) },
                     onDelete = {
                         if (!downloadManager.delete(model)) status = "모델을 삭제하지 못했습니다. 다시 시도해 주세요."
                     },
@@ -187,6 +188,7 @@ private fun ModelCard(
     busy: Boolean,
     downloadState: ModelDownloadState,
     onDownload: () -> Unit,
+    onCancelDownload: () -> Unit,
     onDelete: () -> Unit,
     onApply: () -> Unit,
     onUnapply: () -> Unit,
@@ -249,7 +251,9 @@ private fun ModelCard(
                 modifier = Modifier.padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (!downloaded) {
+                if (downloadState is ModelDownloadState.Downloading || downloadState is ModelDownloadState.Verifying) {
+                    OutlinedButton(onClick = onCancelDownload) { Text("다운로드 취소") }
+                } else if (!downloaded) {
                     Button(
                         onClick = onDownload,
                         enabled = !busy && downloadState !is ModelDownloadState.Downloading &&
@@ -269,3 +273,4 @@ private fun ModelCard(
         }
     }
 }
+

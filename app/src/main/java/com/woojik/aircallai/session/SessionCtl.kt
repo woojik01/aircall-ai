@@ -54,38 +54,42 @@ class SessionController(private val scope: CoroutineScope) {
     private val _muted: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val muted: StateFlow<Boolean> = _muted.asStateFlow()
 
-    private val paused: MutableStateFlow<Boolean> = MutableStateFlow(false)
     private var job: Job? = null
+    private var turn: (suspend () -> Unit)? = null
 
     val isRunning: Boolean
         get() = _status.value == SessionStatus.Running || _status.value == SessionStatus.Paused
 
-    /** 세션을 시작한다. 진행 중인 턴은 취소하지 않고 다음 턴부터 일시정지한다. */
     fun start(loop: suspend () -> Unit) {
-        if (job?.isActive == true) return
-        paused.value = false
+        if (isRunning) return
+        turn = loop
+        _muted.value = false
         _status.value = SessionStatus.Running
+        launchLoop()
+    }
+
+    private fun launchLoop() {
+        val previous = job
         job = scope.launch {
-            while (isActive) {
-                while (isActive && paused.value) {
-                    _status.value = SessionStatus.Paused
-                    delay(PAUSE_POLL_MS)
-                }
-                if (!isActive) break
-                _status.value = SessionStatus.Running
-                loop()
-                // Prevent a fast/synthetic turn from creating a busy loop and provide the PRD-05 cooldown.
+            // A cancelled STT/TTS turn must finish its cleanup before the next starts.
+            previous?.join()
+            while (isActive && _status.value == SessionStatus.Running) {
+                turn?.invoke() ?: break
                 delay(TURN_COOLDOWN_MS)
             }
         }
     }
 
     fun pause() {
-        if (_status.value == SessionStatus.Running) paused.value = true
+        if (_status.value != SessionStatus.Running) return
+        _status.value = SessionStatus.Paused
+        job?.cancel()
     }
 
     fun resume() {
-        if (_status.value == SessionStatus.Paused) paused.value = false
+        if (_status.value != SessionStatus.Paused) return
+        _status.value = SessionStatus.Running
+        launchLoop()
     }
 
     fun setMuted(muted: Boolean) {
@@ -95,7 +99,7 @@ class SessionController(private val scope: CoroutineScope) {
     /** PRD-05 세션 종료: 사용자(알림 종료)와 시스템(서비스 종료) 모두 여기를 거친다. */
     fun end() {
         job?.cancel()
-        job = null
+        turn = null
         _status.value = SessionStatus.Ended
     }
 
@@ -104,3 +108,4 @@ class SessionController(private val scope: CoroutineScope) {
         private const val TURN_COOLDOWN_MS = 50L
     }
 }
+
