@@ -75,6 +75,9 @@ class ToolBridgedAIProvider(
                     if (failedCalls.isNotEmpty()) return AIResponse(ChatMessage(ChatMessage.Role.ASSISTANT,
                         "실행하지 못한 작업이 있습니다.\n" + failedCalls.joinToString("\n")), base.type,
                         System.currentTimeMillis() - started)
+                    if (claimsWithoutEvidence) return AIResponse(ChatMessage(ChatMessage.Role.ASSISTANT,
+                        "요청한 도구 작업을 실제로 실행하지 못했습니다. 완료된 작업은 없습니다. 계정 연결과 필요한 입력을 확인해 주세요."),
+                        base.type, System.currentTimeMillis() - started)
                     return response
                 }
                 verifyPass++

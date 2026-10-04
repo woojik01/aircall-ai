@@ -24,6 +24,14 @@ import org.junit.Test
  */
 class ToolBridgedAIProviderTest {
 
+    @Test fun repeatedCompletionClaimsWithoutExecutionAreReplacedByHonestStatus() = runTest {
+        val logger = ToolExecutionLogger()
+        val (provider, _) = bridge(listOf("메모를 저장했습니다."), logger)
+        val response = provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "메모 저장해줘")))
+        assertTrue(logger.entries.value.isEmpty())
+        assertTrue(response.message.content.contains("실제로 실행하지 못했습니다"))
+    }
+
     @Test fun approvalContinuesTurnWithActualResultBeforeAiAnswers() = runTest {
         val permissions = InMemoryToolPermissionStore()
         val tool = MockGitHubTool()
