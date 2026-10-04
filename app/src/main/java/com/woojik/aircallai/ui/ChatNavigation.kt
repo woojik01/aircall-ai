@@ -38,6 +38,23 @@ fun AirCallUi(
     requestTaskNotifications: () -> Unit = {},
 ) {
     var themeMode by remember { mutableStateOf(graph.settings.themeMode()) }
+    var ageAcknowledged by remember { mutableStateOf(graph.settings.hasMinimumAgeAcknowledgement()) }
+    if (!ageAcknowledged) {
+        val context = LocalContext.current
+        AirCallTheme(themeMode = themeMode) {
+            AuroraBackground {
+                AlertDialog(onDismissRequest = {}, title = { Text("이용 연령 안내") },
+                    text = { Text("AirCall AI는 만 14세 이상을 대상으로 합니다. 생년월일이나 신분증을 수집하지 않으며, " +
+                        "이 확인은 기기에만 저장합니다. AI 답변은 틀릴 수 있습니다. 만 14세 이상인 경우 계속해 주세요.") },
+                    confirmButton = { TextButton(onClick = {
+                        graph.settings.acceptMinimumAgeAcknowledgement(); ageAcknowledged = true
+                    }) { Text("만 14세 이상입니다") } },
+                    dismissButton = { TextButton(onClick = { (context as? android.app.Activity)?.finish() }) { Text("나가기") } },
+                )
+            }
+        }
+        return
+    }
     val nav = rememberNavController()
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -59,10 +76,12 @@ fun AirCallUi(
     var pendingVoice by rememberSaveable { mutableStateOf(false) }
     val usesCloud = graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD
     fun report(content: String?) { reportResponse = content?.take(4000); reportOpen = true }
-    fun sendText(text: String) {
+    fun sendText(text: String): Boolean {
         if (graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD &&
-            !graph.settings.hasCloudDisclosure()) pendingText = text
-        else vm.sendText(text)
+            !graph.settings.hasCloudDisclosure()) {
+            pendingText = text; return false
+        }
+        vm.sendText(text); return true
     }
     fun startVoice() {
         if (!graph.settings.hasSpeechDisclosure() ||

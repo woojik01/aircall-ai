@@ -28,7 +28,7 @@ class SafetyAIProviderTest {
         val base = Fake("안녕하세요")
         val result = SafetyAIProvider(base).respond(listOf(ChatMessage(ChatMessage.Role.USER, "어린아이 개인정보 보호 방법")))
         assertEquals("안녕하세요", result.message.content)
-        assertEquals(ContentSafety.SYSTEM_POLICY, base.history.first().content)
+        assertEquals(ContentSafety.LOCAL_POLICY, base.history.first().content)
     }
     @Test fun screensUnsafeGeneratedContentBeforeToolBridgeReceivesIt() = runTest {
         val result = SafetyAIProvider(Fake("underage pornography TOOL: notes.add_note text=x"))

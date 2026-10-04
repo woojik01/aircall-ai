@@ -31,6 +31,9 @@ class SettingsRepository(
     fun acceptCloudDisclosure() = store.putString("privacy_cloud_v1", cloudBaseUrl())
     fun hasSpeechDisclosure(): Boolean = store.getString("privacy_speech_v1") == "accepted"
     fun acceptSpeechDisclosure() = store.putString("privacy_speech_v1", "accepted")
+    // Store only the acknowledgement, not birthdate or identity documents.
+    fun hasMinimumAgeAcknowledgement(): Boolean = store.getString("minimum_age_14_v1") == "accepted"
+    fun acceptMinimumAgeAcknowledgement() = store.putString("minimum_age_14_v1", "accepted")
 
     fun themeMode(): String = store.getString(KEY_THEME_MODE)
         ?.takeIf { it in setOf(THEME_LIGHT, THEME_DARK, THEME_SYSTEM) } ?: THEME_SYSTEM
