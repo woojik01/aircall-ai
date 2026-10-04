@@ -69,7 +69,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .padding(16.dp),
         ) {
-            Text("AI Mode", style = MaterialTheme.typography.titleMedium)
+            Text("AI Mode", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
                     selected = mode == SettingsRepository.MODE_LOCAL,
@@ -96,16 +96,16 @@ fun SettingsScreen(
             Text(
                 "모드 변경은 다음 대화부터 적용됩니다.",
      
-           style = MaterialTheme.typography.bodySmall,
+           style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            Text("Local 모델", style = MaterialTheme.typography.titleMedium)
+            Text("Local 모델", style = MaterialTheme.typography.titleLarge)
             Text(
                 "AI 응답은 기기에서 생성합니다. 음성 인식·출력은 음성 서비스에 따라 네트워크가 필요할 수 있습니다.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
             OutlinedButton(
@@ -115,7 +115,7 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            Text("Cloud API Key", style = MaterialTheme.typography.titleMedium)
+            Text("Cloud API Key", style = MaterialTheme.typography.titleLarge)
             OutlinedTextField(
                 value = apiKeyInput,
                 onValueChange = { apiKeyInput = it },
@@ -146,13 +146,13 @@ fun SettingsScreen(
             }
             Text(
                 "Key는 기기의 Android Keystore로 암호화되어 저장되며 서버로 전송되지 않습니다.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 16.dp),
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            Text("Cloud API 연결", style = MaterialTheme.typography.titleMedium)
+            Text("Cloud API 연결", style = MaterialTheme.typography.titleLarge)
             OutlinedTextField(
                 value = baseUrlInput,
                 onValueChange = { baseUrlInput = it },
@@ -186,11 +186,11 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // PRD-09 소셜 로그인 UX: GitHub 로그인 버튼(기본). Client ID는 빌드 시점 기본값 사용.
-            Text("GitHub 계정 연결", style = MaterialTheme.typography.titleMedium)
+            Text("GitHub 계정 연결", style = MaterialTheme.typography.titleLarge)
             githubConnectionStatus?.let {
                 Text(
                     it,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
         
         )
@@ -207,7 +207,7 @@ fun SettingsScreen(
             Text(
                 "GitHub로 로그인하면 GitHub 인증 화면에서 승인 후 연결됩니다. 저장소 조회는 기본 허용, " +
                     "Issue/PR 생성은 사용 시 승인이 필요합니다. 토큰은 기기에 암호화 저장됩니다.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
             if (settings.githubOAuthClientId().isNotBlank()) {
@@ -236,13 +236,13 @@ fun SettingsScreen(
                 Text(
                     "로그인이 아직 준비되지 않았습니다. 아래 고급 설정에서 Client ID를 한 번만 등록하면 " +
                         "버튼만 눌러 로그인할 수 있습니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
             Text(
                 "고급: OAuth Client ID 등록 / Personal Access Token 직접 입력",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 12.dp),
             )
             OutlinedTextField(
@@ -299,11 +299,11 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // PRD-09 소셜 로그인 UX: Google 로그인 버튼(기본). Client ID는 빌드 시점 기본값 사용.
-            Text("Google 계정 연결 (Gmail)", style = MaterialTheme.typography.titleMedium)
+            Text("Google 계정 연결 (Gmail)", style = MaterialTheme.typography.titleLarge)
             gmailConnectionStatus?.let {
                 Text(
                     it,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
                 )
    
@@ -312,7 +312,7 @@ fun SettingsScreen(
                 "Google로 로그인하면 Google 인증 화면에서 계정을 승인합니다. 승인 후 앱으로 돌아오면 " +
                     "연결되고 토큰은 만료 시 자동 갱신됩니다(refresh token). 메일 발송은 사용 시 승인이 필요하며 " +
                     "토큰은 기기에 암호화 저장됩니다.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
             if (settings.googleOAuthClientId().isNotBlank()) {
@@ -329,13 +329,13 @@ fun SettingsScreen(
                 Text(
                     "로그인이 아직 준비되지 않았습니다. 아래 고급 설정에서 Client ID를 한 번만 등록하면 " +
                         "버튼만 눌러 로그인할 수 있습니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
             Text(
                 "고급: OAuth Client ID 등록 / 액세스 토큰 직접 입력 (만료 시 재등록 필요)",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 12.dp),
             )
             OutlinedTextField(
@@ -391,16 +391,16 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // PRD-06: 기기 캘린더 연동. 일정 조회/등록에는 캘린더 권한이 필요하다.
-            Text("Calendar 연동", style = MaterialTheme.typography.titleMedium)
+            Text("Calendar 연동", style = MaterialTheme.typography.titleLarge)
             Text(
                 "기기 캘린더 일정 조회(기본 허용)와 일정 등록(승인 필요)에 캘린더 권한이 필요합니다.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
             if (calendarPermissionGranted) {
                 Text(
                     "캘린더 권한이 허용되었습니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             } else {
@@ -410,7 +410,7 @@ fun SettingsScreen(
                 ) { Text("캘린더 권한 허용") }
                 Text(
                     "권한을 거부한 경우 시스템 설정 → 앱 → AirCall AI → 권한에서 캘린더를 허용해 주세요.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
@@ -418,18 +418,18 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // PRD-06 승인 증분: 승인된 WRITE 작업은 재시작 후에도 유지되며 여기서 해제할 수 있다.
-            Text("Tool 작업 승인", style = MaterialTheme.typography.titleMedium)
+            Text("Tool 작업 승인", style = MaterialTheme.typography.titleLarge)
             if (toolApprovals.isEmpty()) {
                 Text(
                     "승인된 WRITE 작업이 없습니다. Tool이 WRITE 작업을 요청하면 승인 다이얼로그가 표시됩니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             } else {
                 var approvals by remember(toolApprovals) { mutableStateOf(toolApprovals) }
                 Text(
                     "다음 WRITE 작업이 승인되어 있습니다. 해제하면 다시 승인이 필요합니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 approvals.forEach { key ->
@@ -455,10 +455,10 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // PRD-08: 개인정보(데이터 흐름) 안내 화면으로 이동한다.
-            Text("개인정보", style = MaterialTheme.typography.titleMedium)
+            Text("개인정보", style = MaterialTheme.typography.titleLarge)
             Text(
                 "모드별로 어떤 데이터가 어디로 전송되는지 확인할 수 있습니다.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 4.dp),
             )
             OutlinedButton(
@@ -469,7 +469,7 @@ fun SettingsScreen(
             status?.let {
                 Text(
                     it,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
