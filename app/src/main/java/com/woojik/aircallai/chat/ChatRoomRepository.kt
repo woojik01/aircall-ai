@@ -23,7 +23,9 @@ data class ChatRoom(
     val title: String = "새 채팅",
     val messages: List<ChatMessage> = emptyList(),
     val renamed: Boolean = false,
-)
+) {
+    val hasConversation: Boolean get() = messages.any { it.role == ChatMessage.Role.USER && it.content.isNotBlank() }
+}
 
 /** Encrypted, atomic snapshots. A failed read never silently overwrites existing history. */
 class ChatRoomStore(private val file: File, private val crypto: CryptoEngine) {
@@ -86,7 +88,9 @@ class ChatRoomRepository(private val store: ChatRoomStore, scope: CoroutineScope
     suspend fun initialize() = loading.withLock {
         if (_ready.value) return@withLock
         try {
-            _rooms.value = withContext(Dispatchers.IO) { store.read() }
+            val saved = withContext(Dispatchers.IO) { store.read() }
+            _rooms.value = saved.filter { it.hasConversation }
+            if (_rooms.value != saved) writes.trySend(_rooms.value)
             _ready.value = true
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (_: Exception) { _error.value = "저장된 채팅을 열지 못했습니다. 기존 파일은 보존됩니다." }
@@ -96,11 +100,14 @@ class ChatRoomRepository(private val store: ChatRoomStore, scope: CoroutineScope
         check(_ready.value)
         val room = ChatRoom()
         _activeId.value = room.id
-        publish(listOf(room) + _rooms.value)
+        publish(listOf(room) + _rooms.value.filter { it.hasConversation })
         return room
     }
 
-    fun select(id: String): ChatRoom? = _rooms.value.firstOrNull { it.id == id }?.also { _activeId.value = id }
+    fun select(id: String): ChatRoom? = _rooms.value.firstOrNull { it.id == id }?.also {
+        _activeId.value = id
+        publish(_rooms.value.filter { room -> room.id == id || room.hasConversation })
+    }
 
     fun updateMessages(messages: List<ChatMessage>) {
         val id = _activeId.value ?: return
@@ -126,6 +133,7 @@ class ChatRoomRepository(private val store: ChatRoomStore, scope: CoroutineScope
 
     private fun publish(rooms: List<ChatRoom>) {
         _rooms.value = rooms
-        writes.trySend(rooms)
+        // The currently open empty draft exists only in memory, including after renaming.
+        writes.trySend(rooms.filter { it.hasConversation })
     }
 }

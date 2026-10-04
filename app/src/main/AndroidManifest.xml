@@ -28,7 +28,7 @@
 
     <application
         android:name=".AirCallApp"
-        android:label="AirCall AI"
+        android:label="${appLabel}"
         android:icon="@drawable/aircall_ai_icon"
         android:allowBackup="false"
         android:supportsRtl="true"
@@ -59,4 +59,3 @@
             android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
-

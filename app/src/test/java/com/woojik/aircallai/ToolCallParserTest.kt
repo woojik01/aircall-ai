@@ -49,4 +49,19 @@ class ToolCallParserTest {
         assertNull(ToolCallParser.parseFirst("TOOL: "))
         assertNull(ToolCallParser.parseFirst("TOOL: 잘못된형식"))
     }
+
+    @Test fun rejectsTruncatedAmbiguousAndMultipleCalls() {
+        listOf(
+            "TOOL: notes.add_note text=\"닫히지 않은 값",
+            "TOOL: notes.add_note text=하나 text=둘",
+            "TOOL: notes.add_note text=공백 있는 값",
+            "TOOL: notes.add_note text=\"닫힌 값\"나머지",
+            "TOOL: notes.add_note text=하나\nTOOL: notes.add_note text=둘",
+        ).forEach { assertNull(it, ToolCallParser.parseFirst(it)) }
+    }
+
+    @Test fun parsesEscapedQuotesAndTabs() {
+        val call = ToolCallParser.parseFirst("TOOL: notes.add_note\ttext=\"그가 \\\"안녕\\\"이라고 했다\"")
+        assertEquals("그가 \"안녕\"이라고 했다", call!!.arguments["text"])
+    }
 }

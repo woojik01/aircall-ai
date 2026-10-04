@@ -1,80 +1,52 @@
 package com.woojik.aircallai.tools
 
-/**
- * PRD-06 Tool-AI 연결: AI 응답 텍스트에서 Tool 호출 지시어를 파싱한다.
- * 형식 (한 줄):
- *   TOOL: github.read_repository owner=woojik01 repo=aircall-ai
- * 값에 공백이 필요하면 큰따옴표로 감싼다:
- *   TOOL: github.create_issue owner=o repo=r title="버그: 음성 인식 안 됨"
- * 한 응답에 여러 지시어가 있으면 첫 번째만 실행한다(순차 실행은 후속 증분).
- */
+/** Strict single-call parser. Incomplete or ambiguous writes are never partially executed. */
 object ToolCallParser {
-
     data class ToolCall(val toolName: String, val action: String, val arguments: Map<String, String>)
-
     const val MARKER = "TOOL:"
+    private val identifier = Regex("[a-zA-Z_][a-zA-Z0-9_]*")
 
-    /** 응답에서 첫 Tool 지시어를 파싱한다. 없으면 null. */
+    fun hasDirective(response: String): Boolean = response.lineSequence().any { it.trim().startsWith(MARKER) }
+
     fun parseFirst(response: String): ToolCall? {
-        val line = response.lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.startsWith(MARKER) }
-            ?: return null
-        val body = line.removePrefix(MARKER).trim()
-        if (body.isEmpty()) return null
-
-        val tokens = tokenize(body)
-        if (tokens.isEmpty()) return null
-        val qualified = tokens[0]
-        val dot = qualified.indexOf('.')
-        if (dot <= 0 || dot == qualified.length - 1) return null
-        val toolName = qualified.substring(0, dot)
-        val action = qualified.substring(dot + 1)
-        val arguments = mutableMapOf<String, String>()
-        var i = 1
-        while (i < tokens.size) {
-            val token = tokens[i]
-            val eq = token.indexOf('=')
-            if (eq > 0) {
-                val key = token.substring(0, eq)
-                // 값이 따옴표로 시작하면 닫는 따옴표까지 하나의 값으로 묶는다.
-                val rest = token.substring(eq + 1)
-                if (rest.startsWith("\"")) {
-                    val joined = StringBuilder(rest)
-                    while (!joined.toString().endsWith("\"") && i + 1 < tokens.size) {
-                        i++
-                        joined.append(' ').append(tokens[i])
-                    }
-                    arguments[key] = joined.toString().removeSurrounding("\"")
-                } else {
-                    arguments[key] = rest
+        val lines = response.lineSequence().map { it.trim() }.filter { it.startsWith(MARKER) }.toList()
+        if (lines.size != 1 || lines.single().length > 65_536) return null
+        val body = lines.single().removePrefix(MARKER).trim()
+        val qualified = body.takeWhile { !it.isWhitespace() }
+        val parts = qualified.split('.')
+        if (parts.size != 2 || parts.any { !identifier.matches(it) }) return null
+        var position = qualified.length
+        val arguments = linkedMapOf<String, String>()
+        while (position < body.length) {
+            while (position < body.length && body[position].isWhitespace()) position++
+            if (position == body.length) break
+            val keyStart = position
+            while (position < body.length && body[position] != '=' && !body[position].isWhitespace()) position++
+            val key = body.substring(keyStart, position)
+            if (!identifier.matches(key) || key in arguments || position == body.length || body[position] != '=') return null
+            position++
+            if (position == body.length) return null
+            val value = StringBuilder()
+            if (body[position] == '"') {
+                position++
+                var closed = false
+                while (position < body.length) {
+                    val ch = body[position++]
+                    if (ch == '"') { closed = true; break }
+                    if (ch == '\\' && position < body.length && (body[position] == '"' || body[position] == '\\')) {
+                        value.append(body[position++])
+                    } else value.append(ch)
                 }
+                if (!closed || (position < body.length && !body[position].isWhitespace())) return null
+            } else {
+                while (position < body.length && !body[position].isWhitespace()) {
+                    if (body[position] == '"') return null
+                    value.append(body[position++])
+                }
+                if (value.isEmpty()) return null
             }
-            i++
+            arguments[key] = value.toString()
         }
-        return ToolCall(toolName, action, arguments)
-    }
-
-    private fun tokenize(body: String): List<String> {
-        val tokens = mutableListOf<String>()
-        val current = StringBuilder()
-        var inQuote = false
-        body.forEach { ch ->
-            when {
-                ch == '"' -> {
-                    inQuote = !inQuote
-                    current.append(ch)
-                }
-                ch == ' ' && !inQuote -> {
-                    if (current.isNotEmpty()) {
-                        tokens.add(current.toString())
-                        current.setLength(0)
-                    }
-                }
-                else -> current.append(ch)
-            }
-        }
-        if (current.isNotEmpty()) tokens.add(current.toString())
-        return tokens
+        return ToolCall(parts[0], parts[1], arguments)
     }
 }

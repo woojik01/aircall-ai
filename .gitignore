@@ -13,3 +13,11 @@ build/
 
 # Kotlin compiler session/cache files
 .kotlin/
+
+# Private production signing material (the existing public development key is separate).
+*.jks
+release.keystore
+keystore.properties
+dist/
+__pycache__/
+*.pyc

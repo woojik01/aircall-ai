@@ -3,6 +3,12 @@
 로컬 AI 모델 또는 Cloud API로 텍스트·음성 대화를 제공하는 Android 앱입니다.
 [단계별 PRD](docs/prd)는 목표 사양이며, 아래는 현재 구현 상태입니다.
 
+[설치·서명·릴리스 안내](docs/RELEASING.md) · [0.3.0 변경 기록](CHANGELOG.md)
+
+메시지를 보내지 않은 방은 방을 떠날 때 자동 정리되며 현재 빈 방은 저장하지 않습니다.
+AI 도구 작업은 승인 후 실제 결과가 AI에게 전달되고 대화가 이어집니다. 성공·실패 결과는
+앱과 시스템 알림에 표시됩니다. Android 13 이상에서는 알림 허용이 필요하며, 거부해도 앱에서 결과를 확인할 수 있습니다.
+
 ## 현재 구현 상태
 
 - Android 앱, 기기 저장소·Keystore 자격증명 저장, Local/Cloud Provider 구조
@@ -14,12 +20,11 @@
 - PRD-06 Tool 어댑터 전체: GitHub, Notes(기기 로컬), Calendar(기기 캘린더), Gmail
 - 캘린더 런타임 권한 요청 UI와 Gmail OAuth 토큰 등록 UI
 - PRD-09 인증 추상화: OAuth 상태 모델·Provider 인터페이스·자격증명 저장소(갱신 포함)·연결 저장소
-- PRD-09 GitHub OAuth 기기 인증(Device Flow) 연결, Google OAuth(Authorization Code + PKCE) 연결,
-  토큰 자동 갱신, 서비스별 연결/해제 UI
+- GitHub Device Flow 및 Google Android AuthorizationClient 연결, 서비스별 연결/해제 UI
 - PRD-09 소셜 로그인 UX: "GitHub로 로그인"/"Google로 로그인" 버튼이 기본.
   OAuth Client ID는 빌드 시점 기본값(BuildConfig)을 사용하며 고급 설정에서 재정의 가능.
   수동 PAT/토큰 입력은 고급 설정으로 유지
-- 개인정보 안내와 Release R8 빌드 구성 (앱 버전 0.2.0)
+- 개인정보 안내와 Release R8 빌드, Android 16 대상 빌드, 정식 APK/AAB 릴리스 초안 구성 (앱 버전 0.3.0)
 
 **실기 검증 필요:** 로컬 모델의 Android 추론 성능과 메모리 사용, 음성 인식·출력,
 화면 회전·복귀·다른 앱 전환·화면 OFF·알림/오버레이·배터리 동작, Release APK 설치,
@@ -33,7 +38,7 @@ PRD 전체 완료나 출시 준비 완료를 의미하지 않습니다.
 2. 다운로드 크기와 SHA-256 검증 완료 후 **적용**을 누릅니다. 실제 모델 로드가 성공해야 선택이 저장됩니다.
 3. AI Mode를 Local로 선택하고 텍스트 대화 또는 통화 화면으로 이동합니다.
 
-Gemma 4는 **LiteRT-LM 0.10.2**와 Android CPU용 `.litertlm` 파일을 사용합니다.
+Gemma 4는 **LiteRT-LM 0.17.1**과 `.litertlm` 파일을 사용합니다.
 이전 버전의 웹용 `.task` 파일은 사용할 수 없으므로 모델을 새로 다운로드하고 적용해야 합니다.
 파일은 앱 전용 저장소에 보관됩니다. 모델 관리 화면의 **이전 모델 파일 삭제**로
 이전 웹용 파일의 저장 공간을 회수할 수 있습니다. API Key·토큰·설정은 유지됩니다.
@@ -59,14 +64,13 @@ E2B 배포 안내](https://huggingface.co/litert-community/gemma-4-E2B-it-litert
   없으면 고급 설정에서 1회 등록한다. 고급으로 PAT 직접 입력 유지
 - `github` Tool: `read_repository`는 기본 허용, `create_issue`/`create_pull_request`는 승인 필요
 - **Gmail 연동(소셜 로그인)**: 설정의 **"Google로 로그인"** 버튼.
-  승인 후 앱으로 돌아오면 연결되고 refresh token으로 만료 시 자동 갱신된다.
+  Android AuthorizationClient 승인 후 연결된다. 현재 Google 연결에는 refresh token이 없으므로 만료되면 다시 권한을 요청한다.
   Client ID는 빌드 시점 기본값 또는 고급 설정 등록(Android 유형 OAuth 클라이언트).
   고급으로 액세스 토큰 직접 입력 유지
 - **Tool-AI 연결**: AI가 `TOOL: <도구>.<액션> key=value` 지시어를 응답하면
-  실행 결과를 대화에 반영해 최종 답변한다 (최대 2회 라운드)
+  실행 결과를 대화에 반영해 최종 답변한다 (최대 6회 도구 호출, 같은 변경 요청 반복 차단)
 - `notes` Tool: `add_note`(승인 필요), `search_notes`/`list_notes`(기본 허용) — 기기 로컬 저장소 사용
-- `calendar` Tool: `read_upcoming`(기본 허용), `create_event`(승인 필요) — 기기 캘린더 사용.
-  **설정 → Calendar 연동에서 캘린더 권한을 허용해야** 일정 조회·등록이 동작한다
+- `calendar` Tool: `read_upcoming`(기본 허용), `create_event`(승인 필요) — Google 연결의 Calendar API 사용
 - `gmail` Tool: `send_email`(승인 필요) — Gmail API(messages/send) 호출
 - 승인은 **도구·작업 단위**로 저장된다. 승인 후에는 다른 인자로 같은 작업을 요청해도
   다시 묻지 않으며, 앱 재시작 후에도 유지된다. 설정 → Tool 작업 승인에서 해제할 수 있다.
@@ -85,8 +89,8 @@ Client ID는 공개값이므로 빌드에 포함해도 안전하다.
 2. **Google**: Google Cloud Console → 프로젝트 생성 → API 및 서비스 → 사용자 인증 정보 →
    OAuth 클라이언트 ID(**Android** 유형) 생성. 패키지 이름 `com.woojik.aircallai`,
    SHA-1 인증서 지문(debug.keystore의 것, 아래 참조) 입력. Gmail API 사용 설정 필요.
-   콜백 주소는 Client ID에서 유도되는 리버스 스킴(com.googleusercontent.apps.<id>:/oauth2redirect)으로
-   앱이 자동 처리하므로 별도 등록이 필요 없다. Release APK 배포 시 릴리스 서명의 SHA-1도 추가 등록한다.
+   현재는 Android AuthorizationClient를 사용하며 커스텀 콜백 스킴을 등록하지 않는다.
+   정식 배포용은 `com.woojik.aircallai.release`와 정식 서명 인증서를 별도 등록한다 ([안내](docs/RELEASING.md)).
 3. 빌드 머신의 `~/.gradle/gradle.properties`(또는 CI 시크릿)에 추가:
 
 ```properties

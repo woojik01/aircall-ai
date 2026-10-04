@@ -6,13 +6,16 @@ on:
   pull_request:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -21,80 +24,73 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Unit tests
+      - name: Set up Android SDK command line tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+      - name: Prepare Android SDK and stable development identity
+        run: |
+          test -f app/debug.keystore
+          echo "AIRCALL_VERSION_CODE=$((30000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android >> "$GITHUB_STEP_SUMMARY"
+      - name: Release verification unit tests
+        run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Android unit tests
+        timeout-minutes: 12
+        run: gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+      - name: Build debug and shrink production code
         timeout-minutes: 10
-        run: |
-          set +e
-          timeout --signal=TERM --kill-after=30s 8m gradle --no-daemon --console=plain testDebugUnitTest --stacktrace > /tmp/tests.log 2>&1
-          code=$?
-          if [ $code -ne 0 ]; then
-            {
-              echo '### ❌ testDebugUnitTest 실패 또는 시간 초과'
-              echo ''
-              echo '#### 컴파일/테스트 에러 라인'
-              echo '~~~'
-              grep -E '^e: |error: | FAILED|Unresolved|Could not (find|resolve)' /tmp/tests.log | head -n 80
-              echo '~~~'
-              echo ''
-              echo '#### 로그 마지막 120줄'
-              echo '~~~'
-              tail -n 120 /tmp/tests.log
-              echo '~~~'
-            } > /tmp/comment.md
-            if [ -n "$NUMBER" ]; then
-              gh pr comment "$NUMBER" --repo "$REPO" --body-file /tmp/comment.md || true
-            fi
-          fi
-          exit $code
         env:
-          GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-
-      # PRD-09: 고정 디버그 서명 키. 개발 PC가 없어도 SHA-1이 매 빌드 동일하다.
-      # main 에서 최초 1회 생성 후 커밋하고, 지문을 저장소 파일과 run summary 에 남긴다.
-      - name: Ensure fixed debug keystore
+          AIRCALL_KEYSTORE_PATH: ${{ runner.temp }}/ci-test-release.jks
+          AIRCALL_KEYSTORE_PASSWORD: ci-test-only
+          AIRCALL_KEY_ALIAS: ci-test
+          AIRCALL_KEY_PASSWORD: ci-test-only
+          AIRCALL_REQUIRE_RELEASE_SIGNING: 'true'
         run: |
-          set -e
-          if [ ! -f app/debug.keystore ]; then
-            echo "고정 디버그 서명 키가 없어 새로 생성합니다."
-            keytool -genkeypair -v \
-              -keystore app/debug.keystore \
-              -storepass android \
-              -keypass android \
-              -alias androiddebugkey \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          SHA1=$(keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android | grep -E "SHA1:|SHA-1:" | head -n 1 | awk '{print $NF}')
-          SHA256=$(keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android | grep -E "SHA256:|SHA-256:" | head -n 1 | awk '{print $NF}')
-          echo "### 디버그 서명 지문" >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
-          echo "SHA-1:   $SHA1" >> "$GITHUB_STEP_SUMMARY"
-          echo "SHA-256: $SHA256" >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
-          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
-            if ! grep -q "$SHA1" app/debug-keystore-info.txt 2>/dev/null; then
-              printf 'debug.keystore SHA-1:\n%s\n\ndebug.keystore SHA-256:\n%s\n' "$SHA1" "$SHA256" > app/debug-keystore-info.txt
-              git config user.name "github-actions[bot]"
-              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git add app/debug.keystore app/debug-keystore-info.txt
-              git diff --cached --quiet || git commit -m "CI: 고정 디버그 서명 keystore 및 SHA-1/SHA-256 지문 기록"
-              git push
-            fi
-          fi
-
-      - name: Build debug and release APKs
-        timeout-minutes: 5
-        run: gradle --no-daemon --console=plain assembleDebug assembleRelease
+          # This disposable test key is only for validating signing. Its APK/AAB is never uploaded.
+          keytool -genkeypair -keystore "$AIRCALL_KEYSTORE_PATH" -storepass:env AIRCALL_KEYSTORE_PASSWORD \
+            -keypass:env AIRCALL_KEY_PASSWORD -alias "$AIRCALL_KEY_ALIAS" -keyalg RSA -keysize 2048 \
+            -validity 2 -dname "CN=CI Test Only"
+          gradle --no-daemon --console=plain assembleDebug assembleRelease bundleRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+          CERT=$(keytool -list -v -keystore "$AIRCALL_KEYSTORE_PATH" -storepass:env AIRCALL_KEYSTORE_PASSWORD | sed -n 's/.*SHA256: //p')
+          python scripts/verify_apk.py app/build/outputs/apk/release/app-release.apk \
+            --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
+            --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
+            --certificate "$CERT" --release --output "$RUNNER_TEMP/test-release-metadata.json"
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/test-aab-signature.txt"
+          grep -q 'jar verified' "$RUNNER_TEMP/test-aab-signature.txt"
+      - name: Verify installable development APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/aircall-dev.apk
+          python scripts/verify_apk.py dist/aircall-dev.apk \
+            --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
+            --package com.woojik.aircallai --version-code "$AIRCALL_VERSION_CODE" \
+            --certificate '80:AA:90:0B:DF:23:C5:AB:DE:47:3E:24:87:5C:E9:1A:DB:C0:88:2F:86:F3:D3:DB:D5:B4:2A:7E:86:6C:5B:F4' \
+            --output dist/build-metadata.json
+          (cd dist && sha256sum aircall-dev.apk > SHA256SUMS.txt)
+          echo '### 검증된 개발용 APK' >> "$GITHUB_STEP_SUMMARY"
+          echo 'aircall-debug-apk에서 ZIP을 풀고 aircall-dev.apk를 설치하세요. 정식 배포용 패키지는 별도입니다.' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: aircall-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: dist/*
+          if-no-files-found: error
           retention-days: 30
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Remove disposable CI signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ci-test-release.jks"

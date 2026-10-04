@@ -11,6 +11,9 @@ import com.woojik.aircallai.tools.ToolBridgedAIProvider
 import com.woojik.aircallai.tools.ToolExecutionLogger
 import com.woojik.aircallai.tools.ToolExecutor
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
+import com.woojik.aircallai.tools.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,6 +23,38 @@ import org.junit.Test
  * FakeAIProvider는 지시어 응답 → 결과 수신 → 최종 응답 순서를 흉내 낸다.
  */
 class ToolBridgedAIProviderTest {
+
+    @Test fun repeatedCompletionClaimsWithoutExecutionAreReplacedByHonestStatus() = runTest {
+        val logger = ToolExecutionLogger()
+        val (provider, _) = bridge(listOf("메모를 저장했습니다."), logger)
+        val response = provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "메모 저장해줘")))
+        assertTrue(logger.entries.value.isEmpty())
+        assertTrue(response.message.content.contains("실제로 실행하지 못했습니다"))
+    }
+
+    @Test fun approvalContinuesTurnWithActualResultBeforeAiAnswers() = runTest {
+        val permissions = InMemoryToolPermissionStore()
+        val tool = MockGitHubTool()
+        val executor = ToolExecutor(listOf(tool), permissions)
+        val approval = ToolApprovalCoordinator(permissions, executor, this)
+        val fake = FakeAIProvider(listOf("TOOL: github.create_issue title=test", "이슈를 만들었습니다."))
+        val provider = ToolBridgedAIProvider(fake, executor, ToolExecutionLogger(), "desc", listOf(tool),
+            approvalHandler = { approval.awaitResult(it) })
+        val response = async { provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "이슈 생성"))) }
+        runCurrent()
+        assertEquals(1, fake.callCount)
+        approval.approve()
+        response.await()
+        assertTrue(fake.receivedHistories[1].any { it.content.contains("TOOL_RESULT github.create_issue 성공") })
+    }
+
+    @Test fun malformedWriteIsNeverExecutedOrReturnedAsCompletedDirective() = runTest {
+        val logger = ToolExecutionLogger()
+        val (provider, _) = bridge(listOf("TOOL: github.create_issue title=\"끝나지 않음"), logger)
+        val response = provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "이슈 생성")))
+        assertTrue(logger.entries.value.isEmpty())
+        assertTrue(response.message.content.contains("완료된 작업은 없습니다"))
+    }
 
     /** 스크립트: respond() 호출마다 미리 정의된 응답을 차례로 반환한다. */
     private class FakeAIProvider(

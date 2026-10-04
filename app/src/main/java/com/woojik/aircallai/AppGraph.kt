@@ -74,14 +74,16 @@ class AppGraph(context: Context) {
     val calendarAdapter: CalendarAdapter = com.woojik.aircallai.tools.GoogleCalendarAdapter(credentials)
     val toolPermissions = PersistedToolPermissionStore(settingsStore)
     val toolLogger = ToolExecutionLogger()
+    val toolTracker = com.woojik.aircallai.tools.ToolExecutionTracker()
+    private val toolNotifier = com.woojik.aircallai.tools.ToolResultNotifier(context.applicationContext)
+    private val availableTools = listOf(
+        GitHubTool(githubApi), NotesTool(notesStore), CalendarTool(calendarAdapter), GmailTool(gmailApi),
+    )
     val toolExecutor = ToolExecutor(
-        listOf(
-            GitHubTool(githubApi),
-            NotesTool(notesStore),
-            CalendarTool(calendarAdapter),
-            GmailTool(gmailApi),
-        ),
+        availableTools,
         toolPermissions,
+        onEvent = { event -> toolTracker.record(event); toolNotifier.notify(event) },
+        roomId = { chatRooms.activeId.value },
     )
 
     /** PRD-06: WRITE 작업 승인 흐름. 승인 상태는 toolPermissions에 영속 저장된다. */
@@ -119,7 +121,8 @@ class AppGraph(context: Context) {
         executor = toolExecutor,
         logger = toolLogger,
         toolsDescription = toolCatalog,
-        approvalRequester = { request -> toolApproval.submit(request) },
+        tools = availableTools,
+        approvalHandler = { request -> toolApproval.awaitResult(request) },
     )
     val cloudProvider: AIProvider = ToolBridgedAIProvider(
         base = CloudAIProvider(
@@ -135,7 +138,8 @@ class AppGraph(context: Context) {
         executor = toolExecutor,
         logger = toolLogger,
         toolsDescription = toolCatalog,
-        approvalRequester = { request -> toolApproval.submit(request) },
+        tools = availableTools,
+        approvalHandler = { request -> toolApproval.awaitResult(request) },
     )
 
     val providerRouter = ProviderRouter(settings, localProvider, cloudProvider)
@@ -158,4 +162,3 @@ class AppGraph(context: Context) {
     )
     val sessionRepository = SessionRepository(engine, sessionController)
 }
-
