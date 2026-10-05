@@ -12,7 +12,7 @@ import kotlinx.coroutines.sync.withLock
 /**
  * PRD-06: WRITE Tool 작업의 사용자 승인 흐름을 조율한다.
  * submit()으로 대기 요청을 노출하면 UI가 다이얼로그를 띄우고,
- * approve()는 승인을 영속 저장한 뒤 실행, deny()는 버린다.
+ * approve()는 표시한 요청만 한 번 실행하고, deny()는 버린다.
  * 승인/거부 결과와 마지막 실행 결과는 StateFlow로 노출해 UI가 관찰한다.
  */
 class ToolApprovalCoordinator(
@@ -32,7 +32,7 @@ class ToolApprovalCoordinator(
     suspend fun awaitResult(request: ToolRequest): ToolResult = approvalLock.withLock {
         val result = CompletableDeferred<ToolResult>(kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job])
         waiting = result
-        _pending.value = request
+        _pending.value = request.copy(arguments = request.arguments.toMap())
         try { result.await() }
         finally {
             if (waiting === result) {
@@ -45,10 +45,10 @@ class ToolApprovalCoordinator(
     /** 승인이 필요한 요청을 UI에 올린다. 이미 대기 중인 요청을 덮어쓰지 않는다. */
     fun submit(request: ToolRequest) {
         if (_pending.value != null || waiting != null) return
-        _pending.value = request
+        _pending.value = request.copy(arguments = request.arguments.toMap())
     }
 
-    /** 사용자 승인: 권한을 영속 저장하고 작업을 실행한다. */
+    /** 사용자 승인: 표시된 요청만 실행하며 다음 작업에는 다시 승인이 필요하다. */
     fun approve() {
         val request = _pending.value ?: return
         val completion = waiting
@@ -57,8 +57,7 @@ class ToolApprovalCoordinator(
         scope.launch {
             try {
                 if (completion != null && !completion.isActive) return@launch
-                permissions.setAllowed(request.toolName, request.action, true)
-                val result = executor.execute(request)
+                val result = executor.executeApproved(request)
                 _lastResult.value = result
                 completion?.complete(result)
             } catch (e: CancellationException) {

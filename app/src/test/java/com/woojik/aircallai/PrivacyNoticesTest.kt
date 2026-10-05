@@ -15,7 +15,7 @@ class PrivacyNoticesTest {
     @Test
     fun localModeDistinguishesInferenceFromSpeechServices() {
         val notice: PrivacyNotice = PrivacyNotices.localMode
-        assertEquals("Local 모드", notice.title)
+        assertEquals("로컬 모드", notice.title)
         assertTrue(notice.detail.isNotBlank())
         assertTrue(
             "음성 서비스의 별도 네트워크 사용을 명시해야 한다",
@@ -26,7 +26,7 @@ class PrivacyNoticesTest {
     @Test
     fun cloudModeNamesWhatIsTransmitted() {
         val notice = PrivacyNotices.cloudMode
-        assertEquals("Cloud 모드", notice.title)
+        assertEquals("클라우드 모드", notice.title)
         assertTrue("HTTPS 언급 필수", notice.detail.contains("HTTPS"))
         assertTrue("전송 대상 명시 필수", notice.detail.contains("대화 텍스트"))
         assertTrue("Key 인증 전송 명시 필수", notice.detail.contains("인증하기 위해"))
@@ -35,9 +35,9 @@ class PrivacyNoticesTest {
     @Test
     fun toolsNoticeNamesService() {
         val notice = PrivacyNotices.tools
-        assertEquals("Tool 연동", notice.title)
+        assertEquals("도구 연동", notice.title)
         assertTrue(notice.detail.contains("GitHub"))
-        assertTrue("READ 제한 명시", notice.detail.contains("READ"))
+        assertTrue("요청별 승인 명시", notice.detail.contains("매번") && notice.detail.contains("한 번"))
     }
 
     @Test

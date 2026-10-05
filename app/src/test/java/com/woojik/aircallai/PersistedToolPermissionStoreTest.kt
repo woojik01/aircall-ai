@@ -11,7 +11,7 @@ import org.junit.Test
 
 /**
  * PRD-06 승인 증분: WRITE 승인 상태가 일반 설정에 영속화되는지 검증한다.
- * 승인 → 재시작(새 인스턴스, 같은 저장소) → 여전히 허용되어야 한다.
+ * 이전 승인 → 재시작 → 변경 작업을 자동 허용하지 않아야 한다.
  */
 class PersistedToolPermissionStoreTest {
 
@@ -26,17 +26,17 @@ class PersistedToolPermissionStoreTest {
         val store = PersistedToolPermissionStore(InMemorySettingsStore())
         assertFalse(store.isAllowed("github", "create_issue", ToolRisk.WRITE))
         store.setAllowed("github", "create_issue", true)
-        assertTrue(store.isAllowed("github", "create_issue", ToolRisk.WRITE))
+        assertFalse(store.isAllowed("github", "create_issue", ToolRisk.WRITE))
     }
 
     @Test
-    fun approvalSurvivesRestart() = runTest {
+    fun legacyApprovalNeverAuthorizesAfterRestart() = runTest {
         val settings = InMemorySettingsStore()
         val first = PersistedToolPermissionStore(settings)
         first.setAllowed("github", "create_pull_request", true)
         // 앱 재시작: 같은 설정 저장소를 읽는 새 인스턴스
         val second = PersistedToolPermissionStore(settings)
-        assertTrue(second.isAllowed("github", "create_pull_request", ToolRisk.WRITE))
+        assertFalse(second.isAllowed("github", "create_pull_request", ToolRisk.WRITE))
         assertEquals(listOf("github:create_pull_request"), second.approvedActions())
     }
 

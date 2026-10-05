@@ -3,16 +3,15 @@ package com.woojik.aircallai.tools
 import com.woojik.aircallai.settings.SettingsStore
 
 /**
- * PRD-06: WRITE 작업 승인 상태를 일반 설정(SettingsStore)에 영속화한다.
- * 키 형식은 "tool:action" 목록이며 민감 정보가 아니므로 PRD-02 분류상 일반 설정에 둔다.
- * 앱 재시작 후에도 승인이 유지되고, 사용자가 설정에서 개별 해제할 수 있다.
+ * 이전 버전의 지속 승인 목록을 표시·해제하기 위한 호환 저장소.
+ * 저장된 승인은 실행 권한을 부여하지 않는다. 변경 작업은 요청마다 승인한다.
  */
 class PersistedToolPermissionStore(
     private val store: SettingsStore,
 ) : ToolPermissionStore {
 
     override suspend fun isAllowed(toolName: String, action: String, risk: ToolRisk): Boolean =
-        risk == ToolRisk.READ || key(toolName, action) in allowed()
+        risk == ToolRisk.READ
 
     override suspend fun setAllowed(toolName: String, action: String, allowed: Boolean) {
         val current = allowed().toMutableSet()

@@ -8,10 +8,15 @@ class ToolExecutor(
 ) {
     private val toolsByName = tools.associateBy { it.name }
 
-    suspend fun execute(request: ToolRequest): ToolResult {
+    suspend fun execute(request: ToolRequest): ToolResult = executeRequest(request, approved = false)
+
+    /** Only the approval coordinator may execute the exact request reviewed by the user. */
+    internal suspend fun executeApproved(request: ToolRequest): ToolResult = executeRequest(request, approved = true)
+
+    private suspend fun executeRequest(request: ToolRequest, approved: Boolean): ToolResult {
         val tool = toolsByName[request.toolName] ?: return ToolResult(false, "알 수 없는 도구입니다")
         val risk = tool.riskFor(request.action)
-        if (!permissions.isAllowed(tool.name, request.action, risk)) {
+        if (!approved && !permissions.isAllowed(tool.name, request.action, risk)) {
             return ToolResult(false, "사용자 승인이 필요한 작업입니다")
         }
         val event = ToolExecutionEvent(toolName = tool.name, action = request.action, roomId = roomId())

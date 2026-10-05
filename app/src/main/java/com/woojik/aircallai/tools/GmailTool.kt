@@ -69,6 +69,7 @@ open class GmailApiClient(
             val payload = "{\"raw\":\"" + raw + "\"}"
             val connection = URL(ENDPOINT).openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = CONNECT_TIMEOUT_MS
             connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty("Authorization", "Bearer " + token)
@@ -89,7 +90,7 @@ open class GmailApiClient(
                         if (messageId.isBlank()) {
                             "Gmail API가 발송 요청을 접수했습니다."
                         } else {
-                            "Gmail API가 발송 요청을 접수했습니다 (message ID: $messageId)."
+                            "Gmail 발송 요청이 접수되었습니다."
                         },
                     )
                 }
@@ -100,8 +101,7 @@ open class GmailApiClient(
         }.getOrElse { error ->
             ToolResult(
                 false,
-                "Gmail 네트워크 요청에 실패했습니다: " + error.javaClass.simpleName +
-                    (error.message?.let { " ($it)" } ?: ""),
+                "메일 발송 결과를 확인하지 못했습니다. Gmail에서 발송 여부를 확인해 주세요.",
             )
         }
     }

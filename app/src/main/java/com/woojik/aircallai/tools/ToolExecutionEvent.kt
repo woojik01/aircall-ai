@@ -15,19 +15,7 @@ data class ToolExecutionEvent(
     val roomId: String? = null,
     val status: ToolExecutionStatus = ToolExecutionStatus.RUNNING,
 ) {
-    val label: String get() = when ("$toolName.$action") {
-        "notes.add_note" -> "메모 저장"
-        "notes.search_notes" -> "메모 검색"
-        "notes.list_notes" -> "메모 조회"
-        "github.read_repository" -> "GitHub 저장소 조회"
-        "github.read_file" -> "GitHub 파일 조회"
-        "github.create_issue" -> "GitHub 이슈 생성"
-        "github.create_pull_request" -> "GitHub PR 생성"
-        "calendar.read_upcoming" -> "일정 조회"
-        "calendar.create_event" -> "일정 등록"
-        "gmail.send_email" -> "이메일 발송"
-        else -> "도구 작업"
-    }
+    val label: String get() = ToolLabels.action(toolName, action)
     val summary: String get() = when (status) {
         ToolExecutionStatus.RUNNING -> "$label 실행 중"
         ToolExecutionStatus.SUCCEEDED -> "$label 실행 완료"

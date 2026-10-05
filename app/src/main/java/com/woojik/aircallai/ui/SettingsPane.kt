@@ -22,7 +22,7 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
         SettingCategory("ai", "AI 및 모델", "로컬 · 클라우드, 모델 다운로드", onOpen)
         SettingCategory("accounts", "도구 및 계정", "GitHub · Google 로그인", onOpen)
         SettingCategory("appearance", "화면 및 알림", "라이트 · 다크 · 시스템, 알림 설정", onOpen)
-        SettingCategory("permissions", "작업 승인", "허용한 도구 작업 관리", onOpen)
+        SettingCategory("permissions", "작업 승인", "실행 전 확인 및 이전 승인 관리", onOpen)
         SettingCategory("privacy", "개인정보", "기기 저장과 데이터 전송 안내", onOpen)
     }
 }
@@ -105,7 +105,7 @@ fun SettingsDetail(
                     graph.settings.setCloudBaseUrl(endpoint); graph.settings.setCloudModel(model)
                     vm.refreshProviderReadiness()
                     status = if (endedCall) "연결 정보를 저장하고 통화를 종료했습니다. 다시 시작해 주세요." else "연결 정보를 저장했습니다."
-                }, enabled = endpoint.startsWith("https://") && model.isNotBlank()) { Text("연결 정보 저장") }
+                }, enabled = com.woojik.aircallai.privacy.ContentReportClient.isHttpsEndpoint(endpoint.trim()) && model.isNotBlank()) { Text("연결 정보 저장") }
             }
             "accounts" -> {
                 Text("서비스에 로그인하여 도구를 연결하세요. 로그인 없이도 AI 대화와 기기 메모를 사용할 수 있습니다.")
@@ -136,22 +136,24 @@ fun SettingsDetail(
                 AccountCard("기기 메모", "로그인 없이 사용") { Text("메모는 이 기기에 저장됩니다.") }
             }
             "permissions" -> {
-                Text("도구가 외부 데이터를 변경하기 전에 작업 승인을 요청합니다. 아래에서 기존 승인을 해제할 수 있습니다.")
-                if (approvals.isEmpty()) Text("허용한 작업이 없습니다.")
+                Text("메일 발송, 일정 등록, 메모 저장 등 변경 작업은 매번 내용을 확인한 뒤 실행합니다. 이전 버전의 저장된 승인은 자동 실행에 사용되지 않습니다.")
+                if (approvals.isEmpty()) Text("이전 버전에 저장된 승인이 없습니다.")
                 approvals.forEach { action ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text(action)
+                            Text(action.split(':', limit = 2).let {
+                                com.woojik.aircallai.tools.ToolLabels.action(it[0], it.getOrElse(1) { "" })
+                            })
                             TextButton(onClick = { scope.launch {
                                 graph.toolPermissions.revoke(action); approvals = graph.toolPermissions.approvedActions()
-                            } }) { Text("승인 해제") }
+                            } }) { Text("이전 승인 삭제") }
                         }
                     }
                 }
             }
             "appearance" -> {
                 Text("은은한 오로라", style = MaterialTheme.typography.titleLarge)
-                Text("밝은 남색 강조색과 오로라 배경을 선택한 테마에 맞춥니다.")
+                Text("기기에 맞는 화면 테마를 선택하세요.")
                 Text("테마", style = MaterialTheme.typography.titleMedium)
                 listOf(
                     SettingsRepository.THEME_LIGHT to "라이트",

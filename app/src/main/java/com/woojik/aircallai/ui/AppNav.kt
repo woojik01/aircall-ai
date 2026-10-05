@@ -90,12 +90,12 @@ class MainActivity : ComponentActivity() {
             } catch (e: ApiException) {
                 appGraph.accountRepository.mark(
                     "gmail", ConnectionStatus.ERROR,
-                    errorMessage = "Google 인증 오류 (코드 ${e.statusCode}): ${e.message ?: "인증을 완료하지 못했습니다"}. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 계정을 추가해야 합니다.",
+                    errorMessage = "Google 인증 오류 (코드 ${e.statusCode}): 계정 권한을 승인하지 못했습니다. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 계정을 추가해야 합니다.",
                 )
             } catch (e: Exception) {
                 appGraph.accountRepository.mark(
                     "gmail", ConnectionStatus.ERROR,
-                    errorMessage = "Google 인증 결과를 처리하지 못했습니다: ${e.message ?: e.javaClass.simpleName}",
+                    errorMessage = "Google 인증 결과를 처리하지 못했습니다. 다시 연결해 주세요.",
                 )
             }
         }
@@ -342,7 +342,7 @@ class MainActivity : ComponentActivity() {
                     "gmail", ConnectionStatus.ERROR,
                     errorMessage = "Google 로그인에 실패했습니다" +
                         (statusCode?.let { " (코드 $it)" } ?: "") +
-                        ": ${error.message ?: error.javaClass.simpleName}. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록을 확인해 주세요.",
+                        ". 다시 연결해 주세요. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록을 확인해 주세요.",
                 )
             }
 

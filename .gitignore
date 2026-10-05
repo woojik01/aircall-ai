@@ -10,6 +10,13 @@ build/
 *.apk
 *.aab
 .env
+.env.*
+!.env.example
+*.keystore
+!app/debug.keystore
+*.p12
+*.pfx
+*.pem
 
 # Kotlin compiler session/cache files
 .kotlin/

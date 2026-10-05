@@ -22,7 +22,7 @@ import org.junit.Test
 
 /**
  * PRD-06 승인 증분: 승인 코디네이터의 submit/approve/deny 흐름을 검증한다.
- * approve()는 승인을 영속 저장하고 실제 실행까지 이어져야 한다.
+ * approve()는 확인한 요청만 실행하며 이후 요청에는 승인을 남기지 않는다.
  * 여기서는 자격증명이 없어 실행 결과가 "인증 없음" 실패로 나오는 것으로 실행 도달을 확인한다.
  */
 class ToolApprovalCoordinatorTest {
@@ -58,6 +58,42 @@ class ToolApprovalCoordinatorTest {
         assertNull(coordinator.lastResult.value)
     }
 
+
+    @Test fun laterEmailToDifferentRecipientRequiresNewApproval() = runTest {
+        val permissions = PersistedToolPermissionStore(InMemorySettingsStore())
+        val executed = mutableListOf<ToolRequest>()
+        val tool = object : Tool {
+            override val name = "gmail"
+            override val description = "test"
+            override fun riskFor(action: String) = ToolRisk.WRITE
+            override suspend fun execute(request: ToolRequest): ToolResult {
+                executed += request
+                return ToolResult(true, "sent")
+            }
+        }
+        val executor = ToolExecutor(listOf(tool), permissions)
+        val coordinator = ToolApprovalCoordinator(permissions, executor, this)
+        val arguments = mutableMapOf("to" to "first@example.net", "body" to "reviewed")
+        val request = ToolRequest("gmail", "send_email", arguments)
+        val first = async { coordinator.awaitResult(request) }
+        runCurrent()
+        arguments["to"] = "changed@example.net"
+        coordinator.approve()
+        advanceUntilIdle()
+        assertTrue(first.await().success)
+        assertEquals("first@example.net", executed.single().arguments["to"])
+        val later = request.copy(arguments = mapOf("to" to "second@example.net"))
+        assertFalse(executor.execute(later).success)
+        assertEquals(1, executed.size)
+        val second = async { coordinator.awaitResult(later) }
+        runCurrent()
+        assertFalse(second.isCompleted)
+        coordinator.deny()
+        advanceUntilIdle()
+        assertFalse(second.await().success)
+        assertEquals(1, executed.size)
+    }
+
     private object NoCredentials : com.woojik.aircallai.core.storage.CredentialManager {
         override suspend fun save(service: String, credential: ByteArray) {}
         override suspend fun load(service: String): ByteArray? = null
@@ -86,7 +122,7 @@ class ToolApprovalCoordinatorTest {
     }
 
     @Test
-    fun approvePersistsAndExecutes() = runTest {
+    fun approveExecutesWithoutPersistingPermission() = runTest {
         val settings = InMemorySettingsStore()
         val permissions = PersistedToolPermissionStore(settings)
         val coordinator = coordinator(this, permissions)
@@ -96,8 +132,8 @@ class ToolApprovalCoordinatorTest {
         coordinator.approve()
         advanceUntilIdle()
         assertNull(coordinator.pending.value)
-        // 승인이 영속화되었다: 같은 저장소를 읽는 새 인스턴스에서도 허용된다.
-        assertTrue(
+        // 이후 작업과 앱 재시작에는 승인을 재사용하지 않는다.
+        assertFalse(
             PersistedToolPermissionStore(settings)
                 .isAllowed("github", "create_issue", com.woojik.aircallai.tools.ToolRisk.WRITE),
         )

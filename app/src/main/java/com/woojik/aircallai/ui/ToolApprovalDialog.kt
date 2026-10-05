@@ -23,17 +23,17 @@ fun ToolApprovalDialog(request: ToolRequest, onApprove: () -> Unit, onDeny: () -
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("이 작업은 데이터를 저장하거나 외부 서비스의 내용을 변경합니다. 실행할 내용을 확인해 주세요.",
                     style = MaterialTheme.typography.bodyMedium)
-                Text("${request.toolName} · ${request.action}", style = MaterialTheme.typography.titleSmall)
+                Text(com.woojik.aircallai.tools.ToolLabels.action(request.toolName, request.action), style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider()
                 request.arguments.forEach { (key, value) ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(key, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(com.woojik.aircallai.tools.ToolLabels.argument(key), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         SelectionContainer { Text(value, style = MaterialTheme.typography.bodyLarge) }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onApprove) { Text("승인") } },
-        dismissButton = { TextButton(onClick = onDeny) { Text("거부") } },
+        confirmButton = { TextButton(onClick = onApprove) { Text("이번 작업 실행") } },
+        dismissButton = { TextButton(onClick = onDeny) { Text("취소") } },
     )
 }
