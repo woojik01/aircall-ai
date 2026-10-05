@@ -8,6 +8,7 @@ on:
       - 'config/**'
       - 'scripts/**'
       - 'support/**'
+      - 'docs/**'
       - '*.gradle.kts'
       - 'gradle.properties'
       - 'version.properties'

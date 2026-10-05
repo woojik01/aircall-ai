@@ -46,7 +46,8 @@ Play의 업로드 키와 앱 서명키를 혼동하지 마세요. 스토어 공�
 6. 첫 버전은 `AIRCALL_REPORT_METHOD=email`, 빈 `AIRCALL_REPORT_ENDPOINT`, 보관 기간 30일을 사용합니다.
    신고 화면은 내용을 확인할 이메일 초안을 열며, 사용자가 이메일 앱에서 전송해야 접수됩니다.
    전송 완료나 접수 번호를 앱이 자동 확인하지 않습니다. 발신 이메일은 운영자에게 보입니다.
-   운영자는 [개인정보 운영 절차](../PRIVACY_OPERATIONS.md)에 따라 접수 후 30일이 지난 신고를 삭제합니다.
+   운영자는 [개인정보 운영 절차](../PRIVACY_OPERATIONS.md)에 따라 접수 후 최대 30일 이내 신고와 휴지통을 영구 삭제합니다.
+   하루 한 번 점검한다면 29일 경과 기록부터 삭제해 보관 기한을 넘기지 않습니다.
    향후 [HTTPS 신고 접수 서비스](../../support/report-receiver/README.md)를 실제 배포할 때만
    `AIRCALL_REPORT_METHOD=https`와 공개 주소를 설정하고 정책·앱·서비스의 보관 기간을 일치시킵니다.
 7. Google Cloud에 `com.woojik.aircallai.release`와 정식 인증서 SHA-1로 Android OAuth를 등록합니다.
