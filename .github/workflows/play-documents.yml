@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   documents:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -16,6 +16,7 @@ jobs:
       AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
       AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
       AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
+      AIRCALL_REPORT_METHOD: ${{ vars.AIRCALL_REPORT_METHOD }}
       AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
     steps:
       - uses: actions/checkout@v4

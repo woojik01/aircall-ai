@@ -2,6 +2,7 @@
 """Check public store configuration; optionally probe the deployed policy/receiver."""
 import argparse
 from html import escape
+from html.parser import HTMLParser
 import ipaddress
 import json
 import os
@@ -12,7 +13,12 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 FIELDS = ('AIRCALL_DEVELOPER_NAME', 'AIRCALL_SUPPORT_EMAIL', 'AIRCALL_PRIVACY_POLICY_URL',
-          'AIRCALL_REPORT_ENDPOINT', 'AIRCALL_REPORT_RETENTION_DAYS')
+          'AIRCALL_REPORT_METHOD', 'AIRCALL_REPORT_ENDPOINT', 'AIRCALL_REPORT_RETENTION_DAYS')
+
+
+def report_method(config):
+    # Preserve existing HTTPS receiver configurations; new releases choose explicitly.
+    return config.get('AIRCALL_REPORT_METHOD', '').strip() or 'https'
 
 
 def load_config(path):
@@ -49,27 +55,37 @@ def public_https(value):
 
 
 def validate(config):
-    missing = [field for field in FIELDS if not config.get(field, '').strip()]
+    required = ('AIRCALL_DEVELOPER_NAME', 'AIRCALL_SUPPORT_EMAIL', 'AIRCALL_PRIVACY_POLICY_URL',
+                'AIRCALL_REPORT_RETENTION_DAYS')
+    missing = [field for field in required if not config.get(field, '').strip()]
     if missing:
         raise ValueError('Fill public release configuration: ' + ', '.join(missing))
     for field in FIELDS:
-        if any(ord(c) < 32 for c in config[field]) or len(config[field]) > 2000:
+        value = config.get(field, '')
+        if any(ord(c) < 32 for c in value) or len(value) > 2000:
             raise ValueError('Invalid public configuration: ' + field)
     if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', config['AIRCALL_SUPPORT_EMAIL']):
         raise ValueError('Provide a real support email')
     email_domain = config['AIRCALL_SUPPORT_EMAIL'].split('@')[1]
     if not public_https('https://' + email_domain):
         raise ValueError('Placeholder support emails are forbidden')
-    for field in ('AIRCALL_PRIVACY_POLICY_URL', 'AIRCALL_REPORT_ENDPOINT'):
-        if not public_https(config[field]):
-            raise ValueError(field + ' must be a public HTTPS URL, without placeholders or credentials')
+    if not public_https(config['AIRCALL_PRIVACY_POLICY_URL']):
+        raise ValueError('AIRCALL_PRIVACY_POLICY_URL must be a public HTTPS URL, without placeholders or credentials')
+    method = report_method(config)
+    if method not in ('email', 'https'):
+        raise ValueError('AIRCALL_REPORT_METHOD must be email or https')
+    endpoint = config.get('AIRCALL_REPORT_ENDPOINT', '')
+    if method == 'email' and endpoint:
+        raise ValueError('Email reporting must not configure an unused HTTPS receiver')
+    if method == 'https' and not public_https(endpoint):
+        raise ValueError('AIRCALL_REPORT_ENDPOINT must be a public HTTPS URL, without placeholders or credentials')
     try:
         days = int(config['AIRCALL_REPORT_RETENTION_DAYS'])
     except ValueError:
         raise ValueError('Report retention must be an integer') from None
     if not 1 <= days <= 365:
         raise ValueError('Report retention must be 1..365 days')
-    if config['AIRCALL_REPORT_ENDPOINT'].rstrip('/').endswith('/dev'):
+    if endpoint.rstrip('/').endswith('/dev'):
         raise ValueError('Apps Script /dev URLs cannot receive production reports')
     return config
 
@@ -89,7 +105,17 @@ def fetch_public(url, limit, payload=None):
         return payload.decode('utf-8'), response.headers.get('Content-Type', '')
 
 
+class PolicyText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+
 def probe(config):
+    validate(config)
     policy, content_type = fetch_public(config['AIRCALL_PRIVACY_POLICY_URL'], 1_000_000)
     if 'text/html' not in content_type.lower():
         raise ValueError('Privacy policy must be a publicly readable HTML page')
@@ -97,6 +123,15 @@ def probe(config):
         raise ValueError('Privacy page must identify AirCall AI and its privacy policy')
     if escape(config['AIRCALL_SUPPORT_EMAIL']) not in policy:
         raise ValueError('Privacy page does not contain the configured privacy contact')
+    text = PolicyText()
+    text.feed(policy)
+    policy_text = ''.join(text.parts)
+    if report_method(config) == 'email':
+        if '이메일' not in policy_text and 'email' not in policy_text.lower():
+            raise ValueError('Privacy policy must explain email reporting')
+        if not re.search(r'(?<!\d)' + re.escape(config['AIRCALL_REPORT_RETENTION_DAYS']) + r'\s*(?:일|days?\b)', policy_text):
+            raise ValueError('Privacy policy must state the configured email report retention')
+        return
     health_text, _ = fetch_public(config['AIRCALL_REPORT_ENDPOINT'], 8192)
     health = json.loads(health_text)
     if health.get('protocol') != 'aircall-report-v1' or health.get('ready') is not True:
@@ -113,12 +148,22 @@ def probe(config):
 
 def render_policy(config, template, output):
     policy = Path(template).read_text(encoding='utf-8')
-    for field in FIELDS:
-        policy = policy.replace('{{' + field + '}}', escape(config[field], quote=True))
+    values = dict(config, AIRCALL_REPORT_METHOD=report_method(config))
+    values['AIRCALL_REPORT_METHOD_DESCRIPTION'] = (
+        '이메일 앱에서 신고 초안을 확인하고 직접 전송합니다. 운영자는 접수한 신고를 보관 기간에 따라 수동으로 삭제합니다.'
+        if report_method(config) == 'email' else
+        '공개 HTTPS 신고 수신 서비스에 선택한 내용을 전송하고 접수 번호를 확인합니다. 수신기는 보관 기간이 지난 신고를 정리합니다.')
+    for field in (*FIELDS, 'AIRCALL_REPORT_METHOD_DESCRIPTION'):
+        policy = policy.replace('{{' + field + '}}', escape(values.get(field, ''), quote=True))
     if re.search(r'\{\{[A-Z_]+\}\}', policy):
         raise ValueError('Privacy template contains unresolved placeholders')
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(policy, encoding='utf-8')
+
+
+def policy_template(config):
+    return ('docs/onestore/privacy-policy.email.template.html' if report_method(config) == 'email'
+            else 'docs/play/privacy-policy.template.html')
 
 
 def main():
@@ -129,10 +174,11 @@ def main():
     args = parser.parse_args()
     config = validate(load_config(args.config))
     if args.policy_output:
-        render_policy(config, 'docs/play/privacy-policy.template.html', args.policy_output)
+        render_policy(config, policy_template(config), args.policy_output)
     if args.network:
         probe(config)
-    print('Play public configuration verified' + ('; deployed policy and report receiver reachable' if args.network else ''))
+    print('Store public configuration verified; reporting=' + report_method(config) +
+          ('; deployed policy checked' if args.network else ''))
 
 
 if __name__ == '__main__':

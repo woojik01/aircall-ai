@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import shutil
 
-from check_play_config import load_config, validate, probe, render_policy
+from check_play_config import load_config, validate, probe, render_policy, report_method, policy_template
 
 
 def load_product_id(path):
@@ -24,6 +24,8 @@ def validate_product_id(value, required=False):
 
 
 def validate_metadata(metadata, product_id):
+    if metadata.get('signatureVerified') is not True or metadata.get('artifactKind') != 'signed-apk':
+        raise ValueError('Only a verified signed APK can be prepared for submission')
     if metadata.get('package') != 'com.woojik.aircallai.release':
         raise ValueError('Unexpected production package')
     if metadata.get('targetSdk', 0) < 36 or metadata.get('minSdk') != 26:
@@ -36,6 +38,11 @@ def validate_metadata(metadata, product_id):
         raise ValueError('Public development certificate cannot be submitted')
     if not re.fullmatch(r'[a-f0-9]{64}', metadata.get('apkSha256', '')):
         raise ValueError('Missing verified APK checksum')
+    code = metadata.get('versionCode')
+    if type(code) is not int or not 30000 <= code <= 2100000000:
+        raise ValueError('Invalid production versionCode')
+    if not metadata.get('versionName') or not re.fullmatch(r'[a-f0-9]{40}', metadata.get('commit', '')):
+        raise ValueError('Missing production version or source commit')
 
 
 def prepare(config, product_id, output, metadata=None):
@@ -45,13 +52,15 @@ def prepare(config, product_id, output, metadata=None):
         validate_metadata(metadata, product_id)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    render_policy(config, 'docs/play/privacy-policy.template.html', output / 'privacy-policy.html')
+    render_policy(config, policy_template(config), output / 'privacy-policy.html')
     for name in ('STORE_LISTING.md', 'REVIEW_AND_TEST.md', 'DATA_AND_PERMISSIONS.md'):
         shutil.copyfile(Path('docs/onestore') / name, output / name)
     summary = ['# AirCall AI 원스토어 제출 정보', '',
                f"- 운영자: {config['AIRCALL_DEVELOPER_NAME']}",
                f"- 문의: {config['AIRCALL_SUPPORT_EMAIL']}",
                f"- 개인정보처리방침: {config['AIRCALL_PRIVACY_POLICY_URL']}",
+               f"- 신고 접수: {'이메일 ' + config['AIRCALL_SUPPORT_EMAIL'] if report_method(config) == 'email' else config['AIRCALL_REPORT_ENDPOINT']}",
+               f"- 신고 보관: {config['AIRCALL_REPORT_RETENTION_DAYS']}일 ({'운영자 수동 삭제' if report_method(config) == 'email' else '수신기 정리 트리거'})",
                f"- PID: {product_id or 'ONEconsole 상품 등록 후 입력'}",
                '- 국가: 대한민국 / 가격: 무료 / 광고·앱 내 결제: 없음',
                '- 패키지: com.woojik.aircallai.release',
@@ -62,6 +71,8 @@ def prepare(config, product_id, output, metadata=None):
                         f"- APK SHA-256: {metadata['apkSha256']}",
                         f"- 인증서 SHA-256: {metadata['certificateSha256']}",
                         f"- 커밋: {metadata['commit']}"])
+    else:
+        summary.extend(['', 'APK와 서명 검증 결과가 없는 문서 초안입니다. 이 묶음만으로 앱을 제출할 수 없습니다.'])
     (output / 'SUBMISSION.md').write_text('\n'.join(summary) + '\n', encoding='utf-8')
 
 

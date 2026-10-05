@@ -1,0 +1,80 @@
+name: Release Validation
+
+on:
+  pull_request:
+  push:
+    paths:
+      - 'app/**'
+      - 'config/**'
+      - 'scripts/**'
+      - 'support/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'version.properties'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unsigned-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+      - name: Validate release scripts and reporting
+        run: |
+          python -m unittest discover -s scripts -p 'test_*.py' -v
+          node --test support/report-receiver/receiver.test.cjs
+      - name: Test, lint and compile unsigned production code
+        run: |
+          VERSION_CODE=$(sed -n 's/^versionCode=//p' version.properties)
+          echo "AIRCALL_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          # No private key, production secrets, receiver or OAuth registration is needed to compile.
+          gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest lintRelease assembleRelease \
+            -PAIRCALL_VERSION_CODE="$VERSION_CODE" -PAIRCALL_DISTRIBUTION_CHANNEL=onestore \
+            -PGOOGLE_OAUTH_CLIENT_ID_RELEASE= --stacktrace
+      - name: Verify unsigned release identity and native compatibility
+        run: |
+          mkdir -p validation
+          cp app/build/outputs/apk/release/app-release-unsigned.apk validation/aircall-release-UNSIGNED-VALIDATION.apk
+          python scripts/verify_apk.py validation/aircall-release-UNSIGNED-VALIDATION.apk \
+            --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
+            --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
+            --release --unsigned --output validation/unsigned-validation-metadata.json
+          (cd validation && sha256sum *.apk > SHA256SUMS.txt)
+          printf '%s\n' 'UNSIGNED VALIDATION ONLY' 'This APK cannot be installed or submitted to a store.' \
+            'Production signing, public policy, reporting and Google OAuth readiness are checked separately.' > validation/README.txt
+          echo 'Unsigned release code passed tests, lint and packaging checks. This is not a signed submission APK.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload explicitly unsigned validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aircall-unsigned-release-validation
+          path: validation/*
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-release-validation-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -18,7 +18,8 @@ class OneStoreSubmissionTest(unittest.TestCase):
         return {'package': 'com.woojik.aircallai.release', 'versionName': '0.4.1', 'versionCode': 30001,
                 'minSdk': 26, 'targetSdk': 36, 'distributionChannel': 'onestore',
                 'oneStoreProductId': '0000123456', 'certificateSha256': 'a' * 64,
-                'apkSha256': 'b' * 64, 'commit': 'c' * 40}
+                'apkSha256': 'b' * 64, 'commit': 'c' * 40,
+                'signatureVerified': True, 'artifactKind': 'signed-apk'}
 
     def test_initial_documents_work_before_pid_but_submission_requires_it(self):
         validate_product_id('')
@@ -39,6 +40,8 @@ class OneStoreSubmissionTest(unittest.TestCase):
         validate_metadata(self.metadata(), '0000123456')
         for changes in ({'package': 'com.woojik.aircallai'}, {'distributionChannel': 'play'},
                         {'oneStoreProductId': '9999999999'}, {'targetSdk': 32}, {'apkSha256': ''},
+                        {'signatureVerified': False}, {'artifactKind': 'unsigned-validation'},
+                        {'versionCode': True}, {'versionCode': 29999}, {'versionCode': '30001'}, {'commit': ''},
                         {'certificateSha256': '80aa900bdf23c5abde473e24875ce91adbc0882f86f3d3dbd5b42a7e866c5bf4'}):
             with self.assertRaises(ValueError):
                 validate_metadata(dict(self.metadata(), **changes), '0000123456')
@@ -56,3 +59,16 @@ class OneStoreSubmissionTest(unittest.TestCase):
             self.assertIn('0000123456', summary)
             self.assertIn('versionCode: 30001', summary)
             self.assertIn('b' * 64, summary)
+
+    def test_email_pack_uses_email_policy_and_manual_retention(self):
+        config = dict(self.config(), AIRCALL_REPORT_METHOD='email', AIRCALL_REPORT_ENDPOINT='')
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            prepare(config, '0000123456', output)
+            summary = (output / 'SUBMISSION.md').read_text(encoding='utf-8')
+            policy = (output / 'privacy-policy.html').read_text(encoding='utf-8')
+            self.assertIn('신고 접수: 이메일 support@aircall.ai', summary)
+            self.assertIn('운영자 수동 삭제', summary)
+            self.assertIn('문서 초안', summary)
+            self.assertIn('이메일', policy)
+            self.assertNotIn('Apps Script', policy)
