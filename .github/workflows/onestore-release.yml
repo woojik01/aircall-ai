@@ -1,16 +1,17 @@
-name: Android Release
+name: ONE store Release
 
 on:
   workflow_dispatch:
     inputs:
       version_code:
-        description: '새 정식 릴리스 versionCode (이전 릴리스·초안보다 커야 함, 첫 권장값 30000)'
+        description: '이전 모든 정식 APK·AAB·초안보다 큰 versionCode'
         required: true
         type: string
 
 permissions:
   contents: write
 
+# Play와 원스토어가 같은 정식 패키지/키/버전 이력을 공유한다.
 concurrency:
   group: aircall-production-release
   cancel-in-progress: false
@@ -22,6 +23,8 @@ jobs:
     timeout-minutes: 30
     env:
       AIRCALL_VERSION_CODE: ${{ inputs.version_code }}
+      AIRCALL_DISTRIBUTION_CHANNEL: onestore
+      AIRCALL_ONESTORE_PRODUCT_ID: ${{ vars.AIRCALL_ONESTORE_PRODUCT_ID }}
       AIRCALL_KEYSTORE_PASSWORD: ${{ secrets.AIRCALL_KEYSTORE_PASSWORD }}
       AIRCALL_KEY_ALIAS: ${{ secrets.AIRCALL_KEY_ALIAS }}
       AIRCALL_KEY_PASSWORD: ${{ secrets.AIRCALL_KEY_PASSWORD }}
@@ -32,7 +35,7 @@ jobs:
       AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
       AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
       AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
-      AIRCALL_REQUIRE_PLAY_CONFIG: 'true'
+      AIRCALL_REQUIRE_STORE_CONFIG: 'true'
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -46,12 +49,17 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
-      - name: Require working public policy and anonymous report receiver
-        run: python scripts/check_play_config.py --network --policy-output dist/privacy-policy.html
-      - name: Download pinned bundletool
+      - name: Require ONEconsole PID, working policy and report receiver
         run: |
-          curl --fail --location --retry 3 --output "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
-          echo 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  '"$RUNNER_TEMP/bundletool.jar" | sha256sum --check
+          python scripts/prepare_onestore_submission.py --require-product-id --network
+          python - <<'PY'
+          import os
+          import sys
+          sys.path.insert(0, 'scripts')
+          from prepare_onestore_submission import load_product_id
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('AIRCALL_ONESTORE_PRODUCT_ID=' + load_product_id('config/onestore.properties') + '\n')
+          PY
       - name: Require production signing and restore private keystore
         env:
           AIRCALL_KEYSTORE_BASE64: ${{ secrets.AIRCALL_KEYSTORE_BASE64 }}
@@ -73,47 +81,48 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write(f'AIRCALL_KEYSTORE_PATH={target}\nAIRCALL_REQUIRE_RELEASE_SIGNING=true\n')
           PY
-      - name: Tests and signed APK/AAB
+      - name: Tests, lint and signed ONE store APK
         run: |
           python -m unittest discover -s scripts -p 'test_*.py' -v
           node --test support/report-receiver/receiver.test.cjs
-          gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease bundleRelease \
+          gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease \
             -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" \
-            -PAIRCALL_DISTRIBUTION_CHANNEL=play \
+            -PAIRCALL_DISTRIBUTION_CHANNEL=onestore \
+            -PAIRCALL_ONESTORE_PRODUCT_ID="$AIRCALL_ONESTORE_PRODUCT_ID" \
             -PGOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID_RELEASE" --stacktrace
-      - name: Verify identity, signing, native compatibility and update history
+      - name: Verify APK identity, certificate, native compatibility and update history
         run: |
-          mkdir -p dist
           VERSION=$(sed -n 's/^versionName=//p' version.properties)
-          cp app/build/outputs/apk/release/app-release.apk "dist/aircall-$VERSION-$AIRCALL_VERSION_CODE.apk"
-          cp app/build/outputs/bundle/release/app-release.aab "dist/aircall-$VERSION-$AIRCALL_VERSION_CODE.aab"
-          python scripts/verify_apk.py "dist/aircall-$VERSION-$AIRCALL_VERSION_CODE.apk" \
+          cp app/build/outputs/apk/release/app-release.apk "dist/aircall-onestore-$VERSION-$AIRCALL_VERSION_CODE.apk"
+          python scripts/verify_apk.py "dist/aircall-onestore-$VERSION-$AIRCALL_VERSION_CODE.apk" \
             --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
             --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
             --certificate "$AIRCALL_RELEASE_CERT_SHA256" --release --output dist/release-metadata.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('dist/release-metadata.json')
+          data = json.loads(path.read_text())
+          data.update(distributionChannel='onestore', oneStoreProductId=os.environ['AIRCALL_ONESTORE_PRODUCT_ID'])
+          path.write_text(json.dumps(data, indent=2) + '\n')
+          PY
           python scripts/check_release_history.py dist/release-metadata.json --repository "$GITHUB_REPOSITORY"
-          jarsigner -verify "dist/aircall-$VERSION-$AIRCALL_VERSION_CODE.aab" > "$RUNNER_TEMP/aab-signature.txt"
-          grep -q 'jar verified' "$RUNNER_TEMP/aab-signature.txt"
-          python scripts/verify_aab.py "dist/aircall-$VERSION-$AIRCALL_VERSION_CODE.aab" \
-            --bundletool "$RUNNER_TEMP/bundletool.jar" --certificate "$AIRCALL_RELEASE_CERT_SHA256" \
-            --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
-            --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
-            --output dist/play-bundle-metadata.json
-          (cd dist && sha256sum *.apk *.aab > SHA256SUMS.txt)
+          python scripts/prepare_onestore_submission.py --require-product-id --metadata dist/release-metadata.json
+          cp CHANGELOG.md dist/CHANGELOG.md
+          (cd dist && sha256sum *.apk *.html *.md *.json > SHA256SUMS.txt)
           echo "RELEASE_TAG=v$VERSION-build.$AIRCALL_VERSION_CODE" >> "$GITHUB_ENV"
-          echo '### Google Play 제출 파일' >> "$GITHUB_STEP_SUMMARY"
-          echo "Play Console에는 aircall-$VERSION-$AIRCALL_VERSION_CODE.aab를 업로드하세요. APK는 직접 설치용입니다." >> "$GITHUB_STEP_SUMMARY"
-          echo '업로드 키와 Play 앱 서명키가 다르면 직접 설치 APK와 Play 설치 앱은 서로 업데이트할 수 없습니다.' >> "$GITHUB_STEP_SUMMARY"
-          echo '개발자 계정·스토어 정보·데이터 보안·콘텐츠 등급·FGS 선언·OAuth 심사 및 실기 테스트는 docs/play/README.md를 확인하세요.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload signed artifacts
+          echo '### 원스토어 제출 파일' >> "$GITHUB_STEP_SUMMARY"
+          echo "ONEconsole에는 aircall-onestore-$VERSION-$AIRCALL_VERSION_CODE.apk를 업로드하세요." >> "$GITHUB_STEP_SUMMARY"
+          echo '개발용 APK는 제출할 수 없습니다. 계정·상품 정보·스크린샷·실기 검증은 docs/onestore/README.md를 확인하세요.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload signed ONE store submission pack
         uses: actions/upload-artifact@v4
         with:
-          name: aircall-signed-release
+          name: aircall-onestore-submission
           path: dist/*
           if-no-files-found: error
           retention-days: 30
       - name: Create reviewable release draft
-        run: gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "AirCall AI $RELEASE_TAG" --notes-file CHANGELOG.md
+        run: gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "AirCall AI $RELEASE_TAG · ONE store" --notes-file dist/SUBMISSION.md
       - name: Remove private signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/aircall-release.jks"

@@ -182,6 +182,7 @@ fun AirCallUi(
                                 "call" -> "음성 대화"
                                 "models" -> "로컬 모델"
                                 "privacy" -> "개인정보"
+                                "about" -> "앱 정보 및 사용 안내"
                                 "settings/{category}" -> when (entry?.arguments?.getString("category")) {
                                     "ai" -> "AI 및 모델"; "accounts" -> "도구 및 계정"
                                     "permissions" -> "작업 승인"; else -> "화면 및 알림"
@@ -212,12 +213,21 @@ fun AirCallUi(
                             } }) { Text("기록 다시 읽기") }
                         } else NavHost(navController = nav, startDestination = "chat", modifier = Modifier.weight(1f)) {
                             composable("chat") { ConversationScreen(vm, activeId, onOpenCall = { nav.navigate("call") },
-                                onReport = { report(it) }, onSendText = { sendText(it) }) }
+                                onReport = { report(it) }, onSendText = { sendText(it) },
+                                onOpenAiSettings = { nav.navigate("settings/ai") }) }
                             composable("call") { CallScreen(vm, onExit = { nav.popBackStack() },
                                 onStartSession = { startVoice() }, onReport = { report(it) }) }
                             composable("settings") { SettingsCategories { category ->
-                                nav.navigate(if (category == "privacy") "privacy" else "settings/$category")
+                                nav.navigate(when (category) {
+                                    "privacy", "about" -> category
+                                    else -> "settings/$category"
+                                })
                             } }
+                            composable("about") { AppInfoScreen(
+                                onOpenAiSettings = { nav.navigate("settings/ai") },
+                                onOpenPrivacy = { nav.navigate("privacy") },
+                                onReport = { report(null) },
+                            ) }
                             composable("settings/{category}") { target ->
                                 SettingsDetail(target.arguments?.getString("category").orEmpty(), graph, vm,
                                     themeMode = themeMode, onThemeChanged = { themeMode = it },

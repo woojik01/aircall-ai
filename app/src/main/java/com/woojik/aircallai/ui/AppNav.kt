@@ -285,6 +285,12 @@ class MainActivity : ComponentActivity() {
      */
     private fun connectGoogle(): String {
         val appGraph = graph()
+        if (com.google.android.gms.common.GoogleApiAvailability.getInstance()
+                .isGooglePlayServicesAvailable(this) != com.google.android.gms.common.ConnectionResult.SUCCESS) {
+            val reason = "Google 연결에는 사용 가능한 Google Play 서비스가 필요합니다. 기기의 Google Play 서비스를 확인해 주세요."
+            appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR, errorMessage = reason)
+            return reason
+        }
         if (appGraph.settings.googleOAuthClientId().isBlank()) {
             appGraph.accountRepository.mark("gmail", ConnectionStatus.ERROR)
             return "Google Android OAuth Client ID가 설정되지 않았습니다."

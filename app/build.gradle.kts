@@ -13,6 +13,20 @@ val appVersion = Properties().apply {
 val playProperties = Properties().apply {
     rootProject.file("config/play.properties").reader(Charsets.UTF_8).use { load(it) }
 }
+val onestoreProperties = Properties().apply {
+    rootProject.file("config/onestore.properties").reader(Charsets.UTF_8).use { load(it) }
+}
+val distributionChannel = (providers.gradleProperty("AIRCALL_DISTRIBUTION_CHANNEL").orNull
+    ?: providers.environmentVariable("AIRCALL_DISTRIBUTION_CHANNEL").orNull ?: "direct").trim()
+require(distributionChannel in listOf("direct", "play", "onestore")) {
+    "AIRCALL_DISTRIBUTION_CHANNEL must be direct, play or onestore."
+}
+val onestoreProductId = (providers.gradleProperty("AIRCALL_ONESTORE_PRODUCT_ID").orNull
+    ?: providers.environmentVariable("AIRCALL_ONESTORE_PRODUCT_ID").orNull?.takeIf { it.isNotBlank() }
+    ?: onestoreProperties.getProperty("AIRCALL_ONESTORE_PRODUCT_ID", "")).trim()
+require(onestoreProductId.isBlank() || onestoreProductId.matches(Regex("[0-9]{10}"))) {
+    "AIRCALL_ONESTORE_PRODUCT_ID must be the 10-digit PID issued by ONEconsole."
+}
 fun playValue(name: String): String = (providers.gradleProperty(name).orNull
     ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
     ?: playProperties.getProperty(name, "")).trim()
@@ -20,9 +34,10 @@ fun javaString(value: String): String = "\"" + value.replace("\\", "\\\\")
     .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
 val playFieldNames = listOf("AIRCALL_DEVELOPER_NAME", "AIRCALL_SUPPORT_EMAIL",
     "AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT", "AIRCALL_REPORT_RETENTION_DAYS")
-if (providers.environmentVariable("AIRCALL_REQUIRE_PLAY_CONFIG").orNull == "true") {
+if (providers.environmentVariable("AIRCALL_REQUIRE_PLAY_CONFIG").orNull == "true" ||
+    providers.environmentVariable("AIRCALL_REQUIRE_STORE_CONFIG").orNull == "true") {
     require(playFieldNames.all { playValue(it).isNotBlank() }) {
-        "Complete config/play.properties or matching Actions variables before a Play release."
+        "Complete config/play.properties or matching Actions variables before a store release."
     }
     listOf("AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT").forEach { name ->
         val uri = URI(playValue(name))
@@ -66,6 +81,8 @@ android {
         versionName = appVersion.getProperty("versionName")
         manifestPlaceholders["appLabel"] = "AirCall AI"
         playFieldNames.forEach { name -> buildConfigField("String", name, javaString(playValue(name))) }
+        buildConfigField("String", "AIRCALL_DISTRIBUTION_CHANNEL", javaString(distributionChannel))
+        buildConfigField("String", "AIRCALL_ONESTORE_PRODUCT_ID", javaString(onestoreProductId))
 
         // PRD-09 소셜 로그인 UX: OAuth Client ID는 공개값이므로 빌드 시점 기본값으로 제공한다.
         val githubOAuthClientId = (project.findProperty("GITHUB_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()

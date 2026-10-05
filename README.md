@@ -3,8 +3,12 @@
 Android에서 로컬 모델 또는 클라우드 API로 텍스트·음성 대화를 제공하는 앱입니다.
 Google·GitHub에 로그인하지 않아도 대화와 기기 메모를 사용할 수 있습니다.
 
-[설치·업데이트·서명](docs/RELEASING.md) · [Google Play 제출 준비](docs/play/README.md) ·
+[원스토어 우선 출시](docs/onestore/README.md) · [설치·업데이트·서명](docs/RELEASING.md) · [Google Play 제출 준비](docs/play/README.md) ·
 [변경 기록](CHANGELOG.md) · [보안 안내](SECURITY.md) · [개발 명세](docs/prd/README.md)
+
+0.4.1은 원스토어용 단일 서명 APK·제출 문서 생성 경로와 앱 정보·사용 안내를 추가합니다.
+Actions의 **ONE store Release**는 개인 서명키·실제 공개 정책·신고 수신기·발급 PID를 검사하고
+제출 파일과 GitHub 초안을 만듭니다. 계정 등록, 실제 스크린샷과 기기 테스트, 원스토어 심사는 별도로 완료해야 합니다.
 
 ## 현재 기능
 
@@ -16,6 +20,7 @@ Google·GitHub에 로그인하지 않아도 대화와 기기 메모를 사용할
 - Google 로그인으로 Gmail 발송 및 기본 캘린더 일정 조회·등록
 - 로그인 없이 기기에 메모 저장·검색
 - 작업 결과 알림, 응답 신고, 개인정보 안내와 전체 기기 데이터 삭제
+- 앱 정보·첫 AI 설정 안내, 원스토어 상품 페이지를 통한 업데이트 확인
 
 앱 버전은 [version.properties](version.properties)를 기준으로 합니다.
 개발 명세는 목표 사양이며 구현 완료·실기 검증·출시 승인 여부를 뜻하지 않습니다.

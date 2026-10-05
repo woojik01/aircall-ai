@@ -75,7 +75,7 @@ def validate(config):
 
 
 def fetch_public(url, limit, payload=None):
-    headers = {'User-Agent': 'AirCall-Play-Preflight/1'}
+    headers = {'User-Agent': 'AirCall-Store-Preflight/1'}
     body = None
     if payload is not None:
         body = json.dumps(payload).encode('utf-8')

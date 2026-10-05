@@ -1,0 +1,32 @@
+name: Prepare ONE store Documents
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  documents:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
+      AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
+      AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
+      AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
+      AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
+      AIRCALL_ONESTORE_PRODUCT_ID: ${{ vars.AIRCALL_ONESTORE_PRODUCT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare reviewable policy and ONEconsole documents
+        run: |
+          python scripts/prepare_onestore_submission.py
+          echo 'privacy-policy.html을 공개 HTTPS 주소에 게시하고 신고 수신기를 설정하세요. 이 작업은 웹 게시나 스토어 제출을 하지 않습니다.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aircall-onestore-documents
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
