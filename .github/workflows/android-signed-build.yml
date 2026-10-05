@@ -1,10 +1,10 @@
-name: Android Release
+name: Android Signed Build
 
 on:
   workflow_dispatch:
     inputs:
       version_code:
-        description: '새 정식 릴리스 versionCode (이전 릴리스·초안보다 커야 함, 첫 권장값 30000)'
+        description: '이전 모든 정식 APK·AAB·초안보다 큰 versionCode (첫 빌드 30001 이상 권장)'
         required: true
         type: string
 
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  signed-release:
+  signed-build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -24,12 +24,6 @@ jobs:
       AIRCALL_VERSION_CODE: ${{ inputs.version_code }}
       AIRCALL_RELEASE_CERT_SHA256: ${{ vars.AIRCALL_RELEASE_CERT_SHA256 }}
       GOOGLE_OAUTH_CLIENT_ID_RELEASE: ${{ vars.GOOGLE_OAUTH_CLIENT_ID_RELEASE }}
-      AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
-      AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
-      AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
-      AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
-      AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
-      AIRCALL_REQUIRE_PLAY_CONFIG: 'true'
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -37,19 +31,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.13'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
-      - name: Require working public policy and anonymous report receiver
-        run: python scripts/check_play_config.py --network --policy-output dist/privacy-policy.html
-      - name: Download pinned bundletool
-        run: |
-          curl --fail --location --retry 3 --output "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
-          echo 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  '"$RUNNER_TEMP/bundletool.jar" | sha256sum --check
-      - name: Require production signing and restore private keystore
+      - name: Restore and validate private signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -59,16 +41,26 @@ jobs:
           AIRCALL_KEYSTORE_PASSWORD: ${{ secrets.AIRCALL_KEYSTORE_PASSWORD }}
           AIRCALL_KEY_ALIAS: ${{ secrets.AIRCALL_KEY_ALIAS }}
           AIRCALL_KEY_PASSWORD: ${{ secrets.AIRCALL_KEY_PASSWORD }}
-        run: python scripts/prepare_release_signing.py --require-oauth
-      - name: Tests and signed APK/AAB
+        run: python scripts/prepare_release_signing.py
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+      - name: Download pinned bundletool
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          echo 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  '"$RUNNER_TEMP/bundletool.jar" | sha256sum --check
+      - name: Tests, lint and privately signed APK/AAB
         run: |
           python -m unittest discover -s scripts -p 'test_*.py' -v
           node --test support/report-receiver/receiver.test.cjs
           gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease bundleRelease \
             -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" \
-            -PAIRCALL_DISTRIBUTION_CHANNEL=play \
+            -PAIRCALL_DISTRIBUTION_CHANNEL=direct \
             -PGOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID_RELEASE" --stacktrace
-      - name: Verify identity, signing, native compatibility and update history
+      - name: Verify signed APK/AAB and update history
         run: |
           mkdir -p dist
           VERSION=$(sed -n 's/^versionName=//p' version.properties)
@@ -79,28 +71,26 @@ jobs:
             --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
             --certificate "$AIRCALL_RELEASE_CERT_SHA256" --release --output dist/release-metadata.json
           python scripts/check_release_history.py dist/release-metadata.json --repository "$GITHUB_REPOSITORY"
-          jarsigner -verify "dist/aircall-$VERSION-$AIRCALL_VERSION_CODE.aab" > "$RUNNER_TEMP/aab-signature.txt"
-          grep -q 'jar verified' "$RUNNER_TEMP/aab-signature.txt"
           python scripts/verify_aab.py "dist/aircall-$VERSION-$AIRCALL_VERSION_CODE.aab" \
             --bundletool "$RUNNER_TEMP/bundletool.jar" --certificate "$AIRCALL_RELEASE_CERT_SHA256" \
             --build-tools "$ANDROID_HOME/build-tools/35.0.0" \
             --package com.woojik.aircallai.release --version-code "$AIRCALL_VERSION_CODE" \
-            --output dist/play-bundle-metadata.json
+            --output dist/bundle-metadata.json
+          cp CHANGELOG.md dist/CHANGELOG.md
           (cd dist && sha256sum *.apk *.aab > SHA256SUMS.txt)
           echo "RELEASE_TAG=v$VERSION-build.$AIRCALL_VERSION_CODE" >> "$GITHUB_ENV"
-          echo '### Google Play 제출 파일' >> "$GITHUB_STEP_SUMMARY"
-          echo "Play Console에는 aircall-$VERSION-$AIRCALL_VERSION_CODE.aab를 업로드하세요. APK는 직접 설치용입니다." >> "$GITHUB_STEP_SUMMARY"
-          echo '업로드 키와 Play 앱 서명키가 다르면 직접 설치 APK와 Play 설치 앱은 서로 업데이트할 수 없습니다.' >> "$GITHUB_STEP_SUMMARY"
-          echo '개발자 계정·스토어 정보·데이터 보안·콘텐츠 등급·FGS 선언·OAuth 심사 및 실기 테스트는 docs/play/README.md를 확인하세요.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload signed artifacts
+          echo '### 개인 키로 서명된 테스트 빌드' >> "$GITHUB_STEP_SUMMARY"
+          echo "aircall-signed-build ZIP에서 aircall-$VERSION-$AIRCALL_VERSION_CODE.apk를 꺼내 설치하세요." >> "$GITHUB_STEP_SUMMARY"
+          echo '스토어 제출 조건·정식 Google OAuth·실기 동작 검증은 별도입니다. 원스토어 제출은 ONE store Release를 사용하세요.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Reserve signing identity and version in a private release draft
+        run: gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "AirCall AI $RELEASE_TAG · Signed test build" --notes-file CHANGELOG.md
+      - name: Upload verified signed APK/AAB
         uses: actions/upload-artifact@v4
         with:
-          name: aircall-signed-release
+          name: aircall-signed-build
           path: dist/*
           if-no-files-found: error
           retention-days: 30
-      - name: Create reviewable release draft
-        run: gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "AirCall AI $RELEASE_TAG" --notes-file CHANGELOG.md
       - name: Remove private signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/aircall-release.jks"

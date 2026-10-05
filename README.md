@@ -34,6 +34,11 @@ GitHub Actions의 **aircall-debug-apk**에서 ZIP을 풀고 **aircall-dev.apk**�
 
 정식 배포용 서명, 릴리스 초안과 Play AAB 준비는 [릴리스 안내](docs/RELEASING.md)를 참조하세요.
 
+스마트폰에서 만든 개인 키의 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`를 **Actions Secrets**에 등록하면
+**Android Signed Build** → **Run workflow**에서 서명된 APK/AAB를 만들 수 있습니다.
+성공한 실행의 **aircall-signed-build**에서 APK를 받으세요. 스토어 제출 준비는 별도로 완료해야 합니다.
+
 ## AI 설정
 
 **로컬:** 설정 → AI 및 모델 → 로컬 모델 관리에서 다운로드 후 적용하세요.

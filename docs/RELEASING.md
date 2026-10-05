@@ -25,24 +25,62 @@ APK 업로드 전 확인:
 - `zipalign -P 16` 및 ARM64/x86_64 네이티브 ELF의 16 KB LOAD 정렬 검사
 - 다운로드 파일의 SHA-256 및 빌드 메타데이터 동봉
 
-R8 적용 정식 코드와 AAB의 서명 경로도 CI의 임시 테스트 키로 검증합니다. 그 APK/AAB와 테스트 키는 업로드하지 않습니다. 실제 배포는 별도 Android Release에서 개인 키로만 수행합니다. CI 성공은 모든 기기에서의 실행 성공이나 Google Play 심사 통과를 의미하지 않습니다.
+R8 적용 정식 코드와 AAB의 서명 경로도 CI의 임시 테스트 키로 검증합니다. 그 APK/AAB와 테스트 키는 업로드하지 않습니다. 개인 키 빌드는 Android Signed Build, 스토어 제출 파일은 ONE store Release 또는 Android Release에서 만듭니다. CI 성공은 모든 기기에서의 실행 성공이나 스토어 심사 통과를 의미하지 않습니다.
+
+## 스마트폰에서 개인 서명 APK/AAB 만들기
+
+PC 없이 Termux에서 만든 키를 사용할 수 있습니다. 서명키는 스마트폰에서 생성하고 Base64 변환도 기기 안에서 실행합니다. 온라인 변환 사이트나 채팅에 키·비밀번호·Base64를 보내지 않습니다.
+
+1. Termux에서 `pkg update` 후 `pkg install openjdk-17`을 실행합니다. 설치 가능한 JDK 패키지는 사용하는 Termux 저장소에 따라 확인하세요. CI의 JDK 버전과 키 생성용 JDK 버전은 같을 필요가 없습니다.
+2. 아래 명령으로 키를 만듭니다. `-storetype JKS`를 명시하므로 확장자뿐 아니라 실제 형식도 JKS입니다. 이미 배포한 앱의 키가 있다면 새로 만들지 말고 그 키를 사용합니다.
+
+```bash
+keytool -genkeypair -v -storetype JKS -keystore release.jks \
+  -alias aircall-ai -keyalg RSA -keysize 2048 -validity 10000
+```
+
+3. 비밀번호와 인증서 정보를 입력합니다. 키 비밀번호 질문에서 Enter를 눌렀다면 keystore 비밀번호와 같은 값입니다.
+4. `base64 -w 0 release.jks > release.jks.base64.txt`로 변환합니다. `-w`가 지원되지 않으면 `base64 release.jks | tr -d '\n' > release.jks.base64.txt`를 사용합니다.
+5. `cat release.jks.base64.txt` 출력 전체를 GitHub Secret에 붙여 넣습니다. 줄바꿈이 포함된 Base64도 워크플로우가 처리합니다. `release.jks` 원본과 비밀번호는 별도로 안전하게 백업합니다. `.base64.txt`도 원본 키와 같은 수준으로 보호하고 저장소에 올리지 않습니다.
+
+[저장소 Secrets 설정](https://github.com/woojik01/aircall-ai/settings/secrets/actions) → **New repository secret**에서 아래 4개를 등록합니다. Variables가 아닙니다.
+
+| Secret 이름 | 값 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | `release.jks`의 Base64 전체 |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore 비밀번호 |
+| `ANDROID_KEY_ALIAS` | 위 명령 사용 시 `aircall-ai` |
+| `ANDROID_KEY_PASSWORD` | 키 비밀번호; Enter로 동일하게 설정했다면 keystore 비밀번호 |
+
+6. [Android Signed Build](https://github.com/woojik01/aircall-ai/actions/workflows/android-signed-build.yml) → **Run workflow** → **main** → 이전 모든 개인 키 빌드·정식 릴리스·초안보다 큰 `version_code`를 입력합니다. 첫 빌드는 `30001` 이상을 권장합니다. 다음 빌드는 이전보다 큰 값을 사용합니다.
+7. 성공한 실행의 **aircall-signed-build**를 다운로드합니다. ZIP을 풀고 `aircall-버전-versionCode.apk`를 설치합니다. AAB는 직접 설치 파일이 아닙니다. 패키지는 `com.woojik.aircallai.release`입니다.
+
+이 워크플로우는 4개 Secrets만으로 개인 키 테스트 APK/AAB를 만들고 비공개 릴리스 초안에 버전·서명 이력을 남깁니다. 스토어 심사·공개 정책 URL·신고 수신기·정식 Google OAuth 등록은 별도이며, 원스토어 제출용 문서는 ONE store Release를 사용합니다. **Android CI**에서 받는 `aircall-dev.apk`는 계속 개발용 키를 사용합니다.
+
+키 비밀번호·alias·Base64가 잘못되면 빌드 전에 중단합니다. JKS와 PKCS12 형식 모두 지원하고 공개 개발 키는 거부합니다. 인증서 SHA-1·SHA-256은 실행 **Summary**에 표시하며 SHA-256은 자동으로 APK/AAB 검증에 사용합니다. 선택적으로 `AIRCALL_RELEASE_CERT_SHA256` Variable을 등록하면 해당 지문과 일치하는 키만 허용합니다. 최초 성공 이후에는 릴리스 초안/게시 이력과 서명키·versionCode를 대조합니다. 같은 버전의 초안은 덮어쓰지 않습니다.
+
+초안은 다음 정식 릴리스가 참조하는 버전·서명 기록입니다. 삭제하면 이력 검사가 해당 기록을 확인할 수 없으므로 키 원본과 함께 유지하세요. 다음 ONE store Release/Android Release에는 테스트 빌드보다 큰 `version_code`를 넣습니다.
+
+정식 Google 로그인을 테스트하려면 `GOOGLE_OAUTH_CLIENT_ID_RELEASE` Variable을 준비하고 Summary의 패키지·SHA-1로 Android OAuth 클라이언트를 등록합니다. 이 값은 개인 서명 테스트 빌드에서는 선택 사항이고 스토어 제출 워크플로우에서는 필수입니다.
 
 ## 개인 키와 Google 등록 (개발자 최초 1회)
 
-Android Studio의 Generate Signed Bundle/APK로 개인 keystore를 만듭니다. 파일과 암호를 별도로 안전하게 보관하고 소스에 커밋하지 않습니다. 기존 키를 잃어버리거나 다른 키로 바꾸면 APK 직접 배포 사용자가 업데이트할 수 없습니다.
+위 Termux 명령 또는 Android Studio의 Generate Signed Bundle/APK로 개인 keystore를 만듭니다. 파일과 암호를 별도로 안전하게 보관하고 소스에 커밋하지 않습니다. 기존 키를 잃어버리거나 다른 키로 바꾸면 APK 직접 배포 사용자가 업데이트할 수 없습니다.
 
 GitHub 저장소 Settings → Secrets and variables → Actions:
 
 | 구분 | 이름 | 값 |
 | --- | --- | --- |
-| Secret | `AIRCALL_KEYSTORE_BASE64` | 개인 keystore 파일의 Base64 |
-| Secret | `AIRCALL_KEYSTORE_PASSWORD` | keystore 암호 |
-| Secret | `AIRCALL_KEY_ALIAS` | 개인 키 alias |
-| Secret | `AIRCALL_KEY_PASSWORD` | 개인 키 암호 |
-| Variable | `AIRCALL_RELEASE_CERT_SHA256` | 개인 서명 인증서 SHA-256 지문 |
+| Secret | `ANDROID_KEYSTORE_BASE64` | 개인 keystore 파일의 Base64 |
+| Secret | `ANDROID_KEYSTORE_PASSWORD` | keystore 암호 |
+| Secret | `ANDROID_KEY_ALIAS` | 개인 키 alias |
+| Secret | `ANDROID_KEY_PASSWORD` | 개인 키 암호 |
+| Variable (선택) | `AIRCALL_RELEASE_CERT_SHA256` | 허용할 개인 서명 인증서 SHA-256 지문; 생략 시 키에서 자동 계산 |
 | Variable | `GOOGLE_OAUTH_CLIENT_ID_RELEASE` | 정식 패키지/서명에 등록한 Android OAuth Client ID |
 
 Google Cloud에 패키지 `com.woojik.aircallai.release`와 개인 인증서 SHA-1로 **새 Android OAuth 클라이언트**를 등록합니다. 기존 개발용 등록은 유지합니다. Play App Signing을 사용하는 경우 사용자가 설치하는 앱의 **앱 서명 인증서**를 Google에 등록해야 합니다. 업로드 키와 앱 서명키는 서로 다를 수 있습니다.
+
+기존 `AIRCALL_KEYSTORE_BASE64`, `AIRCALL_KEYSTORE_PASSWORD`, `AIRCALL_KEY_ALIAS`, `AIRCALL_KEY_PASSWORD` Secrets도 계속 지원합니다. `ANDROID_*` 4개가 모두 없을 때만 기존 4개를 사용합니다. 두 이름을 섞어서 일부씩 등록하면 키가 뒤섞이지 않도록 중단합니다. 모든 개인 키 워크플로우가 같은 규칙을 적용합니다.
 
 개인 키 정보가 부족하거나 fingerprint가 개발용 키와 같으면 릴리스는 중단합니다. 자동 임시 키 생성이나 개발용 서명으로 대체하지 않습니다.
 
@@ -71,9 +109,10 @@ APK 직접 배포와 Play AAB 배포의 인증서가 다르면 같은 패키지�
 
 텍스트 작업은 영구 예약 큐가 아닙니다. 앱 프로세스 강제 종료 후 외부 변경 작업을 자동 재실행하지 않습니다. 중단된 메일·일정·GitHub 변경은 해당 서비스에서 결과를 확인한 후 다시 요청합니다.
 
-## 공식 자료 (2026-10-04 확인)
+## 공식 자료 (2026-10-05 확인)
 
 - [Android 앱 서명](https://developer.android.com/studio/publish/app-signing)
+- [GitHub Actions Secrets 및 Base64 바이너리 저장](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
 - [Android 앱 버전](https://developer.android.com/studio/publish/versioning)
 - [16 KB 페이지 크기](https://developer.android.com/guide/practices/page-sizes)
 - [알림 런타임 권한](https://developer.android.com/develop/ui/compose/notifications/notification-permission)

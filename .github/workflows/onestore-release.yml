@@ -25,9 +25,6 @@ jobs:
       AIRCALL_VERSION_CODE: ${{ inputs.version_code }}
       AIRCALL_DISTRIBUTION_CHANNEL: onestore
       AIRCALL_ONESTORE_PRODUCT_ID: ${{ vars.AIRCALL_ONESTORE_PRODUCT_ID }}
-      AIRCALL_KEYSTORE_PASSWORD: ${{ secrets.AIRCALL_KEYSTORE_PASSWORD }}
-      AIRCALL_KEY_ALIAS: ${{ secrets.AIRCALL_KEY_ALIAS }}
-      AIRCALL_KEY_PASSWORD: ${{ secrets.AIRCALL_KEY_PASSWORD }}
       AIRCALL_RELEASE_CERT_SHA256: ${{ vars.AIRCALL_RELEASE_CERT_SHA256 }}
       GOOGLE_OAUTH_CLIENT_ID_RELEASE: ${{ vars.GOOGLE_OAUTH_CLIENT_ID_RELEASE }}
       AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
@@ -62,25 +59,15 @@ jobs:
           PY
       - name: Require production signing and restore private keystore
         env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           AIRCALL_KEYSTORE_BASE64: ${{ secrets.AIRCALL_KEYSTORE_BASE64 }}
-        run: |
-          python - <<'PY'
-          import base64, os, re
-          from pathlib import Path
-          names = ['AIRCALL_KEYSTORE_BASE64', 'AIRCALL_KEYSTORE_PASSWORD', 'AIRCALL_KEY_ALIAS', 'AIRCALL_KEY_PASSWORD', 'AIRCALL_RELEASE_CERT_SHA256', 'GOOGLE_OAUTH_CLIENT_ID_RELEASE']
-          missing = [name for name in names if not os.environ.get(name)]
-          if missing: raise SystemExit('Production release configuration missing: ' + ', '.join(missing))
-          code = os.environ['AIRCALL_VERSION_CODE']
-          if not code.isdigit() or not 30000 <= int(code) <= 2100000000: raise SystemExit('Invalid production versionCode')
-          digest = os.environ['AIRCALL_RELEASE_CERT_SHA256'].replace(':', '').lower()
-          if not re.fullmatch('[a-f0-9]{64}', digest): raise SystemExit('Invalid certificate SHA-256')
-          if digest == '80aa900bdf23c5abde473e24875ce91adbc0882f86f3d3dbd5b42a7e866c5bf4': raise SystemExit('Development certificate must never sign production releases')
-          target = Path(os.environ['RUNNER_TEMP']) / 'aircall-release.jks'
-          target.write_bytes(base64.b64decode(os.environ['AIRCALL_KEYSTORE_BASE64'], validate=True))
-          target.chmod(0o600)
-          with open(os.environ['GITHUB_ENV'], 'a') as env:
-              env.write(f'AIRCALL_KEYSTORE_PATH={target}\nAIRCALL_REQUIRE_RELEASE_SIGNING=true\n')
-          PY
+          AIRCALL_KEYSTORE_PASSWORD: ${{ secrets.AIRCALL_KEYSTORE_PASSWORD }}
+          AIRCALL_KEY_ALIAS: ${{ secrets.AIRCALL_KEY_ALIAS }}
+          AIRCALL_KEY_PASSWORD: ${{ secrets.AIRCALL_KEY_PASSWORD }}
+        run: python scripts/prepare_release_signing.py --require-oauth
       - name: Tests, lint and signed ONE store APK
         run: |
           python -m unittest discover -s scripts -p 'test_*.py' -v

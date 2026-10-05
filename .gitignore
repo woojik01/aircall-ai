@@ -23,6 +23,8 @@ build/
 
 # Private production signing material (the existing public development key is separate).
 *.jks
+*.jks.base64.txt
+*.keystore.base64.txt
 release.keystore
 keystore.properties
 dist/
