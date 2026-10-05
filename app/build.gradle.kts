@@ -33,13 +33,18 @@ fun playValue(name: String): String = (providers.gradleProperty(name).orNull
 fun javaString(value: String): String = "\"" + value.replace("\\", "\\\\")
     .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
 val playFieldNames = listOf("AIRCALL_DEVELOPER_NAME", "AIRCALL_SUPPORT_EMAIL",
-    "AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT", "AIRCALL_REPORT_RETENTION_DAYS")
+    "AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_METHOD", "AIRCALL_REPORT_ENDPOINT", "AIRCALL_REPORT_RETENTION_DAYS")
+val reportMethod = playValue("AIRCALL_REPORT_METHOD").ifBlank { "email" }
+require(reportMethod in listOf("email", "https")) { "AIRCALL_REPORT_METHOD must be email or https." }
 if (providers.environmentVariable("AIRCALL_REQUIRE_PLAY_CONFIG").orNull == "true" ||
     providers.environmentVariable("AIRCALL_REQUIRE_STORE_CONFIG").orNull == "true") {
-    require(playFieldNames.all { playValue(it).isNotBlank() }) {
+    val requiredFields = playFieldNames.filter { it != "AIRCALL_REPORT_ENDPOINT" }
+    require(requiredFields.all { playValue(it).isNotBlank() }) {
         "Complete config/play.properties or matching Actions variables before a store release."
     }
-    listOf("AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT").forEach { name ->
+    val requiredUrls = if (reportMethod == "https") listOf("AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT")
+        else listOf("AIRCALL_PRIVACY_POLICY_URL")
+    requiredUrls.forEach { name ->
         val uri = URI(playValue(name))
         require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) {
             "$name must be a public HTTPS URL."
@@ -63,6 +68,8 @@ require(signingValues.all { it.isNullOrBlank() } || signingValues.all { !it.isNu
     "Release signing requires all four AIRCALL_KEYSTORE/KEY environment values."
 }
 val hasReleaseSigning = signingValues.all { !it.isNullOrBlank() }
+val productionGoogleClientId = (providers.gradleProperty("GOOGLE_OAUTH_CLIENT_ID_RELEASE").orNull
+    ?: providers.environmentVariable("GOOGLE_OAUTH_CLIENT_ID_RELEASE").orNull).orEmpty().trim()
 if (providers.environmentVariable("AIRCALL_REQUIRE_RELEASE_SIGNING").orNull == "true") {
     require(hasReleaseSigning) { "Release signing is required; unsigned/debug-signed distribution is forbidden." }
 }
@@ -80,15 +87,17 @@ android {
             ?: error("AIRCALL_VERSION_CODE must be an integer between 3 and 2100000000")
         versionName = appVersion.getProperty("versionName")
         manifestPlaceholders["appLabel"] = "AirCall AI"
-        playFieldNames.forEach { name -> buildConfigField("String", name, javaString(playValue(name))) }
+        playFieldNames.forEach { name ->
+            buildConfigField("String", name, javaString(if (name == "AIRCALL_REPORT_METHOD") reportMethod else playValue(name)))
+        }
         buildConfigField("String", "AIRCALL_DISTRIBUTION_CHANNEL", javaString(distributionChannel))
         buildConfigField("String", "AIRCALL_ONESTORE_PRODUCT_ID", javaString(onestoreProductId))
 
         // PRD-09 소셜 로그인 UX: OAuth Client ID는 공개값이므로 빌드 시점 기본값으로 제공한다.
         val githubOAuthClientId = (project.findProperty("GITHUB_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
         val googleOAuthClientId = (project.findProperty("GOOGLE_OAUTH_CLIENT_ID") as? String)?.trim().orEmpty()
-        buildConfigField("String", "GITHUB_OAUTH_CLIENT_ID", "\"$githubOAuthClientId\"")
-        buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", "\"$googleOAuthClientId\"")
+        buildConfigField("String", "GITHUB_OAUTH_CLIENT_ID", javaString(githubOAuthClientId))
+        buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", javaString(googleOAuthClientId))
     }
 
     signingConfigs {
@@ -120,6 +129,8 @@ android {
             // Preserve the installed development package and its Google OAuth registration.
             // A private production signing key uses a separate, permanent identity.
             applicationIdSuffix = ".release"
+            // A development client must not make an unconfigured production build look connected.
+            buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", javaString(productionGoogleClientId))
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("production")
             // PRD-08: Release 빌드에 R8 축소/난독화 적용. LiteRT-LM JNI 유지 규칙은
             // proguard-rules.pro 참조.

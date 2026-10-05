@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 # Play와 원스토어가 같은 정식 패키지/키/버전 이력을 공유한다.
 concurrency:
@@ -18,7 +19,7 @@ concurrency:
 
 jobs:
   signed-release:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -34,11 +35,24 @@ jobs:
       AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
       AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
       AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
+      AIRCALL_REPORT_METHOD: ${{ vars.AIRCALL_REPORT_METHOD }}
       AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
       AIRCALL_REQUIRE_STORE_CONFIG: 'true'
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require successful validation of this exact source commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              head_sha: context.sha, status: 'success', per_page: 100,
+            });
+            if (!runs.some(run => run.path === '.github/workflows/release-validation.yml' &&
+                run.head_sha === context.sha && ['push', 'workflow_dispatch'].includes(run.event))) {
+              core.setFailed('Run Release Validation successfully on this branch commit before signing.');
+            }
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -49,7 +63,7 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
-      - name: Require ONEconsole PID, working policy and report receiver
+      - name: Require ONEconsole PID, working policy and chosen reporting method
         run: |
           python scripts/prepare_onestore_submission.py --require-product-id --network
           python - <<'PY'
@@ -89,7 +103,7 @@ jobs:
             -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" \
             -PAIRCALL_DISTRIBUTION_CHANNEL=onestore \
             -PAIRCALL_ONESTORE_PRODUCT_ID="$AIRCALL_ONESTORE_PRODUCT_ID" \
-            -PGOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID_RELEASE" --stacktrace
+            -PGOOGLE_OAUTH_CLIENT_ID_RELEASE="$GOOGLE_OAUTH_CLIENT_ID_RELEASE" --stacktrace
       - name: Verify APK identity, certificate, native compatibility and update history
         run: |
           VERSION=$(sed -n 's/^versionName=//p' version.properties)

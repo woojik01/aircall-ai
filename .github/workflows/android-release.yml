@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: aircall-production-release
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   signed-release:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -31,11 +32,24 @@ jobs:
       AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
       AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
       AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
+      AIRCALL_REPORT_METHOD: ${{ vars.AIRCALL_REPORT_METHOD }}
       AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
       AIRCALL_REQUIRE_PLAY_CONFIG: 'true'
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require successful validation of this exact source commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              head_sha: context.sha, status: 'success', per_page: 100,
+            });
+            if (!runs.some(run => run.path === '.github/workflows/release-validation.yml' &&
+                run.head_sha === context.sha && ['push', 'workflow_dispatch'].includes(run.event))) {
+              core.setFailed('Run Release Validation successfully on this branch commit before signing.');
+            }
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -46,7 +60,7 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
-      - name: Require working public policy and anonymous report receiver
+      - name: Require working public policy and chosen reporting method
         run: python scripts/check_play_config.py --network --policy-output dist/privacy-policy.html
       - name: Download pinned bundletool
         run: |
@@ -80,7 +94,7 @@ jobs:
           gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease bundleRelease \
             -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" \
             -PAIRCALL_DISTRIBUTION_CHANNEL=play \
-            -PGOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID_RELEASE" --stacktrace
+            -PGOOGLE_OAUTH_CLIENT_ID_RELEASE="$GOOGLE_OAUTH_CLIENT_ID_RELEASE" --stacktrace
       - name: Verify identity, signing, native compatibility and update history
         run: |
           mkdir -p dist

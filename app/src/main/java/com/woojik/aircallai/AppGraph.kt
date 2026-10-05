@@ -54,7 +54,11 @@ import kotlinx.coroutines.SupervisorJob
  * 연결된 토큰은 CredentialManager에 암호화 저장되고 기존 Tool 계층과 동기화된다.
  */
 class AppGraph(context: Context) {
-    val contentReports = com.woojik.aircallai.privacy.ContentReportClient(BuildConfig.AIRCALL_REPORT_ENDPOINT)
+    val contentReports = com.woojik.aircallai.privacy.ContentReportClient(
+        endpoint = BuildConfig.AIRCALL_REPORT_ENDPOINT,
+        reportMethod = BuildConfig.AIRCALL_REPORT_METHOD,
+        supportEmail = BuildConfig.AIRCALL_SUPPORT_EMAIL,
+    )
     private val settingsStore = SharedPrefsStore(context)
     val settings = SettingsRepository(
         settingsStore,
