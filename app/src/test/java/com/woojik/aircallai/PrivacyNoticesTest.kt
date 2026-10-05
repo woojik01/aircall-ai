@@ -41,6 +41,18 @@ class PrivacyNoticesTest {
     }
 
     @Test
+    fun emailReportingExplainsSendAndRetentionResponsibilities() {
+        val notice = PrivacyNotices.reportsForMethod("email")
+        assertEquals("AI 응답 신고 및 문의", notice.title)
+        assertTrue(notice.detail.contains("보내기를 눌러야"))
+        assertTrue(notice.detail.contains("접수 확인이 아닙니다"))
+        assertTrue(notice.detail.contains("발신 이메일 주소"))
+        assertTrue(notice.detail.contains("수동 삭제"))
+        assertTrue(notice.detail.contains("자동 삭제하지 않습니다"))
+        assertEquals(PrivacyNotices.reports, PrivacyNotices.reportsForMethod("https"))
+    }
+
+    @Test
     fun everyNoticeHasTitleAndDetail() {
         listOf(PrivacyNotices.localMode, PrivacyNotices.cloudMode, PrivacyNotices.tools).forEach {
             assertTrue(it.title.isNotBlank())

@@ -47,7 +47,8 @@ fun PrivacyScreen(onReport: () -> Unit = {}, onBeforeClearData: () -> Unit = {})
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            listOf(PrivacyNotices.localMode, PrivacyNotices.cloudMode, PrivacyNotices.tools, PrivacyNotices.reports).forEach { notice ->
+            listOf(PrivacyNotices.localMode, PrivacyNotices.cloudMode, PrivacyNotices.tools,
+                PrivacyNotices.reportsForMethod(BuildConfig.AIRCALL_REPORT_METHOD)).forEach { notice ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(notice.title, style = MaterialTheme.typography.titleMedium)
@@ -70,7 +71,7 @@ fun PrivacyScreen(onReport: () -> Unit = {}, onBeforeClearData: () -> Unit = {})
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.AIRCALL_PRIVACY_POLICY_URL))) }
                     .onFailure { status = "웹페이지를 열 수 없습니다." }
             }) { Text("공개 개인정보처리방침 보기") }
-            Button(onClick = onReport, modifier = Modifier.fillMaxWidth()) { Text("앱 안에서 문의 및 신고") }
+            Button(onClick = onReport, modifier = Modifier.fillMaxWidth()) { Text("문의 및 신고 작성") }
             Text("AirCall AI 자체 계정을 만들지 않습니다. 외부 계정 연결 해제는 설정의 도구 및 계정에서 할 수 있습니다. " +
                 "연결 해제는 기기의 토큰을 지우며, 서비스의 계정이나 이미 보낸 메일·일정을 삭제하지 않습니다. " +
                 "Google·GitHub의 계정 설정에서 앱의 접근 권한도 취소할 수 있습니다.")

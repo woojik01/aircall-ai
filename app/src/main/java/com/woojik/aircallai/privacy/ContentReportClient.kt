@@ -19,11 +19,15 @@ data class ContentReport(
     val appVersion: String,
     val androidApi: Int,
 ) {
-    fun payload(): String {
+    internal fun validate() {
         require(runCatching { UUID.fromString(id).toString() == id }.getOrDefault(false))
         require(category in setOf("content", "privacy", "bug"))
         require(reason.isNotBlank() && reason.length <= 2000 && response.length <= 4000)
         require(appVersion.isNotBlank() && appVersion.length <= 80 && androidApi in 26..100)
+    }
+
+    fun payload(): String {
+        validate()
         return JSONObject().put("id", id).put("category", category).put("reason", reason)
             .put("response", response).put("appVersion", appVersion).put("androidApi", androidApi).toString()
     }
@@ -36,11 +40,24 @@ fun interface ReportTransport { suspend fun post(endpoint: String, payload: Stri
 class ContentReportClient(
     private val endpoint: String,
     private val transport: ReportTransport = HttpsReportTransport(),
+    private val reportMethod: String = "https",
+    val supportEmail: String = "",
 ) {
-    val isConfigured: Boolean get() = isHttpsEndpoint(endpoint)
+    val usesEmail: Boolean get() = reportMethod == "email"
+    val isConfigured: Boolean get() = when (reportMethod) {
+        "email" -> isSupportEmail(supportEmail)
+        "https" -> isHttpsEndpoint(endpoint)
+        else -> false
+    }
+
+    /** Preparing an editable draft is not evidence of delivery or receipt. */
+    fun emailDraft(report: ContentReport): ContentReportEmailDraft {
+        check(usesEmail && isConfigured) { "신고 문의 이메일이 아직 준비되지 않았습니다." }
+        return ContentReportEmailDraft.create(supportEmail, report)
+    }
 
     suspend fun submit(report: ContentReport): ReportReceipt {
-        check(isConfigured) { "신고 접수 주소가 아직 준비되지 않았습니다. 전송되지 않았습니다." }
+        check(reportMethod == "https" && isConfigured) { "HTTPS 신고 접수 주소가 아직 준비되지 않았습니다. 전송되지 않았습니다." }
         val result = JSONObject(transport.post(endpoint, report.payload()))
         check(result.optBoolean("ok") && result.optString("id") == report.id) {
             "신고 접수를 확인하지 못했습니다. 같은 신고 번호로 다시 시도할 수 있습니다."
@@ -49,6 +66,10 @@ class ContentReportClient(
     }
 
     companion object {
+        // Public support addresses only; reject headers, extra recipients and URI parameters.
+        fun isSupportEmail(value: String): Boolean = value.length <= 254 &&
+            value.matches(Regex("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9]+(?:[.\\-][A-Za-z0-9]+)*\\.[A-Za-z]{2,63}"))
+
         fun isHttpsEndpoint(value: String): Boolean = runCatching {
             val uri = URI(value)
             uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null
