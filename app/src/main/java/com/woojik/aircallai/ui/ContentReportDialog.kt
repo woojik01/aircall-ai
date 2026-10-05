@@ -82,9 +82,9 @@ fun ContentReportDialog(client: ContentReportClient, selectedResponse: String?, 
                     if (includeResponse) OutlinedTextField(excerpt, { excerpt = it.take(4000) },
                         Modifier.fillMaxWidth(), label = { Text("보낼 응답 내용 · 수정 가능") },
                         minLines = 3, maxLines = 8, enabled = !sending)
-                    if (includeResponse && selectedResponse.length > 4000) Text("응답의 앞 4,000자만 포함됩니다.")
+                    if (includeResponse) Text("최대 4,000자까지 포함하며 긴 응답은 앞부분만 표시됩니다.")
                 }
-                Text(if (client.usesEmail) "개발자는 접수한 신고 메일을 ${BuildConfig.AIRCALL_REPORT_RETENTION_DAYS}일 보관한 뒤 수동으로 삭제합니다. " +
+                Text(if (client.usesEmail) "개발자는 접수한 신고 메일을 최대 ${BuildConfig.AIRCALL_REPORT_RETENTION_DAYS}일 보관하며 기한 안에 수동으로 영구 삭제합니다. " +
                     "앱이 메일을 자동 삭제하지 않습니다. 삭제 요청에는 신고 번호를 적어 주세요. 발신함·임시보관함은 사용하는 메일 서비스에서 직접 관리해 주세요."
                     else "신고 보관 기간: ${BuildConfig.AIRCALL_REPORT_RETENTION_DAYS}일. 삭제 요청에는 접수 번호를 적어 주세요.",
                     style = MaterialTheme.typography.bodySmall)

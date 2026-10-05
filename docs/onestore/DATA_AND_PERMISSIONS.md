@@ -20,7 +20,7 @@ ONEconsole의 개인정보·권한 질문은 최신 제출 APK와 게시한 정�
 | RECORD_AUDIO | 사용자가 음성 대화를 시작할 때 런타임 요청 |
 | FOREGROUND_SERVICE / MICROPHONE | 사용자 시작 음성 세션의 지속 알림·백그라운드 마이크 |
 | FOREGROUND_SERVICE_DATA_SYNC | 사용자가 시작한 모델 다운로드의 진행률·취소 알림 |
-| WAKE_LOCK | 진행 중 세션의 기기 절전 대응 |
+| WAKE_LOCK | 사용자가 시작한 모델 다운로드 중 기기 절전 대응 |
 | POST_NOTIFICATIONS | 작업 결과·통화·모델 다운로드 알림, 거부 시 앱에서 결과 확인 |
 | SYSTEM_ALERT_WINDOW | 사용자가 선택해 허용한 플로팅 통화 컨트롤. 기본 대화에 필수 아님 |
 
