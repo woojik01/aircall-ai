@@ -32,6 +32,27 @@ class HttpCloudApiAdapterTest {
         )
     }
 
+    @Test fun invalidEndpointsNeverSendCredentials() = runTest {
+        for (endpoint in listOf("http://example.net", "https://user:secret@example.net", "https://example.net/#secret", "")) {
+            var connected = false
+            try {
+                HttpCloudApiAdapter { connected = true; Connection() }.chat("secret", endpoint, "m", emptyList())
+                fail("endpoint must be rejected")
+            } catch (e: AIProviderException) { assertEquals(ProviderErrorKind.API_ERROR, e.kind) }
+            assertFalse(connected)
+        }
+    }
+
+    @Test fun redirectIsNotTreatedAsSuccessfulCompletion() = runTest {
+        val conn = Connection(code = 307)
+        try {
+            HttpCloudApiAdapter { conn }.chat("secret", "https://example.invalid", "m", emptyList())
+            fail("redirect must fail")
+        } catch (e: AIProviderException) { assertEquals(ProviderErrorKind.API_ERROR, e.kind) }
+        assertFalse(conn.instanceFollowRedirects)
+        assertTrue(conn.disconnected)
+    }
+
     @Test
     fun preservesAllRolesAndClosesSuccessfulConnection() = runTest {
         val conn = Connection()
@@ -48,6 +69,7 @@ class HttpCloudApiAdapterTest {
         assertEquals("user", messages.getJSONObject(2).getString("role"))
         assertEquals("assistant", messages.getJSONObject(3).getString("role"))
         assertTrue(conn.disconnected)
+        assertFalse(conn.instanceFollowRedirects)
     }
 
     @Test

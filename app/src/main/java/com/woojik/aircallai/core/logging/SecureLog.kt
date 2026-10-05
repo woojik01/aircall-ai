@@ -15,10 +15,12 @@ object SecureLog {
     }
 
     fun e(tag: String, message: String, throwable: Throwable? = null) {
-        Log.e(tag, mask(message), throwable)
+        if (debuggable) Log.e(tag, mask(message) + (throwable?.let { " [${it.javaClass.simpleName}]" } ?: ""))
     }
 
     /** Masks anything that looks like a key or token before it reaches logcat. */
     fun mask(message: String): String =
-        message.replace(Regex("(?i)(key|token|secret|password|credential)=[^\\s]+"), "$1=***")
+        message
+            .replace(Regex("(?i)Bearer\\s+[^\\s\",]+"), "Bearer ***")
+            .replace(Regex("(?i)((?:[a-z_]*(?:key|token|secret|password|credential))[\"]?\\s*[=:]\\s*)(?:\"[^\"]*\"|[^\\s&,}]+)"), "$1***")
 }

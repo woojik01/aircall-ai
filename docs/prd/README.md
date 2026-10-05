@@ -29,6 +29,7 @@ AirCall AI는 Android에서 실제 전화 통화에 가까운 자연스러운 �
 - PRD-07: 통화형 UI 및 사용자 경험
 - PRD-08: 성능·보안 강화 및 출시 준비
 - PRD-09: 간편 계정 로그인 및 외부 서비스 OAuth 연동
+- PRD-12: [원스토어 우선 배포](PRD-12-onestore-first-release.md)
 
 ## 구현 규칙
 

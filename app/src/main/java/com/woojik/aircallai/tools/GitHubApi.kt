@@ -89,6 +89,7 @@ open class GitHubApiClient(
         return runCatching {
             val connection = URL("https://api.github.com" + path).openConnection() as HttpURLConnection
             connection.requestMethod = method
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = CONNECT_TIMEOUT_MS
             connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty("Accept", "application/vnd.github+json")

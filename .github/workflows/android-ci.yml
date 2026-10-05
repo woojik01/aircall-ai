@@ -43,7 +43,7 @@ jobs:
         run: node --test support/report-receiver/receiver.test.cjs
       - name: Android unit tests
         timeout-minutes: 12
-        run: gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest lintRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+        run: gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest lintRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" -PAIRCALL_DISTRIBUTION_CHANNEL=onestore --stacktrace
       - name: Download pinned bundletool
         run: |
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
@@ -61,7 +61,7 @@ jobs:
           keytool -genkeypair -keystore "$AIRCALL_KEYSTORE_PATH" -storepass:env AIRCALL_KEYSTORE_PASSWORD \
             -keypass:env AIRCALL_KEY_PASSWORD -alias "$AIRCALL_KEY_ALIAS" -keyalg RSA -keysize 2048 \
             -validity 2 -dname "CN=CI Test Only"
-          gradle --no-daemon --console=plain assembleDebug assembleDebugAndroidTest assembleRelease bundleRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" --stacktrace
+          gradle --no-daemon --console=plain assembleDebug assembleDebugAndroidTest assembleRelease bundleRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" -PAIRCALL_DISTRIBUTION_CHANNEL=onestore --stacktrace
           CERT=$(keytool -list -v -keystore "$AIRCALL_KEYSTORE_PATH" -storepass:env AIRCALL_KEYSTORE_PASSWORD | sed -n 's/.*SHA256: //p')
           python scripts/verify_apk.py app/build/outputs/apk/release/app-release.apk \
             --build-tools "$ANDROID_HOME/build-tools/35.0.0" \

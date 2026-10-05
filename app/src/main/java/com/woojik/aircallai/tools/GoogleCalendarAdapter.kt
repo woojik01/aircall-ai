@@ -42,6 +42,7 @@ class GoogleCalendarAdapter(private val credentials: CredentialManager) : Calend
             val connection = URL("https://www.googleapis.com/calendar/v3/calendars/primary/events$suffix").openConnection() as HttpURLConnection
             try {
                 connection.requestMethod = method
+                connection.instanceFollowRedirects = false
                 connection.connectTimeout = 15_000; connection.readTimeout = 20_000
                 connection.setRequestProperty("Authorization", "Bearer $token")
                 if (body != null) {

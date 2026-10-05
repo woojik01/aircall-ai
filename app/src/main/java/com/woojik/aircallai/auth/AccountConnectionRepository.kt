@@ -90,14 +90,18 @@ class AccountConnectionRepository(
     }
 
     /** 인증 만료 시 안내 문구. 내부 enum 이름을 그대로 노출하지 않는다. */
-    fun statusMessage(account: ConnectionAccount): String = when (account.status) {
+    fun statusMessage(account: ConnectionAccount): String {
+        val service = when (account.provider) { "github" -> "GitHub"; "gmail" -> "Google"; else -> "서비스" }
+        return when (account.status) {
         ConnectionStatus.NOT_CONNECTED ->
-            account.provider + " 계정이 연결되어 있지 않습니다. 연결하면 이 기능을 사용할 수 있습니다."
-        ConnectionStatus.CONNECTING -> account.provider + " 연결을 진행 중입니다."
-        ConnectionStatus.CONNECTED -> account.provider + " 계정이 연결되어 있습니다."
-        ConnectionStatus.EXPIRED -> account.provider + " 로그인이 만료되었습니다. 다시 연결해 주세요."
-        ConnectionStatus.REAUTH_REQUIRED -> account.provider + " 재인증이 필요합니다. 다시 연결해 주세요."
-        ConnectionStatus.ERROR -> account.errorMessage ?: (account.provider + " 연결에 문제가 발생했습니다. 다시 시도해 주세요.")
+            service + " 계정이 연결되어 있지 않습니다. 연결하면 이 기능을 사용할 수 있습니다."
+        ConnectionStatus.CONNECTING -> service + " 연결을 진행 중입니다."
+        ConnectionStatus.CONNECTED -> service + " 계정이 연결되어 있습니다."
+        ConnectionStatus.EXPIRED -> service + " 로그인이 만료되었습니다. 다시 연결해 주세요."
+        ConnectionStatus.REAUTH_REQUIRED -> service + " 재인증이 필요합니다. 다시 연결해 주세요."
+        ConnectionStatus.ERROR -> account.errorMessage ?: (service + " 연결에 문제가 발생했습니다. 다시 시도해 주세요.")
+    }
+
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.woojik.aircallai
 
 import com.woojik.aircallai.auth.AccountConnectionRepository
+import com.woojik.aircallai.auth.ConnectionAccount
 import com.woojik.aircallai.auth.ConnectionStatus
 import com.woojik.aircallai.auth.OAuthCallbackResult
 import com.woojik.aircallai.auth.OAuthCredentialStore
@@ -128,8 +129,16 @@ class AccountConnectionRepositoryTest {
     @Test
     fun statusMessagesDoNotLeakEnumNames() = runTest {
         val repository = repo()
-        val notConnected = repository.statusMessage(repository.connections.value["github"]!!)
-        assertFalse(notConnected.contains("NOT_CONNECTED"))
-        assertTrue(notConnected.contains("github"))
+        for ((provider, label) in listOf("github" to "GitHub", "gmail" to "Google")) {
+            for (status in ConnectionStatus.entries) {
+                val message = repository.statusMessage(ConnectionAccount(provider, null, status))
+                assertTrue("Display the service name for $provider/$status", message.startsWith(label + " "))
+                assertTrue("Explain the connection state", message.length > label.length + 3)
+                ConnectionStatus.entries.forEach { internalStatus ->
+                    assertFalse("Do not display internal status names", message.contains(internalStatus.name))
+                }
+            }
+        }
     }
 }
+

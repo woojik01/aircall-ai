@@ -32,8 +32,7 @@ class HttpOAuthPost(
                 } catch (error: UnknownHostException) {
                     if (dnsRetries >= MAX_DNS_RETRIES) {
                         return@withContext -1 to (
-                            error.javaClass.simpleName + ": " +
-                                (error.message ?: "Unable to resolve OAuth server")
+                            "OAuth 서버 주소를 찾지 못했습니다. 인터넷 연결을 확인해 주세요."
                             )
                     }
                     dnsRetries += 1
@@ -42,8 +41,7 @@ class HttpOAuthPost(
                     throw error
                 } catch (error: Exception) {
                     return@withContext -1 to (
-                        error.javaClass.simpleName + ": " +
-                            (error.message ?: "OAuth network request failed")
+                        "OAuth 서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요."
                         )
                 }
             }
@@ -52,8 +50,10 @@ class HttpOAuthPost(
         }
 
     private fun postFormOnce(url: String, form: Map<String, String>): Pair<Int, String> {
+        require(com.woojik.aircallai.privacy.ContentReportClient.isHttpsEndpoint(url))
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
+        connection.instanceFollowRedirects = false
         connection.connectTimeout = connectTimeoutMs
         connection.readTimeout = readTimeoutMs
         connection.doOutput = true

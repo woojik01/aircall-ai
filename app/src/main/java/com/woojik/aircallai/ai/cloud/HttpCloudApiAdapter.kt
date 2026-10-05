@@ -26,14 +26,15 @@ class HttpCloudApiAdapter(
 
     override suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String =
         withContext(Dispatchers.IO) {
-            if (baseUrl.isBlank()) {
-                throw AIProviderException(ProviderErrorKind.API_ERROR, "endpoint not configured")
+            if (!com.woojik.aircallai.privacy.ContentReportClient.isHttpsEndpoint(baseUrl)) {
+                throw AIProviderException(ProviderErrorKind.API_ERROR, "올바른 HTTPS API 주소를 설정해 주세요.")
             }
             var connection: HttpURLConnection? = null
             try {
                 val conn = connect(baseUrl)
                 connection = conn
                 conn.requestMethod = "POST"
+                conn.instanceFollowRedirects = false
                 conn.connectTimeout = 15_000
                 conn.readTimeout = 30_000
                 conn.doOutput = true

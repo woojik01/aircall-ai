@@ -14,6 +14,14 @@ class SecureLogTest {
         assertEquals("api_key=*** token=*** secret word", masked)
     }
 
+    @Test fun masksBearerJsonAndQueryCredentials() {
+        val masked = SecureLog.mask("Authorization: Bearer secret-token {\"access_token\":\"private-token\"} url?password=private-pass&ok=1")
+        assertFalse(masked.contains("secret-token"))
+        assertFalse(masked.contains("private-token"))
+        assertFalse(masked.contains("private-pass"))
+        assertTrue(masked.contains("ok=1"))
+    }
+
     @Test
     fun maskLeavesPlainMessagesIntact() {
         assertEquals("conversation started", SecureLog.mask("conversation started"))
