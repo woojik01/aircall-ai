@@ -2,7 +2,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from check_play_config import validate, public_https, render_policy, probe
+from check_play_config import validate, public_https, render_policy, rendered_policy, probe
 from verify_aab import verified_bundletool
 
 
@@ -38,12 +38,23 @@ class PlayConfigTest(unittest.TestCase):
                 verified_bundletool(path)
 
     def test_release_probe_only_fetches_public_policy(self):
-        policy = ('AirCall AI 개인정보처리방침 woojik1220@gmail.com', 'text/html')
+        policy = (rendered_policy(self.config(), 'docs/play/privacy-policy.template.html'), 'text/html')
         with patch('check_play_config.fetch_public', return_value=policy) as fetch:
             probe(self.config())
             fetch.assert_called_once_with(self.config()['AIRCALL_PRIVACY_POLICY_URL'], 1_000_000)
         with patch('check_play_config.fetch_public', return_value=('AirCall AI 개인정보처리방침', 'text/html')):
             with self.assertRaises(ValueError):
+                probe(self.config())
+
+    def test_policy_probe_rejects_outdated_published_content(self):
+        policy = rendered_policy(self.config(), 'docs/play/privacy-policy.template.html')
+        stale = policy.replace('2026-10-07', '2026-10-05')
+        with patch('check_play_config.fetch_public', return_value=(stale, 'text/html')):
+            with self.assertRaisesRegex(ValueError, 'stale'):
+                probe(self.config())
+        wrong_operator = policy.replace('개발자', '다른 운영자')
+        with patch('check_play_config.fetch_public', return_value=(wrong_operator, 'text/html')):
+            with self.assertRaisesRegex(ValueError, 'differs'):
                 probe(self.config())
 
     def test_support_email_is_fixed_even_with_stale_actions_variable(self):

@@ -86,14 +86,22 @@ def probe(config):
         raise ValueError('Privacy page must identify AirCall AI and its privacy policy')
     if escape(config['AIRCALL_SUPPORT_EMAIL']) not in policy:
         raise ValueError('Privacy page does not contain the configured privacy contact')
+    expected = rendered_policy(config, 'docs/play/privacy-policy.template.html')
+    if re.sub(r'\s+', ' ', policy).strip() != re.sub(r'\s+', ' ', expected).strip():
+        raise ValueError('Published privacy policy is stale or differs from this release; publish the generated policy first')
 
 
-def render_policy(config, template, output):
+def rendered_policy(config, template):
     policy = Path(template).read_text(encoding='utf-8')
     for field in FIELDS:
         policy = policy.replace('{{' + field + '}}', escape(config[field], quote=True))
     if re.search(r'\{\{[A-Z_]+\}\}', policy):
         raise ValueError('Privacy template contains unresolved placeholders')
+    return policy
+
+
+def render_policy(config, template, output):
+    policy = rendered_policy(config, template)
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(policy, encoding='utf-8')
 

@@ -42,7 +42,11 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
       - name: Require working public policy
-        run: python scripts/check_play_config.py --network --policy-output dist/privacy-policy.html
+        run: |
+          python scripts/check_play_config.py --network
+          python scripts/prepare_public_site.py --output dist
+          cp docs/play/STORE_LISTING.md docs/play/DATA_SAFETY.md docs/play/REVIEW_AND_TEST.md dist/
+          echo '::warning::현재 앱은 앱 내 AI 콘텐츠 신고 기능이 없어 Google Play 공개 출시 요건이 미충족입니다. 이 빌드는 테스트용 초안이며 심사 제출 준비 완료가 아닙니다.'
       - name: Download pinned bundletool
         run: |
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar

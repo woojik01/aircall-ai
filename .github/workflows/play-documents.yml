@@ -19,13 +19,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Render policy with real publisher information
         run: |
-          python scripts/check_play_config.py --policy-output dist/privacy-policy.html
+          python scripts/prepare_public_site.py --output dist
           cp docs/play/STORE_LISTING.md docs/play/DATA_SAFETY.md docs/play/REVIEW_AND_TEST.md dist/
           echo '### 게시 전 확인할 문서' >> "$GITHUB_STEP_SUMMARY"
-          echo 'privacy-policy.html을 정한 공개 HTTPS 주소에 게시하세요. 이 워크플로는 웹 게시나 Play 제출을 수행하지 않습니다.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'index.html, privacy-policy.html, support.html, site.css를 함께 게시하세요. 현재 앱은 Play 필수 앱 내 AI 신고 기능이 없어 Play 공개 출시 준비가 완료되지 않았습니다.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: aircall-play-documents
           path: dist/*
           if-no-files-found: error
           retention-days: 30
+          include-hidden-files: true

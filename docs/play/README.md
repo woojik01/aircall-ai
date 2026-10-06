@@ -1,6 +1,10 @@
-# Google Play 제출 준비 — AirCall AI 0.4.0
+# Google Play 제출 준비 — AirCall AI
 
-첫 배포 방향: **무료, 광고 없음, 청소년·성인(만 14세 이상), 한국 우선**. 대상 연령은 IARC 콘텐츠 등급과 별도이며 실제 양식으로 등급을 정합니다. 현재 개발자 계정·개발자 공개 이름·문의 이메일·개인정보처리방침 URL이 미정입니다. 코드는 제출 준비를 지원하지만 지금 상태를 심사 통과 또는 공개 출시 완료로 표시하지 않습니다.
+첫 배포 방향: **무료, 광고 없음, 청소년·성인(만 14세 이상), 한국 우선**. 대상 연령은 IARC 콘텐츠 등급과 별도이며 실제 양식으로 등급을 정합니다. 공개 개발자명은 `woojik01`, 문의는 `woojik1220@gmail.com`, 정책 주소는 `https://woojik01.github.io/aircall-ai/privacy-policy.html`입니다. Play Console 준비 상태는 별도 확인이 필요합니다. 코드는 제출 준비를 지원하지만 지금 상태를 심사 통과 또는 공개 출시 완료로 표시하지 않습니다.
+
+## 현재 공개 출시 미충족 항목
+
+2026-10-07 공식 정책 확인: AI 챗봇은 앱을 떠나지 않고 개발자에게 부적절한 AI 콘텐츠를 신고할 수 있어야 합니다. 현재 앱은 사용자 요청으로 응답 신고 기능을 제거했으며 외부 메일 앱을 여는 서비스 문의만 제공합니다. 따라서 이 기능을 구현하고 운영하기 전에는 Google Play 공개 출시 준비가 완료되지 않습니다. 외부 AI 모델을 이용하는 앱도 챗봇 기능이 핵심이면 적용됩니다. [공식 정책](https://support.google.com/googleplay/android-developer/answer/13985936).
 
 ## 적용된 앱·빌드 구성
 
@@ -24,7 +28,7 @@
 2. **공개 정보 결정**: 개발자 표시 이름, 실제 받을 수 있는 문의 이메일, 개인정보처리방침을 공개할 HTTPS 주소를 정합니다. 이름·주소를 임의로 추정하거나 예시 이메일로 제출하지 않습니다.
 3. **문의 이메일 확인**: 설정의 문의 버튼이 메일 앱을 열고 수신 주소가 `woojik1220@gmail.com`인지 확인합니다.
 4. **공개 설정 입력**: GitHub → Settings → Secrets and variables → Actions → Variables에서 아래 표를 입력합니다. 또는 `config/play.properties`를 GitHub 웹 편집기로 수정합니다. 변수의 비어 있지 않은 값이 파일보다 우선합니다.
-5. **정책 문서 만들기**: Actions → **Prepare Play Documents** → Run workflow → main. `aircall-play-documents`의 `privacy-policy.html`을 받습니다. 정한 공개 주소에 HTML로 게시합니다. 로그인·지역 제한 없이 열려야 하며 PDF나 공동 편집 화면은 제출용 정책이 아닙니다. 이 작업은 파일 생성이며 자동으로 웹에 게시하지 않습니다.
+5. **정책 문서 만들기**: Actions → **Prepare Play Documents** → Run workflow → main. `aircall-play-documents`의 `privacy-policy.html`과 `index.html`, `support.html`, `site.css`를 받습니다. 파일들을 함께 정한 공개 주소에 게시합니다. 로그인·지역 제한 없이 열려야 하며 PDF나 공동 편집 화면은 제출용 정책이 아닙니다. 이 작업은 파일 생성이며 자동으로 웹에 게시하지 않습니다.
 6. **정식 키 준비**: [기존 서명 안내](../RELEASING.md)에 따라 Android Studio에서 개인 업로드 keystore를 만들고 GitHub Secrets에 저장합니다. 파일·비밀번호를 이슈·PR·대화에 공개하지 않습니다.
 7. **Play 앱 생성**: Play Console에 AirCall AI를 만들고 Play App Signing을 설정합니다. 첫 AAB의 앱 ID가 `com.woojik.aircallai.release`인지 확인합니다. 앱 서명 인증서 SHA-1으로 정식 Google Android OAuth 등록을 준비합니다. 개발용 인증서 등록은 유지합니다.
 8. **Google OAuth 준비**: 메일 발송·캘린더 기능에 필요한 API·동의 화면·공개 앱 이름·정책 URL·민감 범위 심사를 준비합니다. `gmail.send`도 민감 범위이므로 범위 축소만으로 공개 앱의 검증이 끝난 것은 아닙니다. Play 앱 서명 인증서와 직접 설치 인증서가 다르면 각 인증서를 등록합니다.

@@ -7,7 +7,8 @@ from pathlib import Path
 import re
 import shutil
 
-from check_play_config import load_config, validate, probe, render_policy
+from check_play_config import load_config, validate, probe
+from prepare_public_site import prepare as prepare_site
 
 
 def load_product_id(path):
@@ -45,7 +46,7 @@ def prepare(config, product_id, output, metadata=None):
         validate_metadata(metadata, product_id)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    render_policy(config, 'docs/play/privacy-policy.template.html', output / 'privacy-policy.html')
+    prepare_site(config, output)
     for name in ('STORE_LISTING.md', 'REVIEW_AND_TEST.md', 'DATA_AND_PERMISSIONS.md'):
         shutil.copyfile(Path('docs/onestore') / name, output / name)
     summary = ['# AirCall AI 원스토어 제출 정보', '',

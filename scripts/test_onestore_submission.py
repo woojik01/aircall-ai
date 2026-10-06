@@ -45,7 +45,7 @@ class OneStoreSubmissionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
             prepare(self.config(), '0000123456', output, self.metadata())
-            self.assertEqual({'privacy-policy.html', 'STORE_LISTING.md', 'REVIEW_AND_TEST.md',
+            self.assertEqual({'privacy-policy.html', 'index.html', 'support.html', 'site.css', '.nojekyll', 'STORE_LISTING.md', 'REVIEW_AND_TEST.md',
                               'DATA_AND_PERMISSIONS.md', 'SUBMISSION.md'}, {p.name for p in output.iterdir()})
             policy = (output / 'privacy-policy.html').read_text(encoding='utf-8')
             self.assertNotIn('{{', policy)

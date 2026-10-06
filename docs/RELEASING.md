@@ -1,6 +1,6 @@
 # 설치 및 릴리스
 
-첫 출시는 [원스토어 제출 안내](onestore/README.md)를 확인하세요. Google Play 제출은 [Play 제출 준비](play/README.md)를 확인하세요. 정식 릴리스는 공개 개인정보처리방침·운영자 연락처가 실제 준비되어야 진행됩니다.
+배포 준비 상태는 [현재 점검 기록](DEPLOYMENT_STATUS.md)을 확인하세요. 첫 출시는 [원스토어 제출 안내](onestore/README.md)를 확인하세요. Google Play 제출은 [Play 제출 준비](play/README.md)를 확인하세요. 정식 릴리스는 공개 개인정보처리방침·운영자 연락처가 실제 준비되어야 진행됩니다.
 
 ## 패키지와 서명
 

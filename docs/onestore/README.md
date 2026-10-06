@@ -1,6 +1,6 @@
 # 원스토어 우선 출시 설계 및 등록 안내
 
-확인일: 2026-10-05. 이 문서는 구현된 제출 경로와 사람이 완료해야 하는 등록 작업을 구분합니다.
+배포 설정 점검일: 2026-10-07. 이 문서는 구현된 제출 경로와 사람이 완료해야 하는 등록 작업을 구분합니다.
 코드와 CI 성공만으로 원스토어 심사 승인·출시 완료가 되지는 않습니다.
 
 ## 첫 출시 결정
@@ -37,7 +37,7 @@ Play의 업로드 키와 앱 서명키를 혼동하지 마세요. 스토어 공�
    `config/play.properties`는 이름과 달리 **모든 마켓이 공유하는 공개 연락처·개인정보 구성**입니다.
    기존 Google Play 설정을 재입력할 필요는 없습니다.
 5. Actions → **Prepare ONE store Documents**를 실행합니다. `aircall-onestore-documents`의
-   `privacy-policy.html`을 설정한 공개 HTTPS 주소에 게시합니다. PID는 이 단계에서는 없어도 됩니다.
+   정책 웹사이트 파일(`index.html`, `privacy-policy.html`, `support.html`, `site.css`)을 함께 게시합니다. 공개 설정의 PID는 `0001009976`이며 사용자가 알려준 상품 값입니다. 콘솔에서 현재 상품과 일치하는지 확인하세요.
 6. 설정의 서비스 문의 이메일 버튼을 확인합니다. 수신 주소는 `woojik1220@gmail.com`입니다.
 7. Google Cloud에 `com.woojik.aircallai.release`와 정식 인증서 SHA-1로 Android OAuth를 등록합니다.
    Gmail·Calendar API와 동의 화면을 준비하고 일반 사용자용 공개·심사 상태를 확인합니다.
@@ -49,6 +49,15 @@ Play의 업로드 키와 앱 서명키를 혼동하지 마세요. 스토어 공�
 10. ONEconsole에 **aircall-onestore-버전-버전코드.apk**를 업로드합니다. 상품 설명, 지원 정보,
     개인정보 주소, 실제 스크린샷(공식 안내: 2~8장), 지원 단말과 검증 참고 정보를 입력합니다.
     콘솔에서 검증을 요청하고 승인 후 직접 배포합니다. 워크플로는 스토어 업로드·공개를 자동 수행하지 않습니다.
+
+## 반영된 공개 설정
+
+- 공개 개발자명: `woojik01`
+- 문의 이메일: `woojik1220@gmail.com`
+- 정책 주소: `https://woojik01.github.io/aircall-ai/privacy-policy.html`
+- 원스토어 PID: `0001009976`
+
+main 변경 시 **Store Preparation**이 문서를 생성하고 공개 정책이 현재 템플릿과 일치하는지 확인합니다. 정책 원본은 `docs/play/privacy-policy.template.html`이며 웹과 제출 자료가 같은 원본을 사용합니다. `python scripts/prepare_public_site.py`로 웹 게시 파일을 생성합니다. 게시된 내용이 오래되면 정식 출시 검사에서 중단합니다.
 
 ## GitHub Actions 설정
 

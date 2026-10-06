@@ -1,0 +1,55 @@
+name: Store Preparation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'config/**'
+      - 'docs/**'
+      - 'scripts/**'
+      - '.github/workflows/store-preparation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-preparation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  documents-and-policy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
+      AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
+      AIRCALL_ONESTORE_PRODUCT_ID: ${{ vars.AIRCALL_ONESTORE_PRODUCT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Generate ONE store submission and complete policy website
+        run: |
+          python scripts/prepare_onestore_submission.py --require-product-id
+          cp docs/DEPLOYMENT_STATUS.md dist/
+          python -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Upload preparation documents
+        uses: actions/upload-artifact@v4
+        with:
+          name: aircall-store-preparation
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Check published policy matches this release
+        run: python scripts/check_play_config.py --network
+      - name: Explain remaining submission work
+        if: always()
+        run: |
+          echo '### 스토어 배포 준비' >> "$GITHUB_STEP_SUMMARY"
+          echo '정책 최신성 검사와 제출 문서 생성입니다. APK 서명·실기 동작·스토어 심사 통과를 의미하지 않습니다.' >> "$GITHUB_STEP_SUMMARY"
+          echo '원스토어: 최신 main CI 성공 후 ONE store Release에서 이전 모든 버전보다 큰 version_code를 입력하세요. 실기 테스트·스크린샷·ONEconsole 심사는 별도입니다.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Google Play: 현재 삭제된 앱 내 AI 콘텐츠 신고 기능은 공식 필수 요건이므로 공개 출시 요건이 미충족입니다. 서비스 문의 이메일만으로 충족되지 않습니다.' >> "$GITHUB_STEP_SUMMARY"
