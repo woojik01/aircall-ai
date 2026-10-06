@@ -45,20 +45,25 @@ fun AppInfoScreen(onOpenAiSettings: () -> Unit, onOpenPrivacy: () -> Unit) {
             }
         }
         SettingsSection("버전 정보") {
-            Text("빌드 ${BuildConfig.VERSION_CODE}", style = MaterialTheme.typography.bodyMedium)
+            Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyMedium)
             Text(StoreDistribution.label(BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL, BuildConfig.DEBUG),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         SettingsSection("앱 관리") {
             TextButton(onClick = onOpenAiSettings) { Text("AI 및 모델 설정") }
-            if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) Text("개발자: ${BuildConfig.AIRCALL_DEVELOPER_NAME}")
-            if (BuildConfig.AIRCALL_SUPPORT_EMAIL.isNotBlank()) Text("문의: ${BuildConfig.AIRCALL_SUPPORT_EMAIL}")
             TextButton(onClick = onOpenPrivacy) { Text("개인정보 및 데이터 삭제") }
             SupportContactButton()
             if (BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL == "onestore" && !BuildConfig.DEBUG) {
                 StoreDistribution.oneStoreProductUrl(BuildConfig.AIRCALL_ONESTORE_PRODUCT_ID)?.let { url ->
                     TextButton(onClick = { openUrl(url) }) { Text("원스토어에서 업데이트 확인") }
                 }
+            }
+        }
+        if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) {
+            SettingsSection("개발자 정보") {
+                Text(BuildConfig.AIRCALL_DEVELOPER_NAME,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface)
             }
         }
         status?.let { Text(it, color = MaterialTheme.colorScheme.error) }
