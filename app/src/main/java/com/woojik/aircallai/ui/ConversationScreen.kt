@@ -54,7 +54,7 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                     textAlign = TextAlign.Center)
                 Spacer(Modifier.height(10.dp))
                 Text(if (providerReady) "글로 남기거나, 편하게 말해 보세요." else
-                    "AI 및 모델 설정에서 로컬 모델을 적용하거나 클라우드 API 키를 저장해 주세요.",
+                    "먼저 AI를 설정해 주세요.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 if (!providerReady) TextButton(onClick = onOpenAiSettings) { Text("AI 설정 열기") }
             }

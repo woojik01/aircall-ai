@@ -21,7 +21,7 @@ fun ToolApprovalDialog(request: ToolRequest, onApprove: () -> Unit, onDeny: () -
         text = {
             Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("이 작업은 데이터를 저장하거나 외부 서비스의 내용을 변경합니다. 실행할 내용을 확인해 주세요.",
+                Text("실행할 내용을 확인해 주세요.",
                     style = MaterialTheme.typography.bodyMedium)
                 Text(com.woojik.aircallai.tools.ToolLabels.action(request.toolName, request.action), style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider()

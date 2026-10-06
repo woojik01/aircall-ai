@@ -18,7 +18,7 @@ fun SupportContactButton() {
             context.startActivity(Intent(Intent.ACTION_SENDTO,
                 Uri.parse("mailto:${BuildConfig.AIRCALL_SUPPORT_EMAIL}")))
         }.isFailure
-    }) { Text("서비스 문의 이메일 보내기") }
+    }) { Text("이메일 문의") }
     if (failed) Text("메일 앱을 열 수 없습니다. ${BuildConfig.AIRCALL_SUPPORT_EMAIL}으로 직접 문의해 주세요.",
         color = MaterialTheme.colorScheme.error)
 }

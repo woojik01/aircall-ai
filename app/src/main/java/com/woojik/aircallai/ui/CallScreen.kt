@@ -53,8 +53,5 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
             Button(onClick = onStartSession, enabled = ready && state !is ConversationState.Processing,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) { Text("통화 시작") }
         }
-        Text("다른 앱을 사용하는 동안에도 알림에서 대화를 제어할 수 있어요.",
-            style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

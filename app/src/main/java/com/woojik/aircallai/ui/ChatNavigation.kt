@@ -44,8 +44,7 @@ fun AirCallUi(
         AirCallTheme(themeMode = themeMode) {
             AuroraBackground {
                 AlertDialog(onDismissRequest = {}, title = { Text("이용 연령 안내") },
-                    text = { Text("AirCall AI는 만 14세 이상을 대상으로 합니다. 생년월일이나 신분증을 수집하지 않으며, " +
-                        "이 확인은 기기에만 저장합니다. AI 답변은 틀릴 수 있습니다. 만 14세 이상인 경우 계속해 주세요.") },
+                    text = { Text("만 14세 이상부터 이용할 수 있습니다.") },
                     confirmButton = { TextButton(onClick = {
                         graph.settings.acceptMinimumAgeAcknowledgement(); ageAcknowledged = true
                     }) { Text("만 14세 이상입니다") } },
@@ -179,7 +178,7 @@ fun AirCallUi(
                                 "call" -> "음성 대화"
                                 "models" -> "로컬 모델"
                                 "privacy" -> "개인정보"
-                                "about" -> "앱 정보 및 사용 안내"
+                                "about" -> "앱 정보"
                                 "settings/{category}" -> when (entry?.arguments?.getString("category")) {
                                     "ai" -> "AI 및 모델"; "accounts" -> "도구 및 계정"
                                     "permissions" -> "작업 승인"; else -> "화면 및 알림"
@@ -279,13 +278,8 @@ fun AirCallUi(
                     title = { Text(if (voice) "음성 대화의 데이터 사용" else "클라우드로 대화 전송") },
                     text = { Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (voice) Text("통화를 시작하면 마이크를 사용합니다. Android 음성 인식·출력 서비스의 설정에 따라 " +
-                            "음성과 텍스트가 해당 서비스 제공자에게 전송될 수 있습니다. 앱이 화면 밖에 있거나 화면이 꺼져도 " +
-                            "통화가 진행되는 동안 마이크를 사용할 수 있으며, 알림에서 일시정지하거나 종료할 수 있습니다.")
-                        if (usesCloud) Text("대화 기록과 응답 생성에 필요한 도구 결과가 설정한 AI 서버로 전송됩니다. " +
-                            "API 키는 이 서버의 요청 인증에 사용됩니다. 전송 주소: ${graph.settings.cloudBaseUrl()}")
-                        else if (voice) Text("로컬 모델의 AI 응답 생성은 기기에서 처리됩니다. 음성 서비스와 도구 연동은 별도로 네트워크를 사용할 수 있습니다.")
-                        Text("자세한 내용은 설정의 개인정보 화면에서 확인할 수 있습니다.")
+                        if (voice) Text("음성 서비스 설정에 따라 음성·텍스트가 제공자에게 전송될 수 있습니다. 통화 중에는 화면이 꺼져도 마이크를 사용합니다. 알림에서 종료할 수 있습니다.")
+                        if (usesCloud) Text("대화 기록·도구 결과와 인증용 API 키를 아래 AI 서버로 전송합니다.\n${graph.settings.cloudBaseUrl()}")
                     } },
                     confirmButton = { TextButton(onClick = {
                         // A notification/deep link can change rooms while this dialog is open.

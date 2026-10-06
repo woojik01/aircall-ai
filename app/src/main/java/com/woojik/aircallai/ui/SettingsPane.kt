@@ -23,8 +23,8 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
         SettingCategory("accounts", "도구 및 계정", "GitHub · Google 로그인", onOpen)
         SettingCategory("appearance", "화면 및 알림", "라이트 · 다크 · 시스템, 알림 설정", onOpen)
         SettingCategory("permissions", "작업 승인", "실행 전 확인 및 이전 승인 관리", onOpen)
-        SettingCategory("privacy", "개인정보", "기기 저장과 데이터 전송 안내", onOpen)
-        SettingCategory("about", "앱 정보 및 사용 안내", "버전, 시작하기, 문의", onOpen)
+        SettingCategory("privacy", "개인정보", "개인정보처리방침 · 데이터 삭제", onOpen)
+        SettingCategory("about", "앱 정보", "버전 · 문의", onOpen)
     }
 }
 
@@ -82,13 +82,12 @@ fun SettingsDetail(
                 }
                 Button(onClick = onOpenLocalModels, modifier = Modifier.fillMaxWidth()) { Text("로컬 모델 관리") }
                 Text("클라우드 연결", style = MaterialTheme.typography.titleMedium)
-                Text("AI 모델 제공자의 API 키는 도구 계정 로그인과 별도로 설정합니다.", style = MaterialTheme.typography.bodyMedium)
                 OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text("API 키") },
                     visualTransformation = PasswordVisualTransformation(), singleLine = true)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { scope.launch {
                         graph.credentials.save(CloudAIProvider.KEY_SERVICE, key.toByteArray()); key = ""
-                        vm.refreshProviderReadiness(); status = "API 키를 기기에 암호화해 저장했습니다."
+                        vm.refreshProviderReadiness(); status = "API 키를 저장했습니다."
                     } }, enabled = key.isNotBlank()) { Text("키 저장") }
                     TextButton(onClick = { scope.launch {
                         graph.credentials.delete(CloudAIProvider.KEY_SERVICE); vm.refreshProviderReadiness(); status = "키를 삭제했습니다."
@@ -109,7 +108,6 @@ fun SettingsDetail(
                 }, enabled = com.woojik.aircallai.privacy.HttpsEndpoint.isHttpsEndpoint(endpoint.trim()) && model.isNotBlank()) { Text("연결 정보 저장") }
             }
             "accounts" -> {
-                Text("서비스에 로그인하여 도구를 연결하세요. 로그인 없이도 AI 대화와 기기 메모를 사용할 수 있습니다.")
                 AccountCard("GitHub", accounts["github"]?.let { graph.accountRepository.statusMessage(it) } ?: "연결 안 됨") {
                     deviceCode?.let { code ->
                         androidx.compose.foundation.text.selection.SelectionContainer {
@@ -130,14 +128,13 @@ fun SettingsDetail(
                     TextButton(onClick = { disconnect("github") }, enabled = !connecting) { Text("연결 해제") }
                 }
                 AccountCard("Google · Gmail 및 캘린더", accounts["gmail"]?.let { graph.accountRepository.statusMessage(it) } ?: "연결 안 됨") {
-                    Text("메일 발송과 Google 기본 캘린더의 일정 조회·등록에 사용합니다.")
                     Button(onClick = { status = connectGoogle() }) { Text("Google로 로그인") }
                     TextButton(onClick = { disconnect("gmail") }) { Text("연결 해제") }
                 }
-                AccountCard("기기 메모", "로그인 없이 사용") { Text("메모는 이 기기에 저장됩니다.") }
+                AccountCard("기기 메모", "로그인 없이 사용") {}
             }
             "permissions" -> {
-                Text("메일 발송, 일정 등록, 메모 저장 등 변경 작업은 매번 내용을 확인한 뒤 실행합니다. 이전 버전의 저장된 승인은 자동 실행에 사용되지 않습니다.")
+                Text("작업 실행 전마다 승인을 요청합니다.")
                 if (approvals.isEmpty()) Text("이전 버전에 저장된 승인이 없습니다.")
                 approvals.forEach { action ->
                     Card(Modifier.fillMaxWidth()) {
@@ -153,8 +150,6 @@ fun SettingsDetail(
                 }
             }
             "appearance" -> {
-                Text("은은한 오로라", style = MaterialTheme.typography.titleLarge)
-                Text("기기에 맞는 화면 테마를 선택하세요.")
                 Text("테마", style = MaterialTheme.typography.titleMedium)
                 listOf(
                     SettingsRepository.THEME_LIGHT to "라이트",
@@ -175,12 +170,8 @@ fun SettingsDetail(
                             color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
-                Text("시스템 설정을 선택하면 기기의 다크 모드 변경을 자동으로 반영합니다.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 HorizontalDivider()
                 Text("알림", style = MaterialTheme.typography.titleMedium)
-                Text("AI 도구 작업을 실제로 실행하면 성공·실패 결과 알림을 보냅니다. 알림을 누르면 해당 채팅방을 엽니다. 통화 알림에서는 일시정지·재개, 음소거, 종료를, 모델 다운로드 알림에서는 진행률 확인과 취소를 사용할 수 있습니다.")
-                Text("알림을 허용하지 않아도 작업 결과는 앱에서 확인할 수 있습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(onClick = openNotificationSettings) { Text("시스템 알림 설정 열기") }
             }
         }

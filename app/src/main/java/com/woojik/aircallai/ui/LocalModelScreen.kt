@@ -79,7 +79,7 @@ fun LocalModelScreen(
         ) {
             item {
                 Text(
-                    "화면을 닫아도 다운로드는 계속됩니다. 알림에서 진행률을 확인하거나 취소할 수 있습니다. 다운로드 후 적용하면 AI 응답을 기기에서 생성합니다. 음성 인식·출력의 네트워크 사용 여부는 기기의 음성 서비스에 따라 다릅니다.",
+                    "다운로드 후 적용해 주세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -169,13 +169,6 @@ fun LocalModelScreen(
                             }
                         }
                     },
-                )
-            }
-            item {
-                Text(
-                    "모델 파일은 이 기기에만 저장되며 외부로 전송되지 않습니다.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
         }
