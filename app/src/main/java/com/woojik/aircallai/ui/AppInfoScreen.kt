@@ -2,10 +2,12 @@ package com.woojik.aircallai.ui
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import com.woojik.aircallai.R
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -32,18 +34,31 @@ fun AppInfoScreen(onOpenAiSettings: () -> Unit, onOpenPrivacy: () -> Unit) {
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("AirCall AI", style = MaterialTheme.typography.headlineSmall)
-        Text("버전 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-        Text(StoreDistribution.label(BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL, BuildConfig.DEBUG),
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = onOpenAiSettings) { Text("AI 및 모델 설정") }
-        if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) Text("개발자: ${BuildConfig.AIRCALL_DEVELOPER_NAME}")
-        if (BuildConfig.AIRCALL_SUPPORT_EMAIL.isNotBlank()) Text("문의: ${BuildConfig.AIRCALL_SUPPORT_EMAIL}")
-        TextButton(onClick = onOpenPrivacy) { Text("개인정보 및 데이터 삭제") }
-        SupportContactButton()
-        if (BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL == "onestore" && !BuildConfig.DEBUG) {
-            StoreDistribution.oneStoreProductUrl(BuildConfig.AIRCALL_ONESTORE_PRODUCT_ID)?.let { url ->
-                TextButton(onClick = { openUrl(url) }) { Text("원스토어에서 업데이트 확인") }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Image(painterResource(R.drawable.aircall_ai_icon), "AirCall AI",
+                Modifier.size(72.dp).clip(RoundedCornerShape(22.dp)))
+            Column {
+                Text("AirCall AI", style = MaterialTheme.typography.headlineSmall)
+                Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        SettingsSection("버전 정보") {
+            Text("빌드 ${BuildConfig.VERSION_CODE}", style = MaterialTheme.typography.bodyMedium)
+            Text(StoreDistribution.label(BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL, BuildConfig.DEBUG),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        SettingsSection("앱 관리") {
+            TextButton(onClick = onOpenAiSettings) { Text("AI 및 모델 설정") }
+            if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) Text("개발자: ${BuildConfig.AIRCALL_DEVELOPER_NAME}")
+            if (BuildConfig.AIRCALL_SUPPORT_EMAIL.isNotBlank()) Text("문의: ${BuildConfig.AIRCALL_SUPPORT_EMAIL}")
+            TextButton(onClick = onOpenPrivacy) { Text("개인정보 및 데이터 삭제") }
+            SupportContactButton()
+            if (BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL == "onestore" && !BuildConfig.DEBUG) {
+                StoreDistribution.oneStoreProductUrl(BuildConfig.AIRCALL_ONESTORE_PRODUCT_ID)?.let { url ->
+                    TextButton(onClick = { openUrl(url) }) { Text("원스토어에서 업데이트 확인") }
+                }
             }
         }
         status?.let { Text(it, color = MaterialTheme.colorScheme.error) }

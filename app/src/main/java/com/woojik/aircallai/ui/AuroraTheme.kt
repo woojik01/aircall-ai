@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.woojik.aircallai.settings.SettingsRepository
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +70,9 @@ fun AirCallTheme(
     content: @Composable () -> Unit,
 ) {
     val dark = usesDarkTheme(themeMode, isSystemInDarkTheme())
-    MaterialTheme(colorScheme = airCallColors(dark), typography = AirCallTypography) {
+    MaterialTheme(colorScheme = airCallColors(dark), typography = AirCallTypography,
+        shapes = Shapes(extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
+            medium = RoundedCornerShape(20.dp), large = RoundedCornerShape(24.dp), extraLarge = RoundedCornerShape(28.dp))) {
         // MaterialTheme alone does not supply LocalContentColor. Transparent screens
         // must inherit a theme-aware foreground instead of Compose's default black.
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background,

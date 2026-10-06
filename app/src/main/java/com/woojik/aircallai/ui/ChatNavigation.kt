@@ -112,7 +112,7 @@ fun AirCallUi(
         AuroraBackground {
             ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = ready, drawerContent = {
                 ModalDrawerSheet(
-                    modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 360.dp),
+                    modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(0.88f),
                     windowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout),
                 ) {
                     Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -122,7 +122,11 @@ fun AirCallUi(
                             Text("나만의 대화 공간", style = MaterialTheme.typography.bodyMedium) }
                     }
                     Button(onClick = { changeRoom() }, enabled = ready,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("새 채팅") }
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).heightIn(min = 52.dp)) {
+                            AirCallIcon(UiSymbol.Plus)
+                            Spacer(Modifier.width(8.dp))
+                            Text("새 채팅")
+                        }
                     Text("채팅방", Modifier.padding(start = 24.dp, top = 24.dp, bottom = 8.dp),
                         style = MaterialTheme.typography.labelLarge)
                     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp)) {
@@ -135,7 +139,7 @@ fun AirCallUi(
                                     Text(room.title, Modifier.weight(1f).clickable { changeRoom(room.id) }.padding(16.dp),
                                         style = MaterialTheme.typography.bodyLarge)
                                     Box {
-                                        TextButton(onClick = { menu = true }, contentPadding = PaddingValues(8.dp)) { Text("관리") }
+                                        IconButton(onClick = { menu = true }) { AirCallIcon(UiSymbol.More, "채팅방 관리") }
                                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                             DropdownMenuItem(text = { Text("이름 변경") }, onClick = {
                                                 menu = false; editing = room; rename = room.title
@@ -148,7 +152,8 @@ fun AirCallUi(
                         }
                     }
                     HorizontalDivider()
-                    NavigationDrawerItem(label = { Text("설정") }, selected = route.startsWith("settings"),
+                    NavigationDrawerItem(label = { Text("설정") }, icon = { AirCallIcon(UiSymbol.Theme) },
+                        selected = route.startsWith("settings"),
                         modifier = Modifier.padding(12.dp), onClick = { scope.launch {
                             drawer.close(); nav.navigate("settings") { launchSingleTop = true }
                         } })
@@ -161,7 +166,7 @@ fun AirCallUi(
                     // A custom top bar must handle its own top inset; Scaffold only
                     // forwards the measured bar height to the screen content.
                     Surface(
-                        color = Color.Transparent,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                         modifier = Modifier.windowInsetsPadding(
                             WindowInsets.systemBars.union(WindowInsets.displayCutout)
                                 .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
@@ -169,10 +174,11 @@ fun AirCallUi(
                     ) {
                         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            TextButton(onClick = {
+                            IconButton(onClick = {
                                 if (route == "chat") scope.launch { drawer.open() }
                                 else if (!nav.popBackStack()) openChat()
-                            }) { Text(if (route == "chat") "메뉴" else "뒤로") }
+                            }) { AirCallIcon(if (route == "chat") UiSymbol.Menu else UiSymbol.Back,
+                                if (route == "chat") "메뉴 열기" else "뒤로") }
                             Text(when (route) {
                                 "chat" -> rooms.firstOrNull { it.id == activeId }?.title ?: "새 채팅"
                                 "call" -> "음성 대화"
@@ -185,13 +191,17 @@ fun AirCallUi(
                                 }
                                 else -> "설정"
                             }, modifier = Modifier.weight(1f).padding(end = 12.dp),
-                                style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (route == "chat") IconButton(onClick = { changeRoom() }, enabled = ready) {
+                                AirCallIcon(UiSymbol.Plus, "새 채팅")
+                            }
                         }
                     }
                 }) { padding ->
                     // Consume Scaffold padding so nested screens do not apply system
                     // bar insets twice; their IME padding still handles the keyboard.
-                    Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
+                    Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         storageError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
                         taskEvents.lastOrNull { it.roomId == activeId }?.let { task ->
                             Text(task.summary, color = if (task.status == com.woojik.aircallai.tools.ToolExecutionStatus.FAILED)
@@ -207,7 +217,7 @@ fun AirCallUi(
                                     vm.engine.restore(graph.chatRooms.newRoom().messages)
                                 }
                             } }) { Text("기록 다시 읽기") }
-                        } else NavHost(navController = nav, startDestination = "chat", modifier = Modifier.weight(1f)) {
+                        } else NavHost(navController = nav, startDestination = "chat", modifier = Modifier.weight(1f).widthIn(max = 760.dp).fillMaxWidth()) {
                             composable("chat") { ConversationScreen(vm, activeId, onOpenCall = { nav.navigate("call") },
                                 onSendText = { sendText(it) },
                                 onOpenAiSettings = { nav.navigate("settings/ai") }) }

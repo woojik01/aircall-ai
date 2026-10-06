@@ -1,5 +1,7 @@
 package com.woojik.aircallai.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -189,7 +191,9 @@ private fun ModelCard(
     onApply: () -> Unit,
     onUnapply: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))) {
         Column(modifier = Modifier.padding(16.dp)) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -210,7 +214,7 @@ private fun ModelCard(
             )
             Text(
                 "크기 약 " + formatSizeBytes(model.sizeBytes) +
-                    " · RAM 검사 기준 " + (model.minRamMb / 1024) + "GiB 이상",
+                    " · 메모리 " + (model.minRamMb / 1024) + "GiB 이상",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
@@ -243,7 +247,7 @@ private fun ModelCard(
             }
 
             FlowRow(
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

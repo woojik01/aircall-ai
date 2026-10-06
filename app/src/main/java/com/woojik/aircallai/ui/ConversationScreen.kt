@@ -65,9 +65,10 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                     val user = message.role == ChatMessage.Role.USER
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
                         Surface(
-                            color = if (user) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            color = if (user) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
                             contentColor = if (user) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            shape = RoundedCornerShape(22.dp), modifier = Modifier.widthIn(max = 340.dp),
+                            shape = RoundedCornerShape(if (user) 22.dp else 16.dp),
+                            modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth(if (user) 0.88f else 1f),
                         ) {
                             Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
                                 Text(if (user) "나" else "AirCall", style = MaterialTheme.typography.labelMedium,
@@ -96,23 +97,34 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                 TextButton(onClick = { vm.cancelText() }) { Text("중지") }
             }
         }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.Start) {
-            TextButton(onClick = onOpenCall) { Text(if (active) "진행 중인 통화" else "음성 대화") }
-            Text(vm.engine.activeProvider.displayName, style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(value = input, onValueChange = { input = it },
-                modifier = Modifier.weight(1f), placeholder = { Text("메시지를 입력하세요") },
-                shape = RoundedCornerShape(24.dp), maxLines = 5,
-                textStyle = MaterialTheme.typography.bodyLarge)
-            Button(onClick = {
-                if (onSendText(input)) { input = ""; awaitingConsent = false } else awaitingConsent = true
-            },
-                enabled = roomId != null && input.isNotBlank() && state !is ConversationState.Processing && !active,
-                contentPadding = PaddingValues(horizontal = 18.dp), modifier = Modifier.heightIn(min = 56.dp)) { Text("전송") }
+        Surface(color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface, tonalElevation = 2.dp,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(vm.engine.activeProvider.displayName, style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = onOpenCall) {
+                        AirCallIcon(UiSymbol.Phone)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (active) "통화 중" else "음성 대화", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = input, onValueChange = { input = it },
+                        modifier = Modifier.weight(1f), placeholder = { Text("메시지 입력") },
+                        shape = RoundedCornerShape(24.dp), maxLines = 5,
+                        textStyle = MaterialTheme.typography.bodyLarge)
+                    FilledIconButton(onClick = {
+                        if (onSendText(input)) { input = ""; awaitingConsent = false } else awaitingConsent = true
+                    }, enabled = roomId != null && input.isNotBlank() && state !is ConversationState.Processing && !active,
+                        modifier = Modifier.size(56.dp), shape = RoundedCornerShape(20.dp)) {
+                        AirCallIcon(UiSymbol.Send, "메시지 전송")
+                    }
+                }
+            }
         }
     }
 }

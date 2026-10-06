@@ -3,6 +3,9 @@ package com.woojik.aircallai.ui
 import android.app.ActivityManager
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,14 +42,21 @@ fun PrivacyScreen(onBeforeClearData: () -> Unit = {}) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) Text("개발자: ${BuildConfig.AIRCALL_DEVELOPER_NAME}")
-            if (BuildConfig.AIRCALL_SUPPORT_EMAIL.isNotBlank()) Text("문의: ${BuildConfig.AIRCALL_SUPPORT_EMAIL}")
-            if (BuildConfig.AIRCALL_PRIVACY_POLICY_URL.isNotBlank()) TextButton(onClick = {
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.AIRCALL_PRIVACY_POLICY_URL))) }
-                    .onFailure { status = "웹페이지를 열 수 없습니다." }
-            }) { Text("개인정보처리방침") }
-            SupportContactButton()
-            TextButton(onClick = { confirmClear = true }) { Text("이 기기의 앱 데이터 모두 삭제") }
+            SettingsSection("문의 및 개인정보") {
+                if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) Text("개발자: ${BuildConfig.AIRCALL_DEVELOPER_NAME}")
+                if (BuildConfig.AIRCALL_SUPPORT_EMAIL.isNotBlank()) Text("문의: ${BuildConfig.AIRCALL_SUPPORT_EMAIL}")
+                if (BuildConfig.AIRCALL_PRIVACY_POLICY_URL.isNotBlank()) TextButton(onClick = {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.AIRCALL_PRIVACY_POLICY_URL))) }
+                        .onFailure { status = "웹페이지를 열 수 없습니다." }
+                }) { Text("개인정보처리방침") }
+                SupportContactButton()
+            }
+            SettingsSection("데이터 관리") {
+                    OutlinedButton(onClick = { confirmClear = true }, modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        Text("이 기기의 앱 데이터 모두 삭제")
+                    }
+            }
             status?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
