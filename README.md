@@ -7,7 +7,7 @@ Google·GitHub에 로그인하지 않아도 대화와 기기 메모를 사용할
 [변경 기록](CHANGELOG.md) · [보안 안내](SECURITY.md) · [개발 명세](docs/prd/README.md)
 
 0.4.1은 원스토어용 단일 서명 APK·제출 문서 생성 경로와 앱 정보·사용 안내를 추가합니다.
-Actions의 **ONE store Release**는 개인 서명키·실제 공개 정책·신고 수신기·발급 PID를 검사하고
+Actions의 **ONE store Release**는 개인 서명키·실제 공개 정책·발급 PID를 검사하고
 제출 파일과 GitHub 초안을 만듭니다. 계정 등록, 실제 스크린샷과 기기 테스트, 원스토어 심사는 별도로 완료해야 합니다.
 
 ## 현재 기능
@@ -19,7 +19,7 @@ Actions의 **ONE store Release**는 개인 서명키·실제 공개 정책·신�
 - GitHub 저장소·파일 조회, 이슈·PR 생성
 - Google 로그인으로 Gmail 발송 및 기본 캘린더 일정 조회·등록
 - 로그인 없이 기기에 메모 저장·검색
-- 작업 결과 알림, 응답 신고, 개인정보 안내와 전체 기기 데이터 삭제
+- 작업 결과 알림, 서비스 문의 이메일, 개인정보 안내와 전체 기기 데이터 삭제
 - 앱 정보·첫 AI 설정 안내, 원스토어 상품 페이지를 통한 업데이트 확인
 
 앱 버전은 [version.properties](version.properties)를 기준으로 합니다.
@@ -80,7 +80,7 @@ OAuth Client ID는 공개 식별자이며 비밀키가 아닙니다. 클라이�
   `GOOGLE_OAUTH_CLIENT_ID_RELEASE` 저장소 변수를 사용합니다.
 
 현재 빌드 속성과 공개 Client ID 기본값은 [Gradle 설정](app/build.gradle.kts)을 참조하세요.
-정식 배포용 계정·인증서·공개 연락처·정책 URL·신고 접수 서비스 설정은 별도로 필요합니다.
+정식 배포용 계정·인증서·공개 연락처·정책 URL은 별도로 필요합니다.
 
 ## 개발과 검사
 
@@ -89,7 +89,6 @@ JDK 21, Gradle 8.13, Android SDK Platform 36, Build Tools 35.0.0을 사용합니
 
 ```bash
 python -m unittest discover -s scripts -p 'test_*.py' -v
-node --test support/report-receiver/receiver.test.cjs
 gradle --no-daemon testDebugUnitTest testReleaseUnitTest lintRelease
 gradle --no-daemon assembleDebug
 ```
@@ -105,7 +104,6 @@ CI는 단위 테스트·릴리스 lint·APK/AAB 검증과 이전 개발 APK 위�
 | `docs/prd/` | 단계별 개발 명세와 과거 설계 |
 | `docs/play/` | Google Play 제출 문서·정책 템플릿 |
 | `scripts/` | 배포 설정·서명·APK/AAB·릴리스 이력 검사 |
-| `support/report-receiver/` | 선택적 신고 접수 서비스 |
 | `.github/workflows/` | 개발 CI, 정식 릴리스 초안, Play 문서 생성 |
 
 과거 PRD와 변경 기록은 당시 설계를 보존합니다. 현재 동작은 코드와 이 README를 기준으로 확인하세요.

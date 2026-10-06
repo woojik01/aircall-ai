@@ -16,7 +16,7 @@
 | AI 이용 | 앱 가입 없이 이용, 로컬 모델 다운로드·적용 또는 사용자 Cloud API 설정 필요 |
 | 외부 계정 | GitHub·Google 연결 선택, Google 연결에는 Google Play 서비스 필요 |
 | 결제 라이브러리 | 첫 버전에는 IAP·유료 앱 라이선스 SDK를 추가하지 않음 |
-| 데이터 | 기기 전용 저장, 자격증명·대화 암호화. 선택한 Cloud·도구·음성 서비스·신고 전송은 안내 |
+| 데이터 | 기기 전용 저장, 자격증명·대화 암호화. 선택한 Cloud·도구·음성 서비스 전송은 안내 |
 | 배포 방식 | GitHub에서 서명 APK·제출 문서·초안 생성 → 실기 확인 → ONEconsole 검증 요청 |
 
 APK를 선택한 이유는 현재 빌드·직접 설치 검증 경로를 그대로 이용하고 개발자가 정식 서명키를 유지하기 위해서입니다.
@@ -33,13 +33,12 @@ Play의 업로드 키와 앱 서명키를 혼동하지 마세요. 스토어 공�
    `AIRCALL_ONESTORE_PRODUCT_ID`에 콘솔이 발급한 10자리 PID를 입력합니다.
 3. 개인 정식 서명키를 Android Studio의 **Generate Signed Bundle/APK**에서 만들거나 기존 정식 키를 사용합니다.
    키 파일·암호를 안전하게 백업하고 공개 Git에 올리지 않습니다. [공통 서명 안내](../RELEASING.md)를 참고합니다.
-4. 공개 운영자명, 실제 지원 이메일, 정책 주소, 신고 접수 주소를 정합니다.
+4. 공개 운영자명과 개인정보처리방침 주소를 정합니다. 지원 이메일은 `woojik1220@gmail.com`으로 고정됩니다.
    `config/play.properties`는 이름과 달리 **모든 마켓이 공유하는 공개 연락처·개인정보 구성**입니다.
    기존 Google Play 설정을 재입력할 필요는 없습니다.
 5. Actions → **Prepare ONE store Documents**를 실행합니다. `aircall-onestore-documents`의
    `privacy-policy.html`을 설정한 공개 HTTPS 주소에 게시합니다. PID는 이 단계에서는 없어도 됩니다.
-6. [신고 접수 서비스](../../support/report-receiver/README.md)를 설정합니다. 익명 신고만 서버로 받고
-   API 키·계정 토큰·전체 대화는 서버에 자동 저장하지 않습니다. 실제 신고 보관 기간과 앱 설정을 일치시킵니다.
+6. 설정의 서비스 문의 이메일 버튼을 확인합니다. 수신 주소는 `woojik1220@gmail.com`입니다.
 7. Google Cloud에 `com.woojik.aircallai.release`와 정식 인증서 SHA-1로 Android OAuth를 등록합니다.
    Gmail·Calendar API와 동의 화면을 준비하고 일반 사용자용 공개·심사 상태를 확인합니다.
    개발용 인증서 등록은 그대로 둡니다. Google 로그인은 앱 자체 사용의 필수 조건이 아닙니다.
@@ -64,10 +63,8 @@ Play의 업로드 키와 앱 서명키를 혼동하지 마세요. 스토어 공�
 | Variable | `AIRCALL_RELEASE_CERT_SHA256` | 개인 앱 서명 인증서 SHA-256 |
 | Variable | `GOOGLE_OAUTH_CLIENT_ID_RELEASE` | 정식 패키지·인증서에 등록한 Android OAuth Client ID |
 | Variable 또는 공개 설정 | `AIRCALL_DEVELOPER_NAME` | 실제 앱 운영자·공개 개발자명 |
-| Variable 또는 공개 설정 | `AIRCALL_SUPPORT_EMAIL` | 실제 문의·개인정보 연락 이메일 |
+| 공개 고정 설정 | `AIRCALL_SUPPORT_EMAIL` | `woojik1220@gmail.com`; Gradle 속성·Actions 변수로 변경되지 않음 |
 | Variable 또는 공개 설정 | `AIRCALL_PRIVACY_POLICY_URL` | 게시 완료한 공개 HTTPS 정책 페이지 |
-| Variable 또는 공개 설정 | `AIRCALL_REPORT_ENDPOINT` | 익명 신고 수신 서비스의 공개 HTTPS `/exec` URL |
-| Variable 또는 공개 설정 | `AIRCALL_REPORT_RETENTION_DAYS` | 신고 보관 일수, 수신기의 값과 일치 |
 | Variable 또는 `config/onestore.properties` | `AIRCALL_ONESTORE_PRODUCT_ID` | 원스토어 상품 PID, 10자리 숫자 |
 
 서명키·암호를 채팅에 보내지 마세요. 공개 정보에도 실제로 공개할 값을 입력합니다.
@@ -76,9 +73,8 @@ Play의 업로드 키와 앱 서명키를 혼동하지 마세요. 스토어 공�
 
 ## 자동 검증 및 산출물
 
-- 공통 개인정보 설정의 빈 값·가짜 주소·HTTP·잘못된 보관 기간을 차단합니다.
+- 공통 개인정보 설정의 빈 값·가짜 주소·HTTP을 차단합니다.
 - 공개 정책 페이지의 실제 응답과 운영자 이메일을 확인합니다.
-- 신고 수신기에 실제 쓰기·읽기·삭제 테스트를 하고 정리 성공을 확인합니다.
 - PID, 개인 서명키, 인증서 fingerprint와 Google 정식 OAuth 설정 존재를 검사합니다.
 - 단위 테스트·lint·R8 release APK 빌드를 실행합니다.
 - APK의 패키지·버전·서명·최소/대상 SDK·ARM64 런타임·ZIP 및 ELF 16 KB 정렬을 검사합니다.

@@ -25,7 +25,7 @@ import com.woojik.aircallai.BuildConfig
 import com.woojik.aircallai.distribution.StoreDistribution
 
 @Composable
-fun AppInfoScreen(onOpenAiSettings: () -> Unit, onOpenPrivacy: () -> Unit, onReport: () -> Unit) {
+fun AppInfoScreen(onOpenAiSettings: () -> Unit, onOpenPrivacy: () -> Unit) {
     val context = LocalContext.current
     var status by remember { mutableStateOf<String?>(null) }
     fun openUrl(url: String) {
@@ -49,11 +49,11 @@ fun AppInfoScreen(onOpenAiSettings: () -> Unit, onOpenPrivacy: () -> Unit, onRep
                 TextButton(onClick = onOpenAiSettings) { Text("AI 및 모델 설정") }
             }
         }
-        Text("AI가 생성한 답변은 틀릴 수 있습니다. 잘못된 응답은 응답의 신고 버튼으로 알려 주세요.")
+        Text("AI가 생성한 답변은 틀릴 수 있습니다. 중요한 정보는 별도로 확인해 주세요.")
         if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) Text("개발자: ${BuildConfig.AIRCALL_DEVELOPER_NAME}")
         if (BuildConfig.AIRCALL_SUPPORT_EMAIL.isNotBlank()) Text("문의: ${BuildConfig.AIRCALL_SUPPORT_EMAIL}")
         TextButton(onClick = onOpenPrivacy) { Text("개인정보 및 데이터 삭제") }
-        TextButton(onClick = onReport) { Text("문의 및 AI 응답 신고") }
+        SupportContactButton()
         if (BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL == "onestore" && !BuildConfig.DEBUG) {
             StoreDistribution.oneStoreProductUrl(BuildConfig.AIRCALL_ONESTORE_PRODUCT_ID)?.let { url ->
                 TextButton(onClick = { openUrl(url) }) { Text("원스토어에서 업데이트 확인") }

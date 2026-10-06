@@ -55,7 +55,6 @@ jobs:
       - name: Tests, lint and privately signed APK/AAB
         run: |
           python -m unittest discover -s scripts -p 'test_*.py' -v
-          node --test support/report-receiver/receiver.test.cjs
           gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease bundleRelease \
             -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" \
             -PAIRCALL_DISTRIBUTION_CHANNEL=direct \

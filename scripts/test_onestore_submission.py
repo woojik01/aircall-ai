@@ -9,10 +9,8 @@ from prepare_onestore_submission import load_product_id, validate_product_id, va
 
 class OneStoreSubmissionTest(unittest.TestCase):
     def config(self):
-        return {'AIRCALL_DEVELOPER_NAME': '테스트 개발자', 'AIRCALL_SUPPORT_EMAIL': 'support@aircall.ai',
-                'AIRCALL_PRIVACY_POLICY_URL': 'https://aircall.ai/privacy',
-                'AIRCALL_REPORT_ENDPOINT': 'https://script.google.com/macros/s/receiver/exec',
-                'AIRCALL_REPORT_RETENTION_DAYS': '30'}
+        return {'AIRCALL_DEVELOPER_NAME': '테스트 개발자', 'AIRCALL_SUPPORT_EMAIL': 'woojik1220@gmail.com',
+                'AIRCALL_PRIVACY_POLICY_URL': 'https://aircall.ai/privacy'}
 
     def metadata(self):
         return {'package': 'com.woojik.aircallai.release', 'versionName': '0.4.1', 'versionCode': 30001,
@@ -51,7 +49,7 @@ class OneStoreSubmissionTest(unittest.TestCase):
                               'DATA_AND_PERMISSIONS.md', 'SUBMISSION.md'}, {p.name for p in output.iterdir()})
             policy = (output / 'privacy-policy.html').read_text(encoding='utf-8')
             self.assertNotIn('{{', policy)
-            self.assertIn('support@aircall.ai', policy)
+            self.assertIn('woojik1220@gmail.com', policy)
             summary = (output / 'SUBMISSION.md').read_text(encoding='utf-8')
             self.assertIn('0000123456', summary)
             self.assertIn('versionCode: 30001', summary)

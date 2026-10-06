@@ -1,6 +1,6 @@
 # 설치 및 릴리스
 
-첫 출시는 [원스토어 제출 안내](onestore/README.md)를 확인하세요. Google Play 제출은 [Play 제출 준비](play/README.md)를 확인하세요. 정식 릴리스는 공개 개인정보처리방침·익명 신고 서비스·운영자 연락처가 실제 준비되어야 진행됩니다.
+첫 출시는 [원스토어 제출 안내](onestore/README.md)를 확인하세요. Google Play 제출은 [Play 제출 준비](play/README.md)를 확인하세요. 정식 릴리스는 공개 개인정보처리방침·운영자 연락처가 실제 준비되어야 진행됩니다.
 
 ## 패키지와 서명
 
@@ -55,7 +55,7 @@ keytool -genkeypair -v -storetype JKS -keystore release.jks \
 6. [Android Signed Build](https://github.com/woojik01/aircall-ai/actions/workflows/android-signed-build.yml) → **Run workflow** → **main** → 이전 모든 개인 키 빌드·정식 릴리스·초안보다 큰 `version_code`를 입력합니다. 첫 빌드는 `30001` 이상을 권장합니다. 다음 빌드는 이전보다 큰 값을 사용합니다.
 7. 성공한 실행의 **aircall-signed-build**를 다운로드합니다. ZIP을 풀고 `aircall-버전-versionCode.apk`를 설치합니다. AAB는 직접 설치 파일이 아닙니다. 패키지는 `com.woojik.aircallai.release`입니다.
 
-이 워크플로우는 4개 Secrets만으로 개인 키 테스트 APK/AAB를 만들고 비공개 릴리스 초안에 버전·서명 이력을 남깁니다. 스토어 심사·공개 정책 URL·신고 수신기·정식 Google OAuth 등록은 별도이며, 원스토어 제출용 문서는 ONE store Release를 사용합니다. **Android CI**에서 받는 `aircall-dev.apk`는 계속 개발용 키를 사용합니다.
+이 워크플로우는 4개 Secrets만으로 개인 키 테스트 APK/AAB를 만들고 비공개 릴리스 초안에 버전·서명 이력을 남깁니다. 스토어 심사·공개 정책 URL·정식 Google OAuth 등록은 별도이며, 원스토어 제출용 문서는 ONE store Release를 사용합니다. **Android CI**에서 받는 `aircall-dev.apk`는 계속 개발용 키를 사용합니다.
 
 키 비밀번호·alias·Base64가 잘못되면 빌드 전에 중단합니다. JKS와 PKCS12 형식 모두 지원하고 공개 개발 키는 거부합니다. 인증서 SHA-1·SHA-256은 실행 **Summary**에 표시하며 SHA-256은 자동으로 APK/AAB 검증에 사용합니다. 선택적으로 `AIRCALL_RELEASE_CERT_SHA256` Variable을 등록하면 해당 지문과 일치하는 키만 허용합니다. 최초 성공 이후에는 릴리스 초안/게시 이력과 서명키·versionCode를 대조합니다. 같은 버전의 초안은 덮어쓰지 않습니다.
 

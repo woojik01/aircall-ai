@@ -106,7 +106,7 @@ fun SettingsDetail(
                     graph.settings.setCloudBaseUrl(endpoint); graph.settings.setCloudModel(model)
                     vm.refreshProviderReadiness()
                     status = if (endedCall) "연결 정보를 저장하고 통화를 종료했습니다. 다시 시작해 주세요." else "연결 정보를 저장했습니다."
-                }, enabled = com.woojik.aircallai.privacy.ContentReportClient.isHttpsEndpoint(endpoint.trim()) && model.isNotBlank()) { Text("연결 정보 저장") }
+                }, enabled = com.woojik.aircallai.privacy.HttpsEndpoint.isHttpsEndpoint(endpoint.trim()) && model.isNotBlank()) { Text("연결 정보 저장") }
             }
             "accounts" -> {
                 Text("서비스에 로그인하여 도구를 연결하세요. 로그인 없이도 AI 대화와 기기 메모를 사용할 수 있습니다.")

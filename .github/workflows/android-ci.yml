@@ -39,8 +39,6 @@ jobs:
           keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android >> "$GITHUB_STEP_SUMMARY"
       - name: Release verification unit tests
         run: python -m unittest discover -s scripts -p 'test_*.py' -v
-      - name: Report receiver tests
-        run: node --test support/report-receiver/receiver.test.cjs
       - name: Android unit tests
         timeout-minutes: 12
         run: gradle --no-daemon --console=plain testDebugUnitTest testReleaseUnitTest lintRelease -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" -PAIRCALL_DISTRIBUTION_CHANNEL=onestore --stacktrace

@@ -28,10 +28,8 @@ jobs:
       AIRCALL_RELEASE_CERT_SHA256: ${{ vars.AIRCALL_RELEASE_CERT_SHA256 }}
       GOOGLE_OAUTH_CLIENT_ID_RELEASE: ${{ vars.GOOGLE_OAUTH_CLIENT_ID_RELEASE }}
       AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
-      AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
+      AIRCALL_SUPPORT_EMAIL: woojik1220@gmail.com
       AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
-      AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
-      AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
       AIRCALL_REQUIRE_STORE_CONFIG: 'true'
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -46,7 +44,7 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
-      - name: Require ONEconsole PID, working policy and report receiver
+      - name: Require ONEconsole PID, working policy
         run: |
           python scripts/prepare_onestore_submission.py --require-product-id --network
           python - <<'PY'
@@ -71,7 +69,6 @@ jobs:
       - name: Tests, lint and signed ONE store APK
         run: |
           python -m unittest discover -s scripts -p 'test_*.py' -v
-          node --test support/report-receiver/receiver.test.cjs
           gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease \
             -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" \
             -PAIRCALL_DISTRIBUTION_CHANNEL=onestore \

@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""Check public store configuration; optionally probe the deployed policy/receiver."""
+"""Check public store configuration; optionally probe the deployed policy."""
 import argparse
 from html import escape
 import ipaddress
-import json
 import os
 from pathlib import Path
 import re
-import uuid
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-FIELDS = ('AIRCALL_DEVELOPER_NAME', 'AIRCALL_SUPPORT_EMAIL', 'AIRCALL_PRIVACY_POLICY_URL',
-          'AIRCALL_REPORT_ENDPOINT', 'AIRCALL_REPORT_RETENTION_DAYS')
+SUPPORT_EMAIL = 'woojik1220@gmail.com'
+FIELDS = ('AIRCALL_DEVELOPER_NAME', 'AIRCALL_SUPPORT_EMAIL', 'AIRCALL_PRIVACY_POLICY_URL')
 
 
 def load_config(path):
@@ -24,6 +22,7 @@ def load_config(path):
     for field in FIELDS:
         if os.environ.get(field, '').strip():
             config[field] = os.environ[field].strip()
+    config['AIRCALL_SUPPORT_EMAIL'] = SUPPORT_EMAIL
     return config
 
 
@@ -57,30 +56,20 @@ def validate(config):
             raise ValueError('Invalid public configuration: ' + field)
     if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', config['AIRCALL_SUPPORT_EMAIL']):
         raise ValueError('Provide a real support email')
+    if config['AIRCALL_SUPPORT_EMAIL'] != SUPPORT_EMAIL:
+        raise ValueError('Support email must be ' + SUPPORT_EMAIL)
     email_domain = config['AIRCALL_SUPPORT_EMAIL'].split('@')[1]
     if not public_https('https://' + email_domain):
         raise ValueError('Placeholder support emails are forbidden')
-    for field in ('AIRCALL_PRIVACY_POLICY_URL', 'AIRCALL_REPORT_ENDPOINT'):
+    for field in ('AIRCALL_PRIVACY_POLICY_URL',):
         if not public_https(config[field]):
             raise ValueError(field + ' must be a public HTTPS URL, without placeholders or credentials')
-    try:
-        days = int(config['AIRCALL_REPORT_RETENTION_DAYS'])
-    except ValueError:
-        raise ValueError('Report retention must be an integer') from None
-    if not 1 <= days <= 365:
-        raise ValueError('Report retention must be 1..365 days')
-    if config['AIRCALL_REPORT_ENDPOINT'].rstrip('/').endswith('/dev'):
-        raise ValueError('Apps Script /dev URLs cannot receive production reports')
     return config
 
 
-def fetch_public(url, limit, payload=None):
+def fetch_public(url, limit):
     headers = {'User-Agent': 'AirCall-Store-Preflight/1'}
-    body = None
-    if payload is not None:
-        body = json.dumps(payload).encode('utf-8')
-        headers['Content-Type'] = 'application/json'
-    with urlopen(Request(url, data=body, headers=headers), timeout=20) as response:
+    with urlopen(Request(url, headers=headers), timeout=20) as response:
         if not public_https(response.url):
             raise ValueError('Release endpoint redirected to a non-public/non-HTTPS URL')
         payload = response.read(limit + 1)
@@ -97,18 +86,6 @@ def probe(config):
         raise ValueError('Privacy page must identify AirCall AI and its privacy policy')
     if escape(config['AIRCALL_SUPPORT_EMAIL']) not in policy:
         raise ValueError('Privacy page does not contain the configured privacy contact')
-    health_text, _ = fetch_public(config['AIRCALL_REPORT_ENDPOINT'], 8192)
-    health = json.loads(health_text)
-    if health.get('protocol') != 'aircall-report-v1' or health.get('ready') is not True:
-        raise ValueError('Report receiver is not ready; configure private storage and retention trigger')
-    if health.get('retentionDays') != int(config['AIRCALL_REPORT_RETENTION_DAYS']):
-        raise ValueError('App and receiver disagree on report retention')
-    canary_id = str(uuid.uuid4())
-    receipt_text, _ = fetch_public(config['AIRCALL_REPORT_ENDPOINT'], 8192,
-                                  {'operation': 'preflight', 'id': canary_id})
-    receipt = json.loads(receipt_text)
-    if receipt.get('ok') is not True or receipt.get('id') != canary_id or receipt.get('cleared') is not True:
-        raise ValueError('Report receiver did not confirm the write/read/delete canary')
 
 
 def render_policy(config, template, output):
@@ -132,7 +109,7 @@ def main():
         render_policy(config, 'docs/play/privacy-policy.template.html', args.policy_output)
     if args.network:
         probe(config)
-    print('Play public configuration verified' + ('; deployed policy and report receiver reachable' if args.network else ''))
+    print('Play public configuration verified' + ('; deployed policy reachable' if args.network else ''))
 
 
 if __name__ == '__main__':

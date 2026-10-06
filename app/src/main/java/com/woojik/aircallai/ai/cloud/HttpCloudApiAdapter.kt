@@ -26,7 +26,7 @@ class HttpCloudApiAdapter(
 
     override suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String =
         withContext(Dispatchers.IO) {
-            if (!com.woojik.aircallai.privacy.ContentReportClient.isHttpsEndpoint(baseUrl)) {
+            if (!com.woojik.aircallai.privacy.HttpsEndpoint.isHttpsEndpoint(baseUrl)) {
                 throw AIProviderException(ProviderErrorKind.API_ERROR, "올바른 HTTPS API 주소를 설정해 주세요.")
             }
             var connection: HttpURLConnection? = null

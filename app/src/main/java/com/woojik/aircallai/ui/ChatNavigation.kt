@@ -70,8 +70,6 @@ fun AirCallUi(
     var editing by remember { mutableStateOf<ChatRoom?>(null) }
     var deleting by remember { mutableStateOf<ChatRoom?>(null) }
     var rename by remember { mutableStateOf("") }
-    var reportResponse by rememberSaveable { mutableStateOf<String?>(null) }
-    var reportOpen by rememberSaveable { mutableStateOf(false) }
     var pendingText by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingVoice by rememberSaveable { mutableStateOf(false) }
     var pendingRoomId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -81,7 +79,6 @@ fun AirCallUi(
         }
     }
     val usesCloud = graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD
-    fun report(content: String?) { reportResponse = content?.take(4000); reportOpen = true }
     fun sendText(text: String): Boolean {
         if (graph.settings.aiProviderMode() == com.woojik.aircallai.settings.SettingsRepository.MODE_CLOUD &&
             !graph.settings.hasCloudDisclosure()) {
@@ -213,10 +210,10 @@ fun AirCallUi(
                             } }) { Text("기록 다시 읽기") }
                         } else NavHost(navController = nav, startDestination = "chat", modifier = Modifier.weight(1f)) {
                             composable("chat") { ConversationScreen(vm, activeId, onOpenCall = { nav.navigate("call") },
-                                onReport = { report(it) }, onSendText = { sendText(it) },
+                                onSendText = { sendText(it) },
                                 onOpenAiSettings = { nav.navigate("settings/ai") }) }
                             composable("call") { CallScreen(vm, onExit = { nav.popBackStack() },
-                                onStartSession = { startVoice() }, onReport = { report(it) }) }
+                                onStartSession = { startVoice() }) }
                             composable("settings") { SettingsCategories { category ->
                                 nav.navigate(when (category) {
                                     "privacy", "about" -> category
@@ -226,7 +223,6 @@ fun AirCallUi(
                             composable("about") { AppInfoScreen(
                                 onOpenAiSettings = { nav.navigate("settings/ai") },
                                 onOpenPrivacy = { nav.navigate("privacy") },
-                                onReport = { report(null) },
                             ) }
                             composable("settings/{category}") { target ->
                                 SettingsDetail(target.arguments?.getString("category").orEmpty(), graph, vm,
@@ -245,7 +241,7 @@ fun AirCallUi(
                                             .putExtra(com.woojik.aircallai.service.ModelDownloadService.EXTRA_MODEL, it.id))
                                     })
                             }
-                            composable("privacy") { PrivacyScreen(onReport = { report(null) }, onBeforeClearData = {
+                            composable("privacy") { PrivacyScreen(onBeforeClearData = {
                                 vm.endSession(); graph.toolApproval.deny()
                             }) }
                         }
@@ -277,7 +273,6 @@ fun AirCallUi(
             }
             val pending by graph.toolApproval.pending.collectAsState()
             pending?.let { ToolApprovalDialog(it, onApprove = { graph.toolApproval.approve() }, onDeny = { graph.toolApproval.deny() }) }
-            if (reportOpen) ContentReportDialog(graph.contentReports, reportResponse, onDismiss = { reportOpen = false })
             if (pendingText != null || pendingVoice) {
                 val voice = pendingVoice
                 AlertDialog(onDismissRequest = { pendingText = null; pendingVoice = false; pendingRoomId = null },

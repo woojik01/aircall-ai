@@ -50,7 +50,7 @@ class HttpOAuthPost(
         }
 
     private fun postFormOnce(url: String, form: Map<String, String>): Pair<Int, String> {
-        require(com.woojik.aircallai.privacy.ContentReportClient.isHttpsEndpoint(url))
+        require(com.woojik.aircallai.privacy.HttpsEndpoint.isHttpsEndpoint(url))
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.instanceFollowRedirects = false

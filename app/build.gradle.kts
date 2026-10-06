@@ -27,19 +27,19 @@ val onestoreProductId = (providers.gradleProperty("AIRCALL_ONESTORE_PRODUCT_ID")
 require(onestoreProductId.isBlank() || onestoreProductId.matches(Regex("[0-9]{10}"))) {
     "AIRCALL_ONESTORE_PRODUCT_ID must be the 10-digit PID issued by ONEconsole."
 }
-fun playValue(name: String): String = (providers.gradleProperty(name).orNull
+fun playValue(name: String): String = if (name == "AIRCALL_SUPPORT_EMAIL") "woojik1220@gmail.com" else (providers.gradleProperty(name).orNull
     ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
     ?: playProperties.getProperty(name, "")).trim()
 fun javaString(value: String): String = "\"" + value.replace("\\", "\\\\")
     .replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
 val playFieldNames = listOf("AIRCALL_DEVELOPER_NAME", "AIRCALL_SUPPORT_EMAIL",
-    "AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT", "AIRCALL_REPORT_RETENTION_DAYS")
+    "AIRCALL_PRIVACY_POLICY_URL")
 if (providers.environmentVariable("AIRCALL_REQUIRE_PLAY_CONFIG").orNull == "true" ||
     providers.environmentVariable("AIRCALL_REQUIRE_STORE_CONFIG").orNull == "true") {
     require(playFieldNames.all { playValue(it).isNotBlank() }) {
         "Complete config/play.properties or matching Actions variables before a store release."
     }
-    listOf("AIRCALL_PRIVACY_POLICY_URL", "AIRCALL_REPORT_ENDPOINT").forEach { name ->
+    listOf("AIRCALL_PRIVACY_POLICY_URL").forEach { name ->
         val uri = URI(playValue(name))
         require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) {
             "$name must be a public HTTPS URL."
@@ -47,9 +47,6 @@ if (providers.environmentVariable("AIRCALL_REQUIRE_PLAY_CONFIG").orNull == "true
     }
     require(playValue("AIRCALL_SUPPORT_EMAIL").matches(Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+"))) {
         "A real public support email is required."
-    }
-    require(playValue("AIRCALL_REPORT_RETENTION_DAYS").toIntOrNull()?.let { it in 1..365 } == true) {
-        "Report retention must be between 1 and 365 days."
     }
 }
 val requestedVersionCode = providers.gradleProperty("AIRCALL_VERSION_CODE").orNull

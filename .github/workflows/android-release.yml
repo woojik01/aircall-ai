@@ -25,10 +25,8 @@ jobs:
       AIRCALL_RELEASE_CERT_SHA256: ${{ vars.AIRCALL_RELEASE_CERT_SHA256 }}
       GOOGLE_OAUTH_CLIENT_ID_RELEASE: ${{ vars.GOOGLE_OAUTH_CLIENT_ID_RELEASE }}
       AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
-      AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
+      AIRCALL_SUPPORT_EMAIL: woojik1220@gmail.com
       AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
-      AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
-      AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
       AIRCALL_REQUIRE_PLAY_CONFIG: 'true'
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -43,7 +41,7 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
-      - name: Require working public policy and anonymous report receiver
+      - name: Require working public policy
         run: python scripts/check_play_config.py --network --policy-output dist/privacy-policy.html
       - name: Download pinned bundletool
         run: |
@@ -63,7 +61,6 @@ jobs:
       - name: Tests and signed APK/AAB
         run: |
           python -m unittest discover -s scripts -p 'test_*.py' -v
-          node --test support/report-receiver/receiver.test.cjs
           gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease bundleRelease \
             -PAIRCALL_VERSION_CODE="$AIRCALL_VERSION_CODE" \
             -PAIRCALL_DISTRIBUTION_CHANNEL=play \

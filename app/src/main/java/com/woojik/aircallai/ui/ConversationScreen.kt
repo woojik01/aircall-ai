@@ -24,7 +24,7 @@ import com.woojik.aircallai.session.SessionStatus
 
 @Composable
 fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Unit,
-    onReport: (String) -> Unit = {}, onSendText: (String) -> Boolean = { vm.sendText(it); true },
+    onSendText: (String) -> Boolean = { vm.sendText(it); true },
     onOpenAiSettings: () -> Unit = {}) {
     val state by vm.state.collectAsState()
     val transcript by vm.transcript.collectAsState()
@@ -73,9 +73,6 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                                 Text(if (user) "나" else "AirCall", style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
                                 androidx.compose.foundation.text.selection.SelectionContainer { Text(message.content, style = MaterialTheme.typography.bodyLarge) }
-                                if (message.role == ChatMessage.Role.ASSISTANT) {
-                                    TextButton(onClick = { onReport(message.content) }) { Text("응답 신고") }
-                                }
                             }
                         }
                     }

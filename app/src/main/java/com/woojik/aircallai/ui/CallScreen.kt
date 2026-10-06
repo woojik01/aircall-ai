@@ -21,7 +21,7 @@ import com.woojik.aircallai.session.SessionStatus
 
 @Composable
 fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
-    onStartSession: () -> Unit = { vm.onMicTap() }, onReport: (String) -> Unit = {}) {
+    onStartSession: () -> Unit = { vm.onMicTap() }) {
     LaunchedEffect(vm) { vm.refreshProviderReadiness() }
     val state by vm.state.collectAsState()
     val session by vm.sessionStatus.collectAsState()
@@ -38,7 +38,6 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
         Text(label, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         transcript.lastOrNull { it.role == ChatMessage.Role.ASSISTANT }?.let {
             Text(it.content, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-            TextButton(onClick = { onReport(it.content) }) { Text("응답 신고") }
         }
         if (!ready) Text("설정에서 로컬 모델을 적용하거나 클라우드 API를 연결해 주세요.")
         (state as? ConversationState.Error)?.let { Text(it.message, color = MaterialTheme.colorScheme.error) }

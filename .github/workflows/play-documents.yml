@@ -13,10 +13,8 @@ jobs:
     timeout-minutes: 5
     env:
       AIRCALL_DEVELOPER_NAME: ${{ vars.AIRCALL_DEVELOPER_NAME }}
-      AIRCALL_SUPPORT_EMAIL: ${{ vars.AIRCALL_SUPPORT_EMAIL }}
+      AIRCALL_SUPPORT_EMAIL: woojik1220@gmail.com
       AIRCALL_PRIVACY_POLICY_URL: ${{ vars.AIRCALL_PRIVACY_POLICY_URL }}
-      AIRCALL_REPORT_ENDPOINT: ${{ vars.AIRCALL_REPORT_ENDPOINT }}
-      AIRCALL_REPORT_RETENTION_DAYS: ${{ vars.AIRCALL_REPORT_RETENTION_DAYS }}
     steps:
       - uses: actions/checkout@v4
       - name: Render policy with real publisher information
