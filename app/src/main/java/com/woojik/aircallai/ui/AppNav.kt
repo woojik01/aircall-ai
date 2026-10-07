@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
                 catch (failure: LinkageError) { showStartupFailure(failure); return@launch }
                 try {
                     val authorizationResult =
-                        Identity.getAuthorizationClient(this)
+                        Identity.getAuthorizationClient(this@MainActivity)
                             .getAuthorizationResultFromIntent(result.data)
                     val accessToken = authorizationResult.accessToken
                     if (accessToken.isNullOrBlank()) {
