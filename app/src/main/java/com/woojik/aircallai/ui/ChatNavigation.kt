@@ -26,6 +26,7 @@ import com.woojik.aircallai.AppGraph
 import com.woojik.aircallai.R
 import com.woojik.aircallai.chat.ChatRoom
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,8 +102,11 @@ fun AirCallUi(
             drawer.close(); openChat()
         }
     }
-    LaunchedEffect(openVersion, ready) {
+    LaunchedEffect(openVersion, ready, openTarget) {
         if (!ready || openTarget.isBlank()) return@LaunchedEffect
+        // NavHost lives in Scaffold's subcomposition. Room readiness can arrive before
+        // that subcomposition installs its graph; wait for a real navigation entry.
+        nav.currentBackStackEntryFlow.first()
         if (openTarget == "models") nav.navigate("models") { launchSingleTop = true }
         else if (openTarget == "call") nav.navigate("call") { launchSingleTop = true }
         else openChat()
@@ -154,6 +158,7 @@ fun AirCallUi(
                     HorizontalDivider()
                     NavigationDrawerItem(label = { Text("설정") }, icon = { AirCallIcon(UiSymbol.Theme) },
                         selected = route.startsWith("settings"),
+                        enabled = ready && entry != null,
                         modifier = Modifier.padding(12.dp), onClick = { scope.launch {
                             drawer.close(); nav.navigate("settings") { launchSingleTop = true }
                         } })
@@ -174,7 +179,7 @@ fun AirCallUi(
                     ) {
                         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            IconButton(onClick = {
+                            IconButton(enabled = ready && entry != null, onClick = {
                                 if (route == "chat") scope.launch { drawer.open() }
                                 else if (!nav.popBackStack()) openChat()
                             }) { AirCallIcon(if (route == "chat") UiSymbol.Menu else UiSymbol.Back,
