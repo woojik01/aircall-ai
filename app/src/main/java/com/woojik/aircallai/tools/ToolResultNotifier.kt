@@ -38,6 +38,7 @@ class ToolResultNotifier(private val context: Context) {
             .setContentTitle(if (event.status == ToolExecutionStatus.SUCCEEDED) "AI 작업 실행 완료" else "AI 작업 결과 확인")
             .setContentText(event.summary).setStyle(NotificationCompat.BigTextStyle().bigText(event.summary))
             .setContentIntent(pending).setAutoCancel(true)
+            .setTimeoutAfter(if (event.status == ToolExecutionStatus.SUCCEEDED) 60_000L else 10_000L)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(public).build()
         // Permission may be revoked after the check. This must not change the tool's result.
         try { manager.notify(event.id, 3000, notification) } catch (_: SecurityException) { }

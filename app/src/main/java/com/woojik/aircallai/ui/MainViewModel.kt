@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * PRD-05: ViewModel은 세션 상태를 SessionRepository(상태 통로)를 통해서만 본다.
@@ -50,6 +52,14 @@ class MainViewModel(
 
     init {
         refreshProviderReadiness()
+        scope.launch {
+            state.collectLatest { error ->
+                if (error is ConversationState.Error) {
+                    delay(6_000)
+                    if (state.value === error) engine.clearError()
+                }
+            }
+        }
     }
 
     /** 설정에서 모드/API 키가 바뀌면 다시 계산한다. */

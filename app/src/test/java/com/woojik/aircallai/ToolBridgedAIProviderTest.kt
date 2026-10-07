@@ -93,8 +93,8 @@ class ToolBridgedAIProviderTest {
         val (provider, fake) = bridge(listOf("그냥 대답입니다."))
         val response = provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "안녕")))
         assertEquals("그냥 대답입니다.", response.message.content)
-        // 시스템 프롬프트가 주입되었는지 확인: 첫 이력의 첫 메시지는 SYSTEM 역할이어야 한다.
-        assertEquals(ChatMessage.Role.SYSTEM, fake.receivedHistories[0][0].role)
+        // 도구 목록은 일반 메시지이며 SYSTEM 프롬프트를 주입하지 않는다.
+        assertEquals(ChatMessage.Role.USER, fake.receivedHistories[0][0].role)
     }
 
     @Test
@@ -148,7 +148,7 @@ class ToolBridgedAIProviderTest {
         )
         provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "무슨 기능을 할 수 있어?")))
         val prompt = fake.receivedHistories.single().first()
-        assertEquals(ChatMessage.Role.SYSTEM, prompt.role)
+        assertEquals(ChatMessage.Role.USER, prompt.role)
         assertTrue(prompt.content.contains("github.read_repository"))
         assertTrue(prompt.content.contains("실행 전 도구를 못 쓴다고 단정하지 않는다"))
     }
@@ -172,7 +172,54 @@ class ToolBridgedAIProviderTest {
         val prompt = fake.receivedHistories.first().first().content
         assertTrue(prompt.contains("TOOL: <도구>.<액션>"))
         assertTrue(prompt.contains("owner=<소유자>"))
+        assertTrue(fake.receivedHistories.flatten().none { it.role == ChatMessage.Role.SYSTEM })
         assertTrue(prompt.contains("음성 규칙은 최종 답변에만 적용한다"))
         assertTrue(fake.receivedHistories[1].any { it.content.contains("TOOL_RESULT github.read_repository 성공") })
     }
+    @Test fun catalogRefreshDoesNotExecuteExternalTool() = runTest {
+        val logger = ToolExecutionLogger()
+        val (provider, fake) = bridge(listOf("TOOL: tools.list", "기능을 설명합니다."), logger)
+        provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "도구 목록 보여줘")))
+        assertTrue(logger.entries.value.isEmpty())
+        assertTrue(fake.receivedHistories[1].last().content.contains("TOOL_RESULT tools.list 성공"))
+    }
+
+    @Test fun invalidActionAndMissingArgumentsAreRepairedBeforeExecution() = runTest {
+        val fake = FakeAIProvider(listOf(
+            "TOOL: github.nonexistent owner=a repo=b",
+            "TOOL: github.read_repository owner=a",
+            "TOOL: github.read_repository owner=a repo=b",
+            "조회했습니다.",
+        ))
+        val logger = ToolExecutionLogger()
+        val provider = ToolBridgedAIProvider(fake,
+            ToolExecutor(listOf(MockGitHubTool()), PersistedToolPermissionStore(InMemorySettingsStore())),
+            logger, "github.read_repository owner=<소유자> repo=<저장소> — 조회")
+        provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "깃허브 저장소 조회")))
+        assertEquals(1, logger.entries.value.size)
+        assertTrue(fake.receivedHistories[1].last().content.contains("목록에 없는 액션"))
+        assertTrue(fake.receivedHistories[2].last().content.contains("필수 인자 누락: repo"))
+    }
+
+    @Test fun malformedCallCanBeCorrectedWithoutPartialExecution() = runTest {
+        val logger = ToolExecutionLogger()
+        val (provider, fake) = bridge(listOf(
+            "TOOL: github.read_repository owner=\"a",
+            "TOOL: github.read_repository owner=a repo=b",
+            "조회했습니다.",
+        ), logger)
+        val result = provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "저장소 조회")))
+        assertEquals("조회했습니다.", result.message.content)
+        assertEquals(1, logger.entries.value.size)
+        assertTrue(fake.receivedHistories[1].last().content.contains("호출 문법"))
+    }
+
+    @Test fun missingResultPlaceholderCannotBeWrittenAsErrorText() = runTest {
+        val logger = ToolExecutionLogger()
+        val (provider, _) = bridge(listOf("TOOL: github.create_issue title={{TOOL_RESULT}}"), logger)
+        provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "이슈 생성")))
+        assertTrue(logger.entries.value.isEmpty())
+    }
+
 }
+

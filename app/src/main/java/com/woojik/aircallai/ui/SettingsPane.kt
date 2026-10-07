@@ -20,6 +20,8 @@ import com.woojik.aircallai.AppGraph
 import com.woojik.aircallai.ai.cloud.CloudAIProvider
 import com.woojik.aircallai.settings.SettingsRepository
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import com.woojik.aircallai.auth.ConnectionStatus
 
 @Composable
 fun SettingsCategories(onOpen: (String) -> Unit) {
@@ -71,7 +73,7 @@ fun SettingsDetail(
 ) {
     val scope = rememberCoroutineScope()
     val accounts by graph.accountRepository.connections.collectAsState()
-    var status by remember { mutableStateOf<String?>(null) }
+    var status by remember(category) { mutableStateOf<String?>(null) }
     var deviceCode by remember { mutableStateOf<String?>(null) }
     var connecting by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(graph.settings.aiProviderMode()) }
@@ -79,6 +81,12 @@ fun SettingsDetail(
     var endpoint by remember { mutableStateOf(graph.settings.cloudBaseUrl()) }
     var model by remember { mutableStateOf(graph.settings.cloudModel()) }
     var approvals by remember { mutableStateOf(graph.toolPermissions.approvedActions()) }
+    LaunchedEffect(status) {
+        if (status != null) { delay(6_000); status = null }
+    }
+    LaunchedEffect(accounts["github"]?.status) {
+        if (accounts["github"]?.status == ConnectionStatus.CONNECTED) deviceCode = null
+    }
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         when (category) {
@@ -133,6 +141,7 @@ fun SettingsDetail(
             }
             "accounts" -> {
                 AccountCard("GitHub", accounts["github"]?.let { graph.accountRepository.statusMessage(it) } ?: "연결 안 됨") {
+                    if (accounts["github"]?.status != ConnectionStatus.CONNECTED) {
                     deviceCode?.let { code ->
                         androidx.compose.foundation.text.selection.SelectionContainer {
                             Text("인증 코드: $code", style = MaterialTheme.typography.titleLarge)
@@ -146,14 +155,23 @@ fun SettingsDetail(
                             catch (e: kotlinx.coroutines.CancellationException) {
                                 graph.accountRepository.refresh(System.currentTimeMillis())
                                 throw e
-                            } finally { connecting = false }
+                            } finally { connecting = false; deviceCode = null }
                         }
                     }, enabled = !connecting) { Text(if (connecting) "승인 대기 중" else "GitHub로 로그인") }
+                    }
+                    if (accounts["github"]?.status != null && accounts["github"]?.status != ConnectionStatus.NOT_CONNECTED) {
                     TextButton(onClick = { disconnect("github") }, enabled = !connecting) { Text("연결 해제") }
+                    }
                 }
                 AccountCard("Google · Gmail 및 캘린더", accounts["gmail"]?.let { graph.accountRepository.statusMessage(it) } ?: "연결 안 됨") {
-                    Button(onClick = { status = connectGoogle() }) { Text("Google로 로그인") }
+                    if (accounts["gmail"]?.status != ConnectionStatus.CONNECTED) {
+                    Button(onClick = { status = connectGoogle() }, enabled = accounts["gmail"]?.status != ConnectionStatus.CONNECTING) {
+                        Text(if (accounts["gmail"]?.status == ConnectionStatus.CONNECTING) "연결 중" else "Google로 로그인")
+                    }
+                    }
+                    if (accounts["gmail"]?.status != null && accounts["gmail"]?.status != ConnectionStatus.NOT_CONNECTED) {
                     TextButton(onClick = { disconnect("gmail") }) { Text("연결 해제") }
+                    }
                 }
                 AccountCard("기기 메모", "로그인 없이 사용") {}
             }

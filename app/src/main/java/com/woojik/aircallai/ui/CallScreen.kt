@@ -69,7 +69,10 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
         (state as? ConversationState.Error)?.let {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer) {
-                Text(it.message, Modifier.fillMaxWidth().padding(16.dp))
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(it.message)
+                    TextButton(onClick = { vm.engine.clearError() }) { Text("닫기") }
+                }
             }
         }
         if (active) {
