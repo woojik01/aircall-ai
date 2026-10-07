@@ -15,6 +15,11 @@ def verify(debug_apk, release_apk):
             for marker in MARKERS:
                 if (marker in dex) != debug:
                     raise AssertionError(f"Unexpected diagnostic marker {marker!r} in {path}")
+            manifest = apk.read("AndroidManifest.xml")
+            launcher = "DebugCrashLogActivity"
+            present = any(launcher.encode(encoding) in manifest for encoding in ("utf-8", "utf-16-le"))
+            if present != debug:
+                raise AssertionError(f"Unexpected diagnostic launcher in {path}")
         print(f"Verified {'debug diagnostics' if debug else 'production exclusion'}: {path}")
 
 

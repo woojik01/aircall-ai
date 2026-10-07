@@ -189,6 +189,14 @@ jobs:
             adb shell am instrument -w -e phase diagnostic-verify -e class com.woojik.aircallai.CrashDiagnosticsTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/diagnostic-verify.txt
             cat upgrade/diagnostic-verify.txt
             grep -q 'OK (1 test)' upgrade/diagnostic-verify.txt
+            adb shell pm revoke com.woojik.aircallai android.permission.POST_NOTIFICATIONS
+            adb shell am instrument -w -e phase blocked -e class com.woojik.aircallai.DebugDiagnosticsAccessTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/diagnostic-blocked.txt
+            cat upgrade/diagnostic-blocked.txt
+            grep -q 'OK (1 test)' upgrade/diagnostic-blocked.txt
+            adb shell pm grant com.woojik.aircallai android.permission.POST_NOTIFICATIONS
+            adb shell am instrument -w -e phase repost -e class com.woojik.aircallai.DebugDiagnosticsAccessTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/diagnostic-repost.txt
+            cat upgrade/diagnostic-repost.txt
+            grep -q 'OK (1 test)' upgrade/diagnostic-repost.txt
       - name: Upload update verification results
         if: always()
         uses: actions/upload-artifact@v4

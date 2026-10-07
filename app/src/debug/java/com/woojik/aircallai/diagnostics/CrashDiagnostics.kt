@@ -30,6 +30,9 @@ object CrashDiagnostics {
     @Volatile private var stage = "application-create"
     @Volatile private var cachedReport: String? = null
     @Volatile private var postedReport: String? = null
+    @Volatile private var queryStatus = "종료 기록 조회 대기"
+    @Volatile private var deliveryStatus = "알림 전송 대기"
+    @Volatile private var storageStatus = "기록 파일 확인 대기"
 
     @Synchronized fun install(application: Application) {
         if (app != null) return
@@ -44,11 +47,9 @@ object CrashDiagnostics {
             }
         }
         worker.execute {
-            try {
-                cachedReport = readReport(application)
-                collectPreviousExit(application)
-                publish(application)
-            } catch (_: Throwable) { }
+            cachedReport = readReport(application)
+            safeCollect(application)
+            safePublish(application)
         }
     }
 
@@ -69,7 +70,53 @@ object CrashDiagnostics {
     }
 
     fun onNotificationsAvailable(context: Context) {
-        worker.execute { try { publish(context.applicationContext) } catch (_: Throwable) { } }
+        worker.execute { safePublish(context.applicationContext) }
+    }
+
+    /** Accessible without notification permission and without initializing the main screen. */
+    fun loadSnapshot(context: Context, callback: (String) -> Unit) = review(context, false, false, callback)
+    fun retryNotification(context: Context, callback: (String) -> Unit) = review(context, true, false, callback)
+    fun testNotification(context: Context, callback: (String) -> Unit) = review(context, false, true, callback)
+
+    private fun review(context: Context, forceNotify: Boolean, test: Boolean, callback: (String) -> Unit) {
+        worker.execute {
+            val application = context.applicationContext as Application
+            cachedReport = readReport(application)
+            // Manual inspection may recover a crash that happened before an APK update.
+            safeCollect(application, reviewHistory = true)
+            if (test) {
+                try {
+                    if (notificationsAllowed(application)) {
+                        postNotification(application, "종료 기록이 아닌 알림 전달 확인용 테스트입니다.",
+                            "AirCall AI 알림 테스트", 9102)
+                        deliveryStatus = "테스트 알림 전송 완료"
+                    }
+                } catch (failure: Throwable) { deliveryStatus = "알림 전송 실패: ${failure.javaClass.simpleName}" }
+            } else safePublish(application, forceNotify)
+            callback(snapshot(application))
+        }
+    }
+
+    private fun safeCollect(application: Application, reviewHistory: Boolean = false) {
+        try { collectPreviousExit(application, reviewHistory) }
+        catch (failure: Throwable) { queryStatus = "종료 기록 조회 실패: ${failure.javaClass.simpleName}" }
+    }
+
+    private fun safePublish(context: Context, force: Boolean = false) {
+        try { publish(context, force) }
+        catch (failure: Throwable) { deliveryStatus = "알림 전송 실패: ${failure.javaClass.simpleName}" }
+    }
+
+    private fun snapshot(context: Context): String = buildString {
+        append("AirCall AI 종료 진단 (개발용)\n")
+        append("빌드: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n")
+        append("Android: ${Build.VERSION.SDK_INT}\n")
+        append("알림 상태: ").append(try { notificationStatus(context) }
+            catch (failure: Exception) { "상태 조회 실패: ${failure.javaClass.simpleName}" }).append('\n')
+        append("조회 상태: ").append(queryStatus).append('\n')
+        append("저장 상태: ").append(storageStatus).append('\n')
+        append("전송 상태: ").append(deliveryStatus).append("\n\n")
+        append(cachedReport ?: "저장된 종료 기록이 없습니다. 알림 테스트는 앱을 종료시키거나 종료 로그를 만들지 않습니다.")
     }
 
     private fun header(time: Long) = "time=$time\nAirCall AI ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
@@ -82,15 +129,20 @@ object CrashDiagnostics {
         publish(application)
     }
 
-    private fun collectPreviousExit(application: Application) {
-        if (Build.VERSION.SDK_INT < 30) return
+    private fun collectPreviousExit(application: Application, reviewHistory: Boolean = false) {
+        if (Build.VERSION.SDK_INT < 30) {
+            queryStatus = "이 Android 버전은 시스템 종료 기록 조회를 지원하지 않습니다. Java 예외 기록만 지원합니다."
+            return
+        }
         val prefs = application.getSharedPreferences("debug_crash_diagnostics", Context.MODE_PRIVATE)
-        @Suppress("DEPRECATION")
-        val installedAt = application.packageManager.getPackageInfo(application.packageName, 0).lastUpdateTime
-        val seen = prefs.getLong("last_exit", installedAt)
-        val records = application.getSystemService(ActivityManager::class.java)
-            .getHistoricalProcessExitReasons(null, 0, 8)
-            .filter { it.processName == application.packageName && it.timestamp > seen }
+        val earliest = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+        val seen = if (reviewHistory) earliest else prefs.getLong("last_exit", earliest)
+        val history = application.getSystemService(ActivityManager::class.java)
+            .getHistoricalProcessExitReasons(null, 0, 32)
+            .filter { it.processName == application.packageName }
+        queryStatus = "시스템 종료 기록 ${history.size}건" +
+            (history.maxByOrNull { it.timestamp }?.let { "; 최근 사유=${it.reason}, 시각=${it.timestamp}" } ?: "")
+        val records = history.filter { it.timestamp > seen }
         val exit = records.filter { it.reason in setOf(ApplicationExitInfo.REASON_CRASH,
             ApplicationExitInfo.REASON_CRASH_NATIVE, ApplicationExitInfo.REASON_ANR,
             ApplicationExitInfo.REASON_LOW_MEMORY, ApplicationExitInfo.REASON_SIGNALED,
@@ -106,10 +158,13 @@ object CrashDiagnostics {
             }
             // Preserve the Java stack saved just before this same process died.
             val previousTime = cachedReport?.lineSequence()?.firstOrNull()?.substringAfter("time=", "")?.toLongOrNull()
+            if (cachedReport?.contains("\nsystem-time=${exit.timestamp}\n") == true ||
+                (previousTime != null && previousTime > exit.timestamp + 10_000)) return
             val javaReport = cachedReport?.takeIf { previousTime != null && kotlin.math.abs(exit.timestamp - previousTime) < 10_000 }
             val summary = exit.processStateSummary?.toString(Charsets.UTF_8)
                 ?.takeIf { it.matches(Regex("[a-z-]{1,64}")) } ?: "unavailable"
             val report = (javaReport ?: header(exit.timestamp)) +
+                "\nsystem-time=${exit.timestamp}\n" +
                 "\nAndroid exit=$reason; status=${exit.status}; stage=$summary\n" +
                 "PSS=${exit.pss} KB; RSS=${exit.rss} KB (last sampled)\n" +
                 if (exit.reason == ApplicationExitInfo.REASON_ANR) anrFrames(exit) else ""
@@ -142,39 +197,63 @@ object CrashDiagnostics {
         try { stream.write(bounded.toByteArray(Charsets.UTF_8)); file.finishWrite(stream) }
         catch (failure: Throwable) { file.failWrite(stream); throw failure }
         cachedReport = bounded
+        storageStatus = "종료 기록 저장됨"
     }
 
     @Synchronized internal fun readReport(context: Context): String? = try {
         AtomicFile(File(context.noBackupFilesDir, "debug-last-crash.txt")).openRead().use {
-            it.readBytes().toString(Charsets.UTF_8).take(DebugCrashReport.MAX_CHARS)
+            it.readBytes().toString(Charsets.UTF_8).take(DebugCrashReport.MAX_CHARS).also {
+                storageStatus = "저장된 종료 기록 있음"
+            }
         }
-    } catch (_: Exception) { null }
+    } catch (_: java.io.FileNotFoundException) { storageStatus = "저장된 종료 기록 없음"; null
+    } catch (failure: Exception) { storageStatus = "파일 읽기 실패: ${failure.javaClass.simpleName}"; null }
 
-    private fun publish(context: Context) {
-        val report = cachedReport ?: return
-        if (postedReport == report) return
+    internal fun notificationStatus(context: Context): String {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context,
-                Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+                Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return "알림 권한 꺼짐"
         val manager = context.getSystemService(NotificationManager::class.java)
-        if (!manager.areNotificationsEnabled()) return
+        if (!manager.areNotificationsEnabled()) return "앱 알림 꺼짐"
+        if (manager.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return "종료 로그 알림 채널 꺼짐"
+        return "알림 사용 가능"
+    }
+
+    private fun notificationsAllowed(context: Context): Boolean {
+        val status = notificationStatus(context)
+        if (status != "알림 사용 가능") { deliveryStatus = status; return false }
+        return true
+    }
+
+    private fun publish(context: Context, force: Boolean = false) {
+        val report = cachedReport ?: run { deliveryStatus = "종료 기록 없음: 전송할 로그가 없습니다"; return }
+        if (!notificationsAllowed(context)) return
+        if (!force && postedReport == report) { deliveryStatus = "이미 알린 기록 (다시 표시 버튼으로 재전송 가능)"; return }
         val prefs = context.getSharedPreferences("debug_crash_diagnostics", Context.MODE_PRIVATE)
         val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
             .digest(report.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
-        if (prefs.getString("notified_report", null) == fingerprint) { postedReport = report; return }
+        if (!force && prefs.getString("notified_report", null) == fingerprint) {
+            postedReport = report; deliveryStatus = "이미 알린 기록 (다시 표시 버튼으로 재전송 가능)"; return
+        }
+        postNotification(context, report, "AirCall AI 개발용 종료 로그", NOTIFICATION_ID)
+        postedReport = report
+        deliveryStatus = "종료 로그 알림 전송 완료"
+        prefs.edit().putString("notified_report", fingerprint).commit()
+    }
+
+    private fun postNotification(context: Context, report: String, title: String, id: Int) {
+        val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "개발용 앱 종료 로그", NotificationManager.IMPORTANCE_DEFAULT))
         val intent = Intent(context, DebugCrashLogActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val pending = PendingIntent.getActivity(context, NOTIFICATION_ID, intent,
+        val pending = PendingIntent.getActivity(context, id, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val public = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.stat_notify_error)
             .setContentTitle("개발용 앱 종료 기록").build()
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_notify_error).setContentTitle("AirCall AI 개발용 종료 로그")
+            .setSmallIcon(android.R.drawable.stat_notify_error).setContentTitle(title)
             .setContentText("눌러서 로그 확인·복사")
             .setStyle(NotificationCompat.BigTextStyle().bigText(report.take(3_000)))
             .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(public).build()
-        manager.notify(NOTIFICATION_ID, notification)
-        postedReport = report
-        prefs.edit().putString("notified_report", fingerprint).commit()
+        manager.notify(id, notification)
     }
 }
