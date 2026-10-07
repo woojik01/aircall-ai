@@ -23,18 +23,18 @@ class AccountConnectionRepository(
         val updated = states.value.toMutableMap()
         for (provider in providerMap.keys) {
             try {
-            val tokens = store.load(provider)
-            val savedName = store.loadDisplayName(provider)
-            updated[provider] = ConnectionAccount(
-                provider = provider,
-                displayName = savedName,
-                status = when {
-                    tokens == null -> ConnectionStatus.NOT_CONNECTED
-                    tokens.isExpired(nowEpochMs) && tokens.refreshToken == null -> ConnectionStatus.REAUTH_REQUIRED
-                    tokens.isExpired(nowEpochMs) -> ConnectionStatus.EXPIRED
-                    else -> ConnectionStatus.CONNECTED
-                },
-            )
+                val tokens = store.load(provider)
+                val savedName = store.loadDisplayName(provider)
+                updated[provider] = ConnectionAccount(
+                    provider = provider,
+                    displayName = savedName,
+                    status = when {
+                        tokens == null -> ConnectionStatus.NOT_CONNECTED
+                        tokens.isExpired(nowEpochMs) && tokens.refreshToken == null -> ConnectionStatus.REAUTH_REQUIRED
+                        tokens.isExpired(nowEpochMs) -> ConnectionStatus.EXPIRED
+                        else -> ConnectionStatus.CONNECTED
+                    },
+                )
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
