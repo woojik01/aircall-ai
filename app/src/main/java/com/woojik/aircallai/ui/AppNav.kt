@@ -67,20 +67,24 @@ class MainActivity : ComponentActivity() {
     // Google AuthorizationClient 권한 승인 결과를 받는 ActivityResultLauncher.
     private val startGoogleAuthorization =
         registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-            val appGraph = graph()
-            try {
-                val authorizationResult =
-                    Identity.getAuthorizationClient(this)
-                        .getAuthorizationResultFromIntent(result.data)
-                val accessToken = authorizationResult.accessToken
-                if (accessToken.isNullOrBlank()) {
-                    appGraph.accountRepository.mark(
-                        "gmail", ConnectionStatus.ERROR,
-                        errorMessage = "Google이 액세스 토큰을 반환하지 않았습니다 (결과 코드 ${result.resultCode}).",
-                    )
-                    return@registerForActivityResult
-                }
-                uiScope.launch {
+            uiScope.launch {
+                // A restored OAuth result may arrive before asynchronous startup has finished.
+                val appGraph = try { withContext(Dispatchers.IO) { graph() } }
+                catch (failure: CancellationException) { throw failure }
+                catch (failure: Exception) { showStartupFailure(failure); return@launch }
+                catch (failure: LinkageError) { showStartupFailure(failure); return@launch }
+                try {
+                    val authorizationResult =
+                        Identity.getAuthorizationClient(this)
+                            .getAuthorizationResultFromIntent(result.data)
+                    val accessToken = authorizationResult.accessToken
+                    if (accessToken.isNullOrBlank()) {
+                        appGraph.accountRepository.mark(
+                            "gmail", ConnectionStatus.ERROR,
+                            errorMessage = "Google이 액세스 토큰을 반환하지 않았습니다 (결과 코드 ${result.resultCode}).",
+                        )
+                        return@launch
+                    }
                     appGraph.accountRepository.connect(
                         "gmail",
                         com.woojik.aircallai.auth.OAuthTokens(
@@ -91,17 +95,18 @@ class MainActivity : ComponentActivity() {
                         null,
                         System.currentTimeMillis(),
                     )
+                } catch (e: ApiException) {
+                    appGraph.accountRepository.mark(
+                        "gmail", ConnectionStatus.ERROR,
+                        errorMessage = "Google 인증 오류 (코드 ${e.statusCode}): 계정 권한을 승인하지 못했습니다. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 계정을 추가해야 합니다.",
+                    )
+                } catch (e: CancellationException) { throw e
+                } catch (e: Exception) {
+                    appGraph.accountRepository.mark(
+                        "gmail", ConnectionStatus.ERROR,
+                        errorMessage = "Google 인증 결과를 처리하지 못했습니다. 다시 연결해 주세요.",
+                    )
                 }
-            } catch (e: ApiException) {
-                appGraph.accountRepository.mark(
-                    "gmail", ConnectionStatus.ERROR,
-                    errorMessage = "Google 인증 오류 (코드 ${e.statusCode}): 계정 권한을 승인하지 못했습니다. 테스트 모드 앱이면 Google Cloud 테스트 사용자 목록에 계정을 추가해야 합니다.",
-                )
-            } catch (e: Exception) {
-                appGraph.accountRepository.mark(
-                    "gmail", ConnectionStatus.ERROR,
-                    errorMessage = "Google 인증 결과를 처리하지 못했습니다. 다시 연결해 주세요.",
-                )
             }
         }
 
