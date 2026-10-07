@@ -1,6 +1,8 @@
 package com.woojik.aircallai.diagnostics
 
 import android.Manifest
+import android.app.Activity
+import android.os.Bundle
 import android.app.ActivityManager
 import android.app.Application
 import android.app.ApplicationExitInfo
@@ -33,6 +35,37 @@ object CrashDiagnostics {
     @Volatile private var queryStatus = "종료 기록 조회 대기"
     @Volatile private var deliveryStatus = "알림 전송 대기"
     @Volatile private var storageStatus = "기록 파일 확인 대기"
+    @Volatile private var latestMainTrace: String? = null
+    @Volatile private var traceStatus = "실행 기록 확인 대기"
+    private val mainEvents = java.util.ArrayDeque<String>()
+    private var mainStartedAt = 0L
+
+    // A disappearing Activity need not kill its process, so exit history alone is insufficient.
+    private fun isMain(activity: Activity) = activity.javaClass.name == "com.woojik.aircallai.ui.MainActivity"
+
+    @Synchronized private fun beginMainTrace() {
+        mainStartedAt = System.currentTimeMillis()
+        mainEvents.clear()
+        mainEvent("main-launch")
+    }
+
+    @Synchronized private fun mainEvent(value: String) {
+        if (mainStartedAt == 0L) return
+        mainEvents.addLast("${System.currentTimeMillis()} $value")
+        while (mainEvents.size > 32) mainEvents.removeFirst()
+        val report = "launch-time=$mainStartedAt; build=${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
+            mainEvents.joinToString("\n", postfix = "\n")
+        latestMainTrace = report
+        val application = app ?: return
+        worker.execute {
+            try {
+                val file = AtomicFile(File(application.noBackupFilesDir, "debug-main-launch.txt"))
+                val stream = file.startWrite()
+                try { stream.write(report.toByteArray(Charsets.UTF_8)); file.finishWrite(stream); traceStatus = "실행 기록 저장됨" }
+                catch (failure: Throwable) { file.failWrite(stream); throw failure }
+            } catch (failure: Throwable) { traceStatus = "실행 기록 저장 실패: ${failure.javaClass.simpleName}" }
+        }
+    }
 
     @Synchronized fun install(application: Application) {
         if (app != null) return
@@ -46,7 +79,35 @@ object CrashDiagnostics {
                 else { Process.killProcess(Process.myPid()); kotlin.system.exitProcess(10) }
             }
         }
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityPreCreated(activity: Activity, state: Bundle?) {
+                if (isMain(activity)) beginMainTrace()
+            }
+            override fun onActivityCreated(activity: Activity, state: Bundle?) {
+                if (isMain(activity)) {
+                    if (Build.VERSION.SDK_INT < 29) beginMainTrace()
+                    mainEvent("main-created")
+                }
+            }
+            override fun onActivityStarted(activity: Activity) { if (isMain(activity)) mainEvent("main-started") }
+            override fun onActivityResumed(activity: Activity) { if (isMain(activity)) mainEvent("main-resumed") }
+            override fun onActivityPaused(activity: Activity) { if (isMain(activity)) mainEvent("main-paused") }
+            override fun onActivityStopped(activity: Activity) { if (isMain(activity)) mainEvent("main-stopped; finishing=${activity.isFinishing}") }
+            override fun onActivityDestroyed(activity: Activity) { if (isMain(activity))
+                mainEvent("main-destroyed; finishing=${activity.isFinishing}; changing-config=${activity.isChangingConfigurations}") }
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
+        })
         worker.execute {
+            try { val savedTrace =
+                File(application.noBackupFilesDir, "debug-main-launch.txt").takeIf { it.isFile }
+                    ?.reader(Charsets.UTF_8)?.use { reader ->
+                        val buffer = CharArray(8_192)
+                        val count = reader.read(buffer)
+                        if (count > 0) String(buffer, 0, count) else null
+                    }
+                synchronized(this) { if (latestMainTrace == null) latestMainTrace = savedTrace }
+                traceStatus = if (latestMainTrace == null) "저장된 실행 기록 없음" else "저장된 실행 기록 있음"
+            } catch (failure: Exception) { traceStatus = "실행 기록 읽기 실패: ${failure.javaClass.simpleName}" }
             cachedReport = readReport(application)
             safeCollect(application)
             safePublish(application)
@@ -56,6 +117,7 @@ object CrashDiagnostics {
     fun markStage(value: String) {
         // Callers supply constant stage labels, never user data.
         stage = value.take(64)
+        mainEvent("stage=$stage")
         val application = app ?: return
         val capturedStage = stage
         if (Build.VERSION.SDK_INT >= 30) worker.execute {
@@ -116,6 +178,10 @@ object CrashDiagnostics {
         append("조회 상태: ").append(queryStatus).append('\n')
         append("저장 상태: ").append(storageStatus).append('\n')
         append("전송 상태: ").append(deliveryStatus).append("\n\n")
+        append("최근 메인 실행 (수명주기 기록이며 충돌 판정이 아닙니다):\n")
+        append("저장 상태: ").append(traceStatus).append('\n')
+        append(latestMainTrace ?: "메인 앱 실행 기록 없음\n").append('\n')
+        append("저장된 충돌 기록 (아래 time은 발생 시각):\n")
         append(cachedReport ?: "저장된 종료 기록이 없습니다. 알림 테스트는 앱을 종료시키거나 종료 로그를 만들지 않습니다.")
     }
 
@@ -124,7 +190,8 @@ object CrashDiagnostics {
 
     private fun recordException(failure: Throwable, thread: String) {
         val application = app ?: return
-        val report = header(System.currentTimeMillis()) + "stage=$stage; thread=$thread\n" + DebugCrashReport.exception(failure)
+        val report = header(System.currentTimeMillis()) + "stage=$stage; thread=$thread\n" + DebugCrashReport.exception(failure) +
+            "\nmain-launch-trace:\n" + (latestMainTrace ?: "unavailable\n")
         saveReport(application, report)
         publish(application)
     }
@@ -163,7 +230,7 @@ object CrashDiagnostics {
             val javaReport = cachedReport?.takeIf { previousTime != null && kotlin.math.abs(exit.timestamp - previousTime) < 10_000 }
             val summary = exit.processStateSummary?.toString(Charsets.UTF_8)
                 ?.takeIf { it.matches(Regex("[a-z-]{1,64}")) } ?: "unavailable"
-            val report = (javaReport ?: header(exit.timestamp)) +
+            val report = (javaReport ?: (header(exit.timestamp).replace("AirCall AI ", "collector-build=AirCall AI ") + "crashed-build=unknown; source=system-history\n")) +
                 "\nsystem-time=${exit.timestamp}\n" +
                 "\nAndroid exit=$reason; status=${exit.status}; stage=$summary\n" +
                 "PSS=${exit.pss} KB; RSS=${exit.rss} KB (last sampled)\n" +

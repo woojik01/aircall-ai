@@ -31,6 +31,10 @@ class DebugCrashLogActivity : Activity() {
         fun button(label: String, action: () -> Unit) {
             layout.addView(Button(this).apply { text = label; setOnClickListener { action() } })
         }
+        button("메인 앱 열기 · 실행 기록 수집") {
+            startActivity(Intent(this, com.woojik.aircallai.ui.MainActivity::class.java)
+                .setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER))
+        }
         button("새로고침") { refresh() }
         button("알림 권한 허용") {
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)

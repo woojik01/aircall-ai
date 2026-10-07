@@ -2,7 +2,7 @@
 import sys
 import zipfile
 
-MARKERS = (b"aircall_debug_crashes", b"debug-last-crash.txt", b"debug_crash_diagnostics")
+MARKERS = (b"aircall_debug_crashes", b"debug-last-crash.txt", b"debug_crash_diagnostics", b"debug-main-launch.txt")
 
 
 def verify(debug_apk, release_apk):
