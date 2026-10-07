@@ -172,9 +172,12 @@ jobs:
             grep -q 'OK (2 tests)' upgrade/seed.txt
             adb shell am force-stop com.woojik.aircallai
             adb install -r upgrade/current/aircall-dev.apk
+            adb shell pm grant com.woojik.aircallai android.permission.POST_NOTIFICATIONS
             adb shell am instrument -w -e phase verify com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/verify.txt
             cat upgrade/verify.txt
             adb logcat -d -b crash > upgrade/crashes.txt
+            adb logcat -d > upgrade/device-logcat.txt
+            adb shell dumpsys activity activities > upgrade/activity-state.txt
             grep -q 'OK (2 tests)' upgrade/verify.txt
       - name: Upload update verification results
         if: always()

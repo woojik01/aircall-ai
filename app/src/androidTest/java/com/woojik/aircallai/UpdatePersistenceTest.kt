@@ -54,13 +54,13 @@ class UpdatePersistenceTest {
         assertTrue("Must be a higher-version in-place install", oldVersion > 0 &&
             context.packageManager.getPackageInfo(context.packageName, 0).versionCode > oldVersion)
         // Exercise the real application startup as well as reading files directly.
-        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val activity = launchMainActivity()
         val graph = (context.applicationContext as AirCallApp).graph
         repeat(100) {
             if (!graph.chatRooms.ready.value) Thread.sleep(50)
         }
         assertTrue(graph.chatRooms.ready.value)
+        assertChatVisible()
         assertTrue(graph.chatRooms.rooms.value.contains(expected))
         assertEquals(SettingsRepository.THEME_DARK, settings.themeMode())
         assertEquals(SettingsRepository.MODE_CLOUD, settings.aiProviderMode())
@@ -89,15 +89,14 @@ class UpdatePersistenceTest {
             assertEquals(SettingsRepository.THEME_SYSTEM, settings.themeMode())
             assertFalse(settings.localUseGpu())
             repeat(2) {
-                val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                val activity = launchMainActivity()
                 val graph = (context.applicationContext as AirCallApp).graph
                 repeat(100) {
                     if (!graph.chatRooms.ready.value ||
                         graph.accountRepository.connections.value["gmail"]?.status != com.woojik.aircallai.auth.ConnectionStatus.ERROR)
                         Thread.sleep(50)
                 }
-                instrumentation.waitForIdleSync()
+                assertChatVisible()
                 assertTrue("Real chat navigation must start", graph.chatRooms.ready.value)
                 assertEquals(com.woojik.aircallai.auth.ConnectionStatus.ERROR,
                     graph.accountRepository.connections.value["gmail"]?.status)
@@ -106,7 +105,8 @@ class UpdatePersistenceTest {
                 assertFalse(activity.isFinishing)
                 assertFalse(activity.isDestroyed)
                 instrumentation.runOnMainSync { activity.finish() }
-                instrumentation.waitForIdleSync()
+                repeat(100) { if (!activity.isDestroyed) Thread.sleep(50) }
+                assertTrue(activity.isDestroyed)
             }
         } finally {
             unreadable.delete()
@@ -126,6 +126,51 @@ class UpdatePersistenceTest {
             restore("local_use_gpu", previousGpu)
             assertTrue(editor.commit())
         }
+    }
+
+    // Measure actual resumed lifecycle and a rendered chat control rather than Looper idleness.
+    private fun launchMainActivity(): MainActivity {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val app = context.applicationContext as android.app.Application
+        val resumed = java.util.concurrent.CountDownLatch(1)
+        val activity = java.util.concurrent.atomic.AtomicReference<MainActivity>()
+        val callbacks = object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(value: android.app.Activity) {
+                if (value is MainActivity) { activity.set(value); resumed.countDown() }
+            }
+            override fun onActivityCreated(value: android.app.Activity, state: android.os.Bundle?) {}
+            override fun onActivityStarted(value: android.app.Activity) {}
+            override fun onActivityPaused(value: android.app.Activity) {}
+            override fun onActivityStopped(value: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(value: android.app.Activity, state: android.os.Bundle) {}
+            override fun onActivityDestroyed(value: android.app.Activity) {}
+        }
+        app.registerActivityLifecycleCallbacks(callbacks)
+        try {
+            context.startActivity(Intent(context, MainActivity::class.java).setAction(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            assertTrue("MainActivity must resume within 15 seconds", resumed.await(15, java.util.concurrent.TimeUnit.SECONDS))
+            return checkNotNull(activity.get())
+        } finally { app.unregisterActivityLifecycleCallbacks(callbacks) }
+    }
+
+    private fun assertChatVisible() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val deadline = android.os.SystemClock.uptimeMillis() + 15_000
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            val nodes = java.util.ArrayDeque<android.view.accessibility.AccessibilityNodeInfo>()
+            automation.rootInActiveWindow?.let { nodes.add(it) }
+            var checked = 0
+            while (nodes.isNotEmpty() && checked++ < 500) {
+                val node = nodes.removeFirst()
+                if (node.packageName?.toString() == InstrumentationRegistry.getInstrumentation().targetContext.packageName &&
+                    node.text?.toString() in setOf("메시지 입력", "어떤 이야기를 나눌까요?", "새 채팅")) return
+                repeat(node.childCount) { index -> node.getChild(index)?.let { nodes.add(it) } }
+            }
+            Thread.sleep(100)
+        }
+        fail("The actual chat screen must be visible after startup")
     }
 
 }
