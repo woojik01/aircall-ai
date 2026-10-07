@@ -158,8 +158,7 @@ fun AirCallUi(
                     HorizontalDivider()
                     NavigationDrawerItem(label = { Text("설정") }, icon = { AirCallIcon(UiSymbol.Theme) },
                         selected = route.startsWith("settings"),
-                        enabled = ready && entry != null,
-                        modifier = Modifier.padding(12.dp), onClick = { scope.launch {
+                        modifier = Modifier.padding(12.dp), onClick = { if (ready && entry != null) scope.launch {
                             drawer.close(); nav.navigate("settings") { launchSingleTop = true }
                         } })
                 }
