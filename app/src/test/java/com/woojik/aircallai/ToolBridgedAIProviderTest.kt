@@ -93,8 +93,8 @@ class ToolBridgedAIProviderTest {
         val (provider, fake) = bridge(listOf("그냥 대답입니다."))
         val response = provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "안녕")))
         assertEquals("그냥 대답입니다.", response.message.content)
-        // 도구 목록은 일반 메시지이며 SYSTEM 프롬프트를 주입하지 않는다.
-        assertEquals(ChatMessage.Role.USER, fake.receivedHistories[0][0].role)
+        // 시스템에는 개요를, 별도 메시지에는 상세 명세를 전달한다.
+        assertEquals(ChatMessage.Role.SYSTEM, fake.receivedHistories[0][0].role)
     }
 
     @Test
@@ -148,9 +148,11 @@ class ToolBridgedAIProviderTest {
         )
         provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "무슨 기능을 할 수 있어?")))
         val prompt = fake.receivedHistories.single().first()
-        assertEquals(ChatMessage.Role.USER, prompt.role)
-        assertTrue(prompt.content.contains("github.read_repository"))
-        assertTrue(prompt.content.contains("실행 전 도구를 못 쓴다고 단정하지 않는다"))
+        assertEquals(ChatMessage.Role.SYSTEM, prompt.role)
+        assertTrue(prompt.content.contains("github"))
+        assertTrue(prompt.content.contains("TOOL: tools.list"))
+        assertTrue(fake.receivedHistories.single().last().content.contains("github.read_repository"))
+        assertTrue(prompt.content.contains("never deny tool access without trying"))
     }
 
     @Test
@@ -170,10 +172,10 @@ class ToolBridgedAIProviderTest {
             ChatMessage(ChatMessage.Role.USER, "깃허브 저장소 보여줘"),
         ))
         val prompt = fake.receivedHistories.first().first().content
-        assertTrue(prompt.contains("TOOL: <도구>.<액션>"))
-        assertTrue(prompt.contains("owner=<소유자>"))
-        assertTrue(fake.receivedHistories.flatten().none { it.role == ChatMessage.Role.SYSTEM })
-        assertTrue(prompt.contains("음성 규칙은 최종 답변에만 적용한다"))
+        assertTrue(prompt.contains("TOOL: <tool>.<action>"))
+        assertTrue(fake.receivedHistories.first().last().content.contains("owner=VALUE"))
+        assertTrue(fake.receivedHistories.first().any { it.role == ChatMessage.Role.SYSTEM && it.content.contains("최종 답변에는 특수 기호") })
+        assertTrue(prompt.contains("Tool syntax is exempt from voice rules"))
         assertTrue(fake.receivedHistories[1].any { it.content.contains("TOOL_RESULT github.read_repository 성공") })
     }
     @Test fun catalogRefreshDoesNotExecuteExternalTool() = runTest {
@@ -219,6 +221,42 @@ class ToolBridgedAIProviderTest {
         val (provider, _) = bridge(listOf("TOOL: github.create_issue title={{TOOL_RESULT}}"), logger)
         provider.respond(listOf(ChatMessage(ChatMessage.Role.USER, "이슈 생성")))
         assertTrue(logger.entries.value.isEmpty())
+    }
+
+    @Test fun systemOverviewPreservesInstructionsAndKeepsDetailedCatalogSeparate() = runTest {
+        val fake = FakeAIProvider(listOf("안녕하세요."))
+        val provider = ToolBridgedAIProvider(fake,
+            ToolExecutor(listOf(MockGitHubTool()), InMemoryToolPermissionStore()),
+            ToolExecutionLogger(), "github.read_file owner=<소유자> repo=<저장소> path=<파일 경로> — 파일 읽기")
+        val instruction = ChatMessage(ChatMessage.Role.SYSTEM, "기존 음성 지시")
+        provider.respond(listOf(instruction, ChatMessage(ChatMessage.Role.USER, "안녕")))
+        val input = fake.receivedHistories.single()
+        assertTrue(input.first().content.contains("github"))
+        assertTrue(input.first().content.contains("TOOL: tools.list"))
+        assertTrue(input.first().content.contains("TOOL_RESULT"))
+        assertTrue(!input.first().content.contains("path=<파일 경로>"))
+        assertTrue(input.contains(instruction))
+        assertTrue(input.any { it.role == ChatMessage.Role.USER && it.content.contains("path=<파일 경로>") })
+    }
+
+    @Test fun localReducerKeepsCatalogOriginalRequestAndToolResultInEveryRound() = runTest {
+        val fake = FakeAIProvider(listOf("TOOL: tools.list",
+            "TOOL: github.read_repository owner=a repo=b", "조회했습니다."), ProviderType.LOCAL)
+        val provider = ToolBridgedAIProvider(fake,
+            ToolExecutor(listOf(MockGitHubTool()), InMemoryToolPermissionStore()),
+            ToolExecutionLogger(), "github.read_repository owner=<소유자> repo=<저장소> — 저장소 조회")
+        val original = "깃허브 저장소 조회"
+        provider.respond(listOf(ChatMessage(ChatMessage.Role.SYSTEM, "최종 답변은 음성에 맞춘다."),
+            ChatMessage(ChatMessage.Role.USER, original)))
+        assertEquals(3, fake.receivedHistories.size)
+        fake.receivedHistories.forEach { history ->
+            val bounded = com.woojik.aircallai.ai.local.localInferenceHistory(history)
+            assertTrue(bounded.first().role == ChatMessage.Role.SYSTEM)
+            assertTrue(bounded.last().content.contains(original))
+            assertTrue(bounded.last().content.contains("github.read_repository"))
+        }
+        val finalInput = com.woojik.aircallai.ai.local.localInferenceHistory(fake.receivedHistories.last()).last()
+        assertTrue(finalInput.content.contains("TOOL_RESULT github.read_repository 성공"))
     }
 
 }
