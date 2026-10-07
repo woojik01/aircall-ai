@@ -169,12 +169,13 @@ jobs:
             adb install upgrade/test/app-debug-androidTest.apk
             adb shell am instrument -w -e phase seed com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/seed.txt
             cat upgrade/seed.txt
-            grep -q 'OK (1 test)' upgrade/seed.txt
+            grep -q 'OK (2 tests)' upgrade/seed.txt
             adb shell am force-stop com.woojik.aircallai
             adb install -r upgrade/current/aircall-dev.apk
             adb shell am instrument -w -e phase verify com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/verify.txt
             cat upgrade/verify.txt
-            grep -q 'OK (1 test)' upgrade/verify.txt
+            adb logcat -d -b crash > upgrade/crashes.txt
+            grep -q 'OK (2 tests)' upgrade/verify.txt
       - name: Upload update verification results
         if: always()
         uses: actions/upload-artifact@v4
