@@ -142,4 +142,17 @@ class FileCredentialManagerTest {
         assertTrue(rejected)
         assertArrayEquals(before, dir.resolve("cloud_ai.bin").readBytes())
     }
+    @Test fun unavailableStorageDoesNotThrowDuringApplicationGraphConstruction() = runTest {
+        val blocked = tmp.newFile("blocked-credentials")
+        blocked.writeText("preserved")
+        val manager = FileCredentialManager(blocked, AesCryptoEngine())
+        assertNull(manager.load("cloud_ai"))
+        try {
+            manager.save("cloud_ai", "key".toByteArray())
+            fail("Saving must report unavailable storage")
+        } catch (_: IllegalStateException) { }
+        assertEquals("preserved", blocked.readText())
+    }
+
 }
+

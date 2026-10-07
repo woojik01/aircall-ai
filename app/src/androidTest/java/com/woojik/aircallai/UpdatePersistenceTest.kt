@@ -35,6 +35,7 @@ class UpdatePersistenceTest {
         val expected = ChatRoom(id = "upgrade-room", title = "업데이트 보존", renamed = true,
             messages = listOf(ChatMessage(ChatMessage.Role.USER, "저장된 대화")))
         if (InstrumentationRegistry.getArguments().getString("phase") == "seed") {
+            settings.acceptMinimumAgeAcknowledgement()
             settings.setThemeMode(SettingsRepository.THEME_DARK)
             settings.setAiProviderMode(SettingsRepository.MODE_CLOUD)
             settings.setCloudModel("upgrade-fixture-model")
@@ -72,4 +73,59 @@ class UpdatePersistenceTest {
         assertEquals("test-only-note", note.readText())
         instrumentation.runOnMainSync { activity.finish() }
     }
+    @Test fun legacySettingsAndUnreadableAccountDoNotCrashRepeatedLaunch() {
+        if (InstrumentationRegistry.getArguments().getString("phase") == "seed") return
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val prefs = context.getSharedPreferences("aircall_settings", 0)
+        val previousTheme = prefs.all["theme_mode"]
+        val previousGpu = prefs.all["local_use_gpu"]
+        val unreadable = File(AppStorage.credentialsDir(context), "oauth.gmail.account.bin")
+        assertFalse("Fixture must not replace account data", unreadable.exists())
+        assertTrue(unreadable.mkdir())
+        assertTrue(prefs.edit().putInt("theme_mode", 17).putBoolean("local_use_gpu", false).commit())
+        try {
+            val settings = SettingsRepository(SharedPrefsStore(context))
+            assertEquals(SettingsRepository.THEME_SYSTEM, settings.themeMode())
+            assertFalse(settings.localUseGpu())
+            repeat(2) {
+                val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                val graph = (context.applicationContext as AirCallApp).graph
+                repeat(100) {
+                    if (!graph.chatRooms.ready.value ||
+                        graph.accountRepository.connections.value["gmail"]?.status != com.woojik.aircallai.auth.ConnectionStatus.ERROR)
+                        Thread.sleep(50)
+                }
+                instrumentation.waitForIdleSync()
+                assertTrue("Real chat navigation must start", graph.chatRooms.ready.value)
+                assertEquals(com.woojik.aircallai.auth.ConnectionStatus.ERROR,
+                    graph.accountRepository.connections.value["gmail"]?.status)
+                assertEquals(com.woojik.aircallai.auth.ConnectionStatus.CONNECTED,
+                    graph.accountRepository.connections.value["github"]?.status)
+                assertFalse(activity.isFinishing)
+                assertFalse(activity.isDestroyed)
+                instrumentation.runOnMainSync { activity.finish() }
+                instrumentation.waitForIdleSync()
+            }
+        } finally {
+            unreadable.delete()
+            val editor = prefs.edit()
+            fun restore(key: String, value: Any?) {
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    null -> editor.remove(key)
+                    else -> error("Unexpected fixture setting type")
+                }
+            }
+            restore("theme_mode", previousTheme)
+            restore("local_use_gpu", previousGpu)
+            assertTrue(editor.commit())
+        }
+    }
+
 }

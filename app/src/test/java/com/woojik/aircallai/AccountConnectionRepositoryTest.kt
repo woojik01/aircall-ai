@@ -140,5 +140,23 @@ class AccountConnectionRepositoryTest {
             }
         }
     }
+    @Test fun oneUnreadableAccountDoesNotCrashOrBlockOtherAccounts() = runTest {
+        val credentials = object : CredentialManager {
+            override suspend fun save(service: String, credential: ByteArray) {}
+            override suspend fun load(service: String): ByteArray? {
+                if (service == OAuthCredentialStore.serviceKey("github")) throw java.io.IOException("unreadable")
+                return null
+            }
+            override suspend fun delete(service: String) {}
+            override suspend fun clearAll() {}
+        }
+        val repository = AccountConnectionRepository(OAuthCredentialStore(credentials),
+            listOf(FakeProvider("github"), FakeProvider("gmail")))
+        repository.refresh(1_000)
+        assertEquals(ConnectionStatus.ERROR, repository.connections.value["github"]!!.status)
+        assertEquals(ConnectionStatus.NOT_CONNECTED, repository.connections.value["gmail"]!!.status)
+    }
+
 }
+
 

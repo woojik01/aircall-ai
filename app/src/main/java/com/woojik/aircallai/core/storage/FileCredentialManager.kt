@@ -23,12 +23,9 @@ class FileCredentialManager(
 ) : CredentialManager {
     private val lock = Mutex()
 
-    init {
-        require(dir.isDirectory || dir.mkdirs()) { "credential dir unavailable" }
-    }
-
     override suspend fun save(service: String, credential: ByteArray) = withContext(Dispatchers.IO) { lock.withLock {
         val target = fileFor(service)
+        check(dir.isDirectory || dir.mkdirs()) { "인증 정보를 저장할 공간을 사용할 수 없습니다." }
         val tmp = File(target.parentFile, target.name + ".tmp")
         // Finish encryption and sync before replacing the last saved credential.
         // Never fall back to truncating the live file if an atomic move fails.

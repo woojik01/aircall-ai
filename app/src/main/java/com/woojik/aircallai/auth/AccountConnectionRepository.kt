@@ -22,6 +22,7 @@ class AccountConnectionRepository(
     suspend fun refresh(nowEpochMs: Long) {
         val updated = states.value.toMutableMap()
         for (provider in providerMap.keys) {
+            try {
             val tokens = store.load(provider)
             val savedName = store.loadDisplayName(provider)
             updated[provider] = ConnectionAccount(
@@ -34,6 +35,12 @@ class AccountConnectionRepository(
                     else -> ConnectionStatus.CONNECTED
                 },
             )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                updated[provider] = ConnectionAccount(provider, null, ConnectionStatus.ERROR,
+                    "저장된 계정 정보를 읽지 못했습니다. 계정 설정에서 다시 시도해 주세요.")
+            }
         }
         states.value = updated
     }

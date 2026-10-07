@@ -6,7 +6,11 @@ import android.content.Context
 class SharedPrefsStore(context: Context) : SettingsStore {
     private val prefs = context.getSharedPreferences("aircall_settings", Context.MODE_PRIVATE)
 
-    override fun getString(key: String): String? = prefs.getString(key, null)
+    override fun getString(key: String): String? = when (val value = prefs.all[key]) {
+        is String -> value
+        is Boolean, is Number -> value.toString()
+        else -> null
+    }
 
     override fun putString(key: String, value: String) {
         // Complete the disk write before reporting a saved setting. APK replacement

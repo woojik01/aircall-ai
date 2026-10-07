@@ -115,7 +115,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingDownload = savedInstanceState?.getString("pendingDownload")
-        val appGraph = graph()
+        val appGraph = try {
+            graph()
+        } catch (failure: Exception) {
+            showStartupFailure(failure)
+            return
+        } catch (failure: LinkageError) {
+            showStartupFailure(failure)
+            return
+        }
 
         uiScope.launch { appGraph.accountRepository.refresh(System.currentTimeMillis()) }
 
@@ -196,6 +204,47 @@ class MainActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("pendingDownload", pendingDownload)
         super.onSaveInstanceState(outState)
+    }
+
+    /** Keep a recoverable startup failure on screen instead of repeatedly closing the app. */
+    private fun showStartupFailure(failure: Throwable) {
+        // Class and stack location only: exception messages may contain private data.
+        val diagnostic = buildString {
+            append("AirCall AI ").append(com.woojik.aircallai.BuildConfig.VERSION_NAME).append('\n')
+            var cause: Throwable? = failure
+            repeat(4) {
+                val current = cause ?: return@repeat
+                append(current.javaClass.name).append('\n')
+                current.stackTrace.take(8).forEach { append(it.toString()).append('\n') }
+                cause = current.cause
+            }
+        }
+        val content = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val padding = (24 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+        }
+        content.addView(android.widget.TextView(this).apply {
+            text = "앱을 시작하지 못했습니다. 다시 시도하거나 오류 정보를 문의 메일로 전달해 주세요."
+            textSize = 18f
+        })
+        content.addView(android.widget.Button(this).apply {
+            text = "다시 시도"
+            setOnClickListener { recreate() }
+        })
+        content.addView(android.widget.Button(this).apply {
+            text = "오류 정보 문의"
+            setOnClickListener {
+                val email = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:woojik1220@gmail.com"))
+                    .putExtra(Intent.EXTRA_SUBJECT, "AirCall AI 시작 오류")
+                    .putExtra(Intent.EXTRA_TEXT, diagnostic)
+                try { startActivity(email) }
+                catch (_: android.content.ActivityNotFoundException) {
+                    android.widget.Toast.makeText(this@MainActivity, "woojik1220@gmail.com", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        })
+        setContentView(android.widget.ScrollView(this).apply { addView(content) })
     }
 
     private fun startModelDownload(id: String) {

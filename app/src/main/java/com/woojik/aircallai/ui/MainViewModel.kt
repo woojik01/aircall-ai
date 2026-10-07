@@ -64,7 +64,9 @@ class MainViewModel(
 
     /** 설정에서 모드/API 키가 바뀌면 다시 계산한다. */
     fun refreshProviderReadiness() {
-        scope.launch { _providerReady.value = isProviderReady() }
+        scope.launch {
+            _providerReady.value = com.woojik.aircallai.ai.provider.providerReadinessOrFalse(isProviderReady)
+        }
     }
 
     /** PRD-05: 음성 대화 시작 = Foreground Service 세션 시작. 권한은 최소 범위 요청. */
@@ -121,4 +123,3 @@ class MainViewModel(
         scope.cancel()
     }
 }
-
