@@ -24,6 +24,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.woojik.aircallai.AirCallApp
 import com.woojik.aircallai.AppGraph
+import com.woojik.aircallai.BuildConfig
+import com.woojik.aircallai.diagnostics.CrashDiagnostics
 import com.woojik.aircallai.ai.cloud.CloudAIProvider
 import com.woojik.aircallai.auth.ConnectionStatus
 import com.woojik.aircallai.auth.GitHubDeviceFlowClient
@@ -45,6 +47,8 @@ import kotlinx.coroutines.cancel
 import com.woojik.aircallai.service.ModelDownloadService
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 
 /** Activity-owned permission and OAuth launchers; chat/settings navigation is in ChatNavigation. */
 class MainActivity : ComponentActivity() {
@@ -55,6 +59,7 @@ class MainActivity : ComponentActivity() {
     private var pendingDownload: String? = null
     private var vm: MainViewModel? = null
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        CrashDiagnostics.onNotificationsAvailable(this)
         pendingDownload?.let { startModelDownload(it) }
         pendingDownload = null
     }
@@ -113,18 +118,28 @@ class MainActivity : ComponentActivity() {
     private fun graph(): AppGraph = (application as AirCallApp).graph
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        CrashDiagnostics.markStage("activity-create")
         super.onCreate(savedInstanceState)
         pendingDownload = savedInstanceState?.getString("pendingDownload")
-        val appGraph = try {
-            graph()
-        } catch (failure: Exception) {
-            showStartupFailure(failure)
-            return
-        } catch (failure: LinkageError) {
-            showStartupFailure(failure)
-            return
+        // Draw a lightweight first frame before any settings/directory initialization.
+        setContentView(android.widget.TextView(this).apply {
+            text = "AirCall AI 시작 중…"
+            gravity = android.view.Gravity.CENTER
+            textSize = 18f
+        })
+        uiScope.launch {
+            try {
+                CrashDiagnostics.markStage("graph-initialize")
+                val appGraph = withContext(Dispatchers.IO) { graph() }
+                if (!isFinishing && !isDestroyed) showMainUi(appGraph, savedInstanceState)
+            } catch (failure: CancellationException) { throw failure
+            } catch (failure: Exception) { showStartupFailure(failure)
+            } catch (failure: LinkageError) { showStartupFailure(failure) }
         }
+    }
 
+    private fun showMainUi(appGraph: AppGraph, savedInstanceState: Bundle?) {
+        CrashDiagnostics.markStage("screen-initialize")
         uiScope.launch { appGraph.accountRepository.refresh(System.currentTimeMillis()) }
 
         val model = MainViewModel(
@@ -134,12 +149,14 @@ class MainActivity : ComponentActivity() {
             requestMicPermission = { requestMicPermission() },
             startSession = { startConversationService() },
             stopSession = { sendServiceAction(ConversationService.ACTION_END) },
-            isProviderReady = { appGraph.providerRouter.current().isReady() },
+            isProviderReady = { withContext(Dispatchers.IO) { appGraph.providerRouter.current().isReady() } },
         )
         vm = model
         openTarget = if (savedInstanceState == null) intent.getStringExtra(EXTRA_SCREEN) ?: "chat" else ""
         uiScope.launch {
+            CrashDiagnostics.markStage("chat-restore")
             appGraph.chatRooms.initialize()
+            CrashDiagnostics.markStage("screen-ready")
             val taskRoom = intent.getStringExtra(EXTRA_ROOM_ID)
             if (appGraph.chatRooms.ready.value && taskRoom != null) {
                 if (appGraph.chatRooms.activeId.value != taskRoom && appGraph.chatRooms.rooms.value.any { it.id == taskRoom }) {
@@ -157,6 +174,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
+            androidx.compose.runtime.LaunchedEffect(Unit) { CrashDiagnostics.markStage("first-composition") }
             AirCallUi(model, appGraph, openTarget, openVersion,
                 connectGitHub = { onCode -> connectGitHub(onCode) },
                 connectGoogle = { connectGoogle() },
@@ -212,6 +230,7 @@ class MainActivity : ComponentActivity() {
 
     /** Keep a recoverable startup failure on screen instead of repeatedly closing the app. */
     private fun showStartupFailure(failure: Throwable) {
+        CrashDiagnostics.recordStartupFailure(failure)
         // Class and stack location only: exception messages may contain private data.
         val diagnostic = buildString {
             append("AirCall AI ").append(com.woojik.aircallai.BuildConfig.VERSION_NAME).append('\n')
@@ -264,6 +283,13 @@ class MainActivity : ComponentActivity() {
             prefs.edit().putBoolean("task_requested", true).apply()
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Diagnostic notifications must also work before the consent/chat screen can open.
+        if (BuildConfig.DEBUG) requestTaskNotifications()
+        CrashDiagnostics.onNotificationsAvailable(this)
     }
 
     override fun onDestroy() {

@@ -21,6 +21,22 @@ class ChatRoomRepositoryTest {
     }
     private fun store() = ChatRoomStore(java.io.File(folder.root, "chats.enc"), crypto)
 
+    @Test fun oversizedSnapshotIsRejectedBeforeDecryptAndPreserved() = runTest {
+        val file = java.io.File(folder.root, "oversized.enc")
+        java.io.RandomAccessFile(file, "rw").use { it.setLength(ChatRoomStore.MAX_SNAPSHOT_BYTES + 1) }
+        var decrypted = false
+        val guarded = ChatRoomStore(file, object : CryptoEngine {
+            override fun encrypt(plain: ByteArray) = plain
+            override fun decrypt(blob: ByteArray): ByteArray { decrypted = true; return blob }
+        })
+        val repo = ChatRoomRepository(guarded, backgroundScope)
+        repo.initialize()
+        assertFalse("Large file must not be allocated/decrypted", decrypted)
+        assertFalse(repo.ready.value)
+        assertNotNull(repo.error.value)
+        assertEquals(ChatRoomStore.MAX_SNAPSHOT_BYTES + 1, file.length())
+    }
+
     @Test fun roundTripPreservesIndependentRoomsAndRenamedTitles() {
         val store = store()
         val a = ChatRoom(title = "프로젝트", messages = listOf(ChatMessage(ChatMessage.Role.USER, "내 대화")), renamed = true)

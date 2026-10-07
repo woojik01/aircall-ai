@@ -1,6 +1,7 @@
 package com.woojik.aircallai
 
 import android.app.Application
+import com.woojik.aircallai.diagnostics.CrashDiagnostics
 
 /**
  * Application entry point.
@@ -9,4 +10,10 @@ import android.app.Application
  */
 class AirCallApp : Application() {
     val graph: AppGraph by lazy { AppGraph(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // The release source set supplies an empty implementation.
+        CrashDiagnostics.install(this)
+    }
 }

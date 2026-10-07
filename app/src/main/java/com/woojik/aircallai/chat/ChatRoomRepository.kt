@@ -31,7 +31,20 @@ data class ChatRoom(
 class ChatRoomStore(private val file: File, private val crypto: CryptoEngine) {
     fun read(): List<ChatRoom> {
         if (!file.exists()) return emptyList()
-        val plain = crypto.decrypt(file.readBytes()) ?: error("대화 기록 복호화 실패")
+        // A stale/abnormally large snapshot must not allocate unbounded memory at launch.
+        require(file.length() <= MAX_SNAPSHOT_BYTES) { "대화 기록 크기 제한 초과" }
+        val blob = file.inputStream().use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(16 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                require(output.size().toLong() + count <= MAX_SNAPSHOT_BYTES) { "대화 기록 크기 제한 초과" }
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        }
+        val plain = crypto.decrypt(blob) ?: error("대화 기록 복호화 실패")
         val array = JSONArray(plain.toString(Charsets.UTF_8))
         return List(array.length()) { index ->
             val room = array.getJSONObject(index)
@@ -42,6 +55,8 @@ class ChatRoomStore(private val file: File, private val crypto: CryptoEngine) {
             }, room.optBoolean("renamed"))
         }
     }
+
+    companion object { internal const val MAX_SNAPSHOT_BYTES = 8L * 1024 * 1024 }
 
     fun write(rooms: List<ChatRoom>) {
         val array = JSONArray()
@@ -88,9 +103,12 @@ class ChatRoomRepository(private val store: ChatRoomStore, scope: CoroutineScope
     suspend fun initialize() = loading.withLock {
         if (_ready.value) return@withLock
         try {
-            val saved = withContext(Dispatchers.IO) { store.read() }
-            _rooms.value = saved.filter { it.hasConversation }
-            if (_rooms.value != saved) writes.trySend(_rooms.value)
+            val (saved, used) = withContext(Dispatchers.IO) {
+                val saved = store.read()
+                saved to saved.filter { it.hasConversation }
+            }
+            _rooms.value = used
+            if (used != saved) writes.trySend(used)
             _ready.value = true
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (_: Exception) { _error.value = "저장된 채팅을 열지 못했습니다. 기존 파일은 보존됩니다." }
