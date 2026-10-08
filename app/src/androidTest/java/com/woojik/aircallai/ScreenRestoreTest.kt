@@ -68,12 +68,28 @@ class ScreenRestoreTest {
         val deadline = android.os.SystemClock.uptimeMillis() + 15_000
         while (android.os.SystemClock.uptimeMillis() < deadline) {
             val root = automation.rootInActiveWindow
-            if (root?.findAccessibilityNodeInfosByText("GPU 가속")?.any {
-                    it.packageName?.toString() == InstrumentationRegistry.getInstrumentation().targetContext.packageName
-                } == true &&
-                root.findAccessibilityNodeInfosByText("다운로드 후 적용해 주세요.").isNotEmpty()) return
+            // Compose renders virtual accessibility descendants. Traverse the real tree;
+            // findAccessibilityNodeInfosByText is not a reliable query for those providers.
+            val nodes = java.util.ArrayDeque<android.view.accessibility.AccessibilityNodeInfo>()
+            root?.let { nodes.add(it) }
+            val texts = mutableSetOf<String>()
+            var checked = 0
+            while (nodes.isNotEmpty() && checked++ < 500) {
+                val node = nodes.removeFirst()
+                if (node.packageName?.toString() == InstrumentationRegistry.getInstrumentation().targetContext.packageName)
+                    node.text?.toString()?.let { texts.add(it) }
+                repeat(node.childCount) { index -> node.getChild(index)?.let { nodes.add(it) } }
+            }
+            if ("GPU 가속" in texts && "다운로드 후 적용해 주세요." in texts) return
             Thread.sleep(100)
         }
+        val diagnosticReady = CountDownLatch(1)
+        val diagnostic = AtomicReference<String>()
+        com.woojik.aircallai.diagnostics.CrashDiagnostics.loadSnapshot(
+            InstrumentationRegistry.getInstrumentation().targetContext) {
+            diagnostic.set(it); diagnosticReady.countDown()
+        }
+        if (diagnosticReady.await(10, TimeUnit.SECONDS)) println(diagnostic.get())
         fail("The restored models screen must render its actual controls")
     }
 }
