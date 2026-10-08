@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
     private fun graph(): AppGraph = (application as AirCallApp).graph
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        CrashDiagnostics.markStage("activity-create")
+        CrashDiagnostics.markStage(if (savedInstanceState == null) "activity-create" else "activity-restored")
         super.onCreate(savedInstanceState)
         pendingDownload = savedInstanceState?.getString("pendingDownload")
         // Draw a lightweight first frame before any settings/directory initialization.

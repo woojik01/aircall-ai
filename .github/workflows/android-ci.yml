@@ -124,6 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: aircall-debug-apk
@@ -176,15 +177,16 @@ jobs:
             adb shell am instrument -w -e phase seed -e class com.woojik.aircallai.UpdatePersistenceTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/seed.txt
             cat upgrade/seed.txt
             grep -q 'OK (2 tests)' upgrade/seed.txt
-            adb shell am force-stop com.woojik.aircallai
-            adb install -r upgrade/current/aircall-dev.apk
-            adb shell pm grant com.woojik.aircallai android.permission.POST_NOTIFICATIONS
+            bash scripts/verify_update_restore.sh
             adb shell am instrument -w -e phase verify -e class com.woojik.aircallai.UpdatePersistenceTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/verify.txt
             cat upgrade/verify.txt
             adb logcat -d -b crash > upgrade/crashes.txt
             adb logcat -d > upgrade/device-logcat.txt
             adb shell dumpsys activity activities > upgrade/activity-state.txt
             grep -q 'OK (2 tests)' upgrade/verify.txt
+            adb shell am instrument -w -e class com.woojik.aircallai.ScreenRestoreTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/screen-restore.txt
+            cat upgrade/screen-restore.txt
+            grep -q 'OK (1 test)' upgrade/screen-restore.txt
             adb shell am instrument -w -e phase crash -e class com.woojik.aircallai.CrashDiagnosticsTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/diagnostic-crash.txt || true
             cat upgrade/diagnostic-crash.txt
             adb shell run-as com.woojik.aircallai cat no_backup/debug-last-crash.txt > upgrade/diagnostic-saved.txt
