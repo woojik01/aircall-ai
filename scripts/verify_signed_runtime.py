@@ -224,8 +224,18 @@ def require_no_crash(label):
 def main():
     RESULTS.mkdir(parents=True, exist_ok=True)
     assert adb("shell", "getprop", "ro.kernel.qemu") == "1", "Disposable emulator required"
-    adb("root")
-    adb("wait-for-device")
+    # The emulator's post-boot configuration can race adbd's root restart.
+    # Retry only this setup transition; never retry app writes or UI assertions.
+    for _ in range(10):
+        try:
+            adb("wait-for-device")
+            adb("root", check=False)
+            adb("wait-for-device")
+            if adb("shell", "id", "-u") == "0":
+                break
+        except subprocess.CalledProcessError as failure:
+            print("Emulator adbd reconnect: " + (failure.stdout or ""), flush=True)
+        time.sleep(1)
     assert adb("shell", "id", "-u") == "0", "Rooted test emulator required for synthetic fixtures"
     baseline = next(Path("signed-runtime/baseline").glob("*.apk"))
     current = next(Path("signed-runtime/current").glob("*.apk"))
