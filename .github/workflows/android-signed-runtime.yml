@@ -93,6 +93,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: aircall-signed-runtime-api-${{ matrix.api }}
+          overwrite: true
           path: signed-runtime/results/*
           if-no-files-found: ignore
           retention-days: 14

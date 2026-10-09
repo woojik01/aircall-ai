@@ -61,12 +61,24 @@ def has(root, text):
     return any(node.get("text") == text or node.get("content-desc") == text for node in nodes(root))
 
 
-def click(label):
-    root = wait_ui(lambda root: has(root, label), label)
+def click_any(labels, scroll=False):
+    def found(root):
+        if any(has(root, label) for label in labels):
+            return True
+        if scroll:
+            width, height = map(int, re.findall(r"(\d+)x(\d+)", adb("shell", "wm", "size"))[-1])
+            adb("shell", "input", "swipe", width // 2, height * 3 // 4,
+                width // 2, height // 3, 300)
+        return False
+    root = wait_ui(found, "/".join(labels))
     node = next(node for node in nodes(root)
-                if node.get("text") == label or node.get("content-desc") == label)
+                if node.get("text") in labels or node.get("content-desc") in labels)
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.get("bounds")))
     adb("shell", "input", "tap", (x1 + x2) // 2, (y1 + y2) // 2)
+
+
+def click(label, scroll=False):
+    click_any((label,), scroll=scroll)
 
 
 def launch(screen=None):
@@ -78,11 +90,12 @@ def launch(screen=None):
 
 
 def chat_ui():
-    return wait_ui(lambda root: has(root, "메시지 입력"), "chat")
+    return wait_ui(lambda root: has(root, "메시지 입력") or has(root, "메시지를 입력하세요"), "chat")
 
 
-def models_ui():
-    return wait_ui(lambda root: has(root, "GPU 가속") and has(root, "다운로드 후 적용해 주세요."), "models")
+def models_ui(legacy=False):
+    return wait_ui(lambda root: has(root, "GPU 가속") and
+                   has(root, "로컬 모델" if legacy else "다운로드 후 적용해 주세요."), "models")
 
 
 def read_fixture(relative):
@@ -128,20 +141,20 @@ def seed_files(legacy=False):
 
 def seed_chat_and_key():
     chat_ui()
-    click("메시지 입력")
+    click_any(("메시지 입력", "메시지를 입력하세요"))
     adb("shell", "input", "text", MESSAGE)
-    click("메시지 전송")
+    click_any(("메시지 전송", "전송"))
     wait_ui(lambda root: has(root, MESSAGE) and not has(root, "생각하고 있어요"), "saved test message")
     encrypted = wait_file("files/chats/rooms.enc")
     assert MESSAGE.encode() not in encrypted, "Chat fixture must be encrypted"
     adb("shell", "input", "keyevent", "KEYCODE_BACK")  # dismiss the keyboard
-    click("메뉴 열기")
+    click_any(("메뉴 열기", "메뉴"))
     click("설정")
     click("AI 및 모델")
-    click("API 키")
+    click("API 키", scroll=True)
     adb("shell", "input", "text", FAKE_KEY)
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
-    click("키 저장")
+    click("키 저장", scroll=True)
     encrypted_key = wait_file("files/credentials/cloud_ai.bin")
     assert FAKE_KEY.encode() not in encrypted_key, "Credential fixture must be encrypted"
     record("Production UI saved encrypted chat and synthetic API key")
@@ -150,9 +163,23 @@ def seed_chat_and_key():
 
 def select_saved_chat():
     chat_ui()
-    click("메뉴 열기")
+    click_any(("메뉴 열기", "메뉴"))
     click(MESSAGE)
     wait_ui(lambda root: has(root, MESSAGE) and has(root, "나"), "decrypted saved chat")
+
+
+def saved_stopped_activity(state, component):
+    # Android 35/36 prints two spaces after Hist and uses state=, not mState=.
+    # Inspect only the target's Hist record, never a neighboring launcher's state.
+    blocks = re.split(r"(?=^\s*\* Hist\s+#)", state, flags=re.M)
+    for block in blocks:
+        header = re.match(r"\s*\* Hist\s+#\d+: ActivityRecord\{[^\n]+", block)
+        if header and component in header[0]:
+            if (re.search(r"\b(?:mState|state)=STOPPED\b", block) and
+                    re.search(r"\b(?:haveState|mHaveState)=true\b", block) and
+                    "finishing=true" not in block):
+                return True
+    return False
 
 
 def background_and_kill(label):
@@ -164,13 +191,13 @@ def background_and_kill(label):
     while time.monotonic() < deadline:
         state = adb("shell", "dumpsys", "activity", "activities")
         (RESULTS / (label + "-activity.txt")).write_text(state)
-        blocks = re.split(r"(?=^\s*\* Hist #)", state, flags=re.M)
-        saved = any(COMPONENT in block and "mState=STOPPED" in block and
-                    re.search(r"(?:haveState|mHaveState)=true", block) for block in blocks)
+        saved = saved_stopped_activity(state, COMPONENT)
         if saved:
             break
         time.sleep(1)
-    assert saved, "Android must stop and save the real production activity before process death"
+    if not saved:
+        print(state, flush=True)
+        raise AssertionError("Android must stop and save the real production activity before process death")
     adb("shell", "kill", "-9", previous_pid)
     for _ in range(15):
         if not adb("shell", "pidof", PACKAGE, check=False):
@@ -204,13 +231,23 @@ def main():
     except AssertionError:
         baseline_healthy = False
         (RESULTS / "baseline-crashes.txt").write_text(adb("logcat", "-d", "-b", "crash"))
+        (RESULTS / "baseline-logcat.txt").write_text(adb("logcat", "-d"))
+        (RESULTS / "baseline-activities.txt").write_text(adb("shell", "dumpsys", "activity", "activities"))
+        if (RESULTS / "ui.xml").exists():
+            (RESULTS / "baseline-ui.xml").write_bytes((RESULTS / "ui.xml").read_bytes())
         record("Older production UI failed to render; updating its retained files", baselineUiHealthy=False)
     if baseline_healthy:
         seed_chat_and_key()
         adb("shell", "am", "force-stop", PACKAGE)
         launch("models")
-        models_ui()
-        background_and_kill("before-version-update")
+        try:
+            models_ui(legacy=True)
+            background_and_kill("before-version-update")
+        except AssertionError:
+            (RESULTS / "baseline-models-crashes.txt").write_text(adb("logcat", "-d", "-b", "crash"))
+            (RESULTS / "baseline-models-logcat.txt").write_text(adb("logcat", "-d"))
+            record("Older production models screen failed the saved-state check; retaining encrypted files for update")
+            adb("shell", "am", "force-stop", PACKAGE)
     else:
         adb("shell", "am", "force-stop", PACKAGE)
     retained = {relative: read_fixture(relative) for relative in (
@@ -283,3 +320,4 @@ if __name__ == "__main__":
         for name, command in (("final-logcat.txt", ("logcat", "-d")),
                               ("final-activities.txt", ("shell", "dumpsys", "activity", "activities"))):
             (RESULTS / name).write_text(adb(*command, check=False))
+        print("Final emulator crash buffer:\n" + adb("logcat", "-d", "-b", "crash", check=False), flush=True)
