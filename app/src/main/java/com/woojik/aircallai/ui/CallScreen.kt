@@ -31,6 +31,8 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
     val muted by vm.sessionMuted.collectAsState()
     val ready by vm.providerReady.collectAsState()
     val transcript by vm.transcript.collectAsState()
+    val recognition by vm.engine.recognitionText.collectAsState()
+    val partial by vm.engine.partialResponse.collectAsState()
     val active = session == SessionStatus.Running || session == SessionStatus.Paused
     val label = callStatusOf(session, state, muted, ready).label
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -54,6 +56,8 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
         }
         Text(vm.engine.activeProvider.displayName, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        if (recognition.isNotBlank()) Text("듣는 중: $recognition")
+        if (partial.isNotBlank()) Text(partial, style = MaterialTheme.typography.bodyLarge)
         transcript.lastOrNull { it.role == ChatMessage.Role.ASSISTANT }?.let {
             Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()) {
@@ -76,6 +80,11 @@ fun CallScreen(vm: MainViewModel, onExit: () -> Unit,
             }
         }
         if (active) {
+            if (state is ConversationState.Speaking || state is ConversationState.Processing) {
+                OutlinedButton(onClick = { vm.pauseSession(); vm.resumeSession() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("말 끊고 다시 말하기")
+                }
+            }
             OutlinedButton(onClick = { if (session == SessionStatus.Paused) vm.resumeSession() else vm.pauseSession() },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text(if (session == SessionStatus.Paused) "대화 재개" else "일시정지")

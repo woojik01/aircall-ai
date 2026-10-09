@@ -7,6 +7,20 @@ class SafetyAIProvider(private val base: AIProvider) : AIProvider {
     override val type = base.type
     override val displayName = base.displayName
     override suspend fun isReady() = base.isReady()
+    override suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse {
+        val started = System.currentTimeMillis()
+        val input = history.lastOrNull { it.role == ChatMessage.Role.USER }?.content.orEmpty()
+        if (ContentSafety.isExplicitlyProhibited(input) && !ContentSafety.isSafeReportingRequest(input))
+            return refused(started).also { onText(it.message.content) }
+        val policy = if (type == ProviderType.LOCAL) ContentSafety.LOCAL_POLICY else ContentSafety.SYSTEM_POLICY
+        var blocked = false
+        val response = base.respondStreaming(listOf(ChatMessage(ChatMessage.Role.SYSTEM, policy)) + history) { text ->
+            if (ContentSafety.isExplicitlyProhibited(text)) blocked = true
+            if (!blocked) onText(text)
+        }
+        return if (blocked || ContentSafety.isExplicitlyProhibited(response.message.content))
+            refused(started).also { onText(it.message.content) } else response
+    }
     override suspend fun respond(history: List<ChatMessage>): AIResponse {
         val started = System.currentTimeMillis()
         val input = history.lastOrNull { it.role == ChatMessage.Role.USER }?.content.orEmpty()

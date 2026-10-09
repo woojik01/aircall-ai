@@ -30,4 +30,8 @@ interface AIProvider {
     suspend fun isReady(): Boolean
 
     suspend fun respond(history: List<ChatMessage>): AIResponse
+    /** Cumulative text; adapters without streaming still produce one final update. */
+    suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse {
+        return respond(history).also { onText(it.message.content) }
+    }
 }

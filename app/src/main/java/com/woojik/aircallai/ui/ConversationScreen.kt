@@ -30,6 +30,7 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
     val transcript by vm.transcript.collectAsState()
     val sessionStatus by vm.sessionStatus.collectAsState()
     val providerReady by vm.providerReady.collectAsState()
+    val partial by vm.engine.partialResponse.collectAsState()
     val listState = rememberLazyListState()
     var input by rememberSaveable(roomId) { mutableStateOf("") }
     var awaitingConsent by rememberSaveable(roomId) { mutableStateOf(false) }
@@ -93,6 +94,9 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
             }
         }
         if (state is ConversationState.Processing) {
+            if (partial.isNotBlank()) Surface(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(partial, Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(12.dp))
+            }
             Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Text("생각하고 있어요", Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium)

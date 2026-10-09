@@ -21,7 +21,11 @@ class ToolBridgedAIProvider(
 
     override suspend fun isReady(): Boolean = base.isReady()
 
-    override suspend fun respond(history: List<ChatMessage>): AIResponse {
+    override suspend fun respond(history: List<ChatMessage>): AIResponse = respondWith(history, null)
+    override suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse =
+        respondWith(history, onText).also { onText(it.message.content) }
+
+    private suspend fun respondWith(history: List<ChatMessage>, onText: (suspend (String) -> Unit)?): AIResponse {
         val requestHistory = discoverTools(history)
         val started = System.currentTimeMillis()
 
@@ -39,7 +43,13 @@ class ToolBridgedAIProvider(
         val writeRequests = mutableSetOf<ToolRequest>()
 
         while (round < MAX_TOOL_ROUNDS) {
-            val response = base.respond(modelHistory(current, originalUserMessage))
+            val response = if (onText != null && round == 0 && requestedTools.isEmpty()) {
+                base.respondStreaming(modelHistory(current, originalUserMessage)) { text ->
+                    // Hold directive prefixes and tool tasks until validated execution completes.
+                    val trimmed = text.trimStart().removePrefix("```").trimStart()
+                    if (trimmed.length >= 8 && !trimmed.startsWith("TOOL") && !ToolCallParser.hasDirective(text)) onText(text)
+                }
+            } else base.respond(modelHistory(current, originalUserMessage))
             val call = ToolCallParser.parseFirst(response.message.content)
 
             if (call == null) {

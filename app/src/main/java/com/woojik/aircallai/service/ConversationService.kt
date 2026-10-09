@@ -71,7 +71,7 @@ class ConversationService : Service() {
         ttsEngine = AndroidSpeechSynthesizerEngine(application)
         val mutedSynthesizer = MutedSynthesizer(ttsEngine) { repository.muted.value }
         session = VoiceSession(
-            recognizer = AndroidSpeechRecognizerEngine(application),
+            recognizer = AndroidSpeechRecognizerEngine(application, repository.engine::updateRecognition),
             synthesizer = mutedSynthesizer,
             engine = repository.engine,
         )

@@ -21,6 +21,7 @@ import java.util.Locale
  */
 class AndroidSpeechRecognizerEngine(
     private val context: Context,
+    private val onPartial: (String) -> Unit = {},
 ) : SpeechRecognizerInterface {
 
     override suspend fun recognizeOnce(): String? = withContext(Dispatchers.Main.immediate) {
@@ -67,7 +68,9 @@ class AndroidSpeechRecognizerEngine(
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}
-                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onPartialResults(partialResults: Bundle?) {
+                    onPartial(partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty())
+                }
                 override fun onReadyForSpeech(params: Bundle?) {}
                 override fun onRmsChanged(rmsdB: Float) {}
             })
@@ -79,6 +82,7 @@ class AndroidSpeechRecognizerEngine(
                         RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
                     )
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 },
             )
             SecureLog.d(TAG, "STT listening started")

@@ -9,6 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -23,6 +24,42 @@ import org.json.JSONObject
 class HttpCloudApiAdapter(
     private val connect: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
 ) : CloudApiAdapter {
+
+    override suspend fun chatStreaming(apiKey: String, baseUrl: String, model: String,
+        history: List<ChatMessage>, onText: suspend (String) -> Unit): String = withContext(Dispatchers.IO) {
+        if (!com.woojik.aircallai.privacy.HttpsEndpoint.isHttpsEndpoint(baseUrl))
+            throw AIProviderException(ProviderErrorKind.API_ERROR)
+        var connection: HttpURLConnection? = null
+        try {
+            val conn = connect(baseUrl).also { connection = it }
+            conn.requestMethod = "POST"
+            conn.instanceFollowRedirects = false
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 30_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "text/event-stream")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            val body = JSONObject(buildBody(model, history)).put("stream", true).toString()
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            when (conn.responseCode) {
+                401, 403 -> throw AIProviderException(ProviderErrorKind.AUTH_FAILED)
+                429 -> throw AIProviderException(ProviderErrorKind.QUOTA_EXCEEDED)
+                in 200..299 -> Unit
+                else -> throw AIProviderException(ProviderErrorKind.API_ERROR, "스트리밍을 지원하지 않으면 설정에서 실시간 응답을 끄세요.")
+            }
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                if (conn.contentType?.contains("application/json") == true) {
+                    return@withContext parseAssistantText(reader.readText()).also { onText(it) }
+                }
+                readChatStream(reader, onText)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: AIProviderException) { throw e
+        } catch (_: IOException) { throw AIProviderException(ProviderErrorKind.NETWORK)
+        } catch (_: org.json.JSONException) { throw AIProviderException(ProviderErrorKind.API_ERROR)
+        } finally { connection?.disconnect() }
+    }
 
     override suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String =
         withContext(Dispatchers.IO) {
@@ -108,4 +145,39 @@ class HttpCloudApiAdapter(
                 "5) 문서체나 나열식 설명 대신, 친구와 수다 떨듯 대화한다. " +
                 "6) 사용자가 짧게 물으면 짧게 답하고, 깊은 이야기가 오가면 공감 먼저 한다."
     }
+}
+
+/** SSE events can contain multiple data lines and empty usage-only choices. */
+internal suspend fun readChatStream(reader: java.io.BufferedReader, onText: suspend (String) -> Unit): String {
+    val text = StringBuilder()
+    val event = StringBuilder()
+    var done = false
+    suspend fun consume() {
+        val data = event.toString().trim()
+        event.setLength(0)
+        if (data.isEmpty()) return
+        if (data == "[DONE]") { done = true; return }
+        val json = JSONObject(data)
+        if (json.has("error")) throw AIProviderException(ProviderErrorKind.API_ERROR)
+        val choice = json.optJSONArray("choices")?.optJSONObject(0) ?: return
+        val delta = choice.optJSONObject("delta")?.optString("content").orEmpty()
+        if (delta.isNotEmpty() && delta != "null") {
+            text.append(delta)
+            if (text.length > 1_000_000) throw AIProviderException(ProviderErrorKind.API_ERROR)
+            onText(text.toString())
+        }
+    }
+    while (!done) {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        val line = reader.readLine() ?: break
+        if (line.isEmpty()) consume()
+        else if (line.startsWith("data:")) {
+            if (event.isNotEmpty()) event.append('\n')
+            event.append(line.removePrefix("data:").trimStart())
+            if (event.length > 1_000_000) throw AIProviderException(ProviderErrorKind.API_ERROR)
+        }
+    }
+    if (event.isNotEmpty()) consume()
+    if (!done || text.isEmpty()) throw AIProviderException(ProviderErrorKind.NETWORK, "응답이 중단되었습니다")
+    return text.toString()
 }

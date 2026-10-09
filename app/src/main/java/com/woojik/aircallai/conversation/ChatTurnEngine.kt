@@ -22,6 +22,11 @@ class ConversationEngine(
     val state: StateFlow<ConversationState> = _state.asStateFlow()
     private val _transcript = MutableStateFlow<List<ChatMessage>>(emptyList())
     val transcript: StateFlow<List<ChatMessage>> = _transcript.asStateFlow()
+    private val _partialResponse = MutableStateFlow("")
+    val partialResponse: StateFlow<String> = _partialResponse.asStateFlow()
+    private val _recognitionText = MutableStateFlow("")
+    val recognitionText: StateFlow<String> = _recognitionText.asStateFlow()
+    fun updateRecognition(text: String) { _recognitionText.value = text }
     val activeProvider: AIProvider get() = provider
 
     fun updateProvider(next: AIProvider) {
@@ -53,7 +58,8 @@ class ConversationEngine(
         _state.update { if (it is ConversationState.Error) ConversationState.Idle else it }
     }
 
-    suspend fun submitUserMessage(text: String, voiceMode: Boolean = false): Boolean {
+    suspend fun submitUserMessage(text: String, voiceMode: Boolean = false,
+        onPartial: (suspend (String) -> Unit)? = null): Boolean {
         if (text.isBlank() || !turnMutex.tryLock()) return false
         val turnRevision = revision.get()
         val active = provider
@@ -61,6 +67,8 @@ class ConversationEngine(
         _transcript.update { it + userMessage }
         onTranscriptChanged(_transcript.value)
         _state.value = ConversationState.Processing(userMessage)
+        _partialResponse.value = ""
+        _recognitionText.value = ""
 
         try {
             val requestHistory = if (voiceMode) {
@@ -68,7 +76,13 @@ class ConversationEngine(
             } else {
                 _transcript.value
             }
-            val response = active.respond(requestHistory)
+            val response = active.respondStreaming(requestHistory) { partial ->
+                if (revision.get() == turnRevision) {
+                    val cleaned = if (voiceMode) VoiceResponseSanitizer.sanitize(partial) else partial
+                    _partialResponse.value = cleaned
+                    onPartial?.invoke(cleaned)
+                }
+            }
             if (revision.get() != turnRevision) return false
             val responseText = if (voiceMode) {
                 VoiceResponseSanitizer.sanitize(response.message.content)
@@ -96,6 +110,7 @@ class ConversationEngine(
                 t.message ?: "AI 응답 생성 실패",
             )
         } finally {
+            if (revision.get() == turnRevision) _partialResponse.value = ""
             turnMutex.unlock()
         }
         return false
@@ -124,6 +139,8 @@ class ConversationEngine(
         revision.incrementAndGet()
         _transcript.value = messages.toList()
         _state.value = ConversationState.Idle
+        _partialResponse.value = ""
+        _recognitionText.value = ""
     }
 
     companion object {

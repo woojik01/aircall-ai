@@ -14,6 +14,8 @@ interface CloudApiAdapter {
      * @throws com.woojik.aircallai.ai.provider.AIProviderException AUTH_FAILED / QUOTA_EXCEEDED / NETWORK / API_ERROR
      */
     suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String
+    suspend fun chatStreaming(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>,
+        onText: suspend (String) -> Unit): String = chat(apiKey, baseUrl, model, history).also { onText(it) }
 }
 
 /** 테스트/설정 전 검증용 가짜 어댑터. 네트워크를 전혀 사용하지 않는다. */
