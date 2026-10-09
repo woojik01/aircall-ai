@@ -24,8 +24,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prior-report:
+    runs-on: ubuntu-latest
+    outputs:
+      report_only: ${{ steps.report.outputs.report_only }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - id: report
+        name: Read prior emulator evidence when requested
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          request = json.loads(Path('.github/signed-runtime-request.json').read_text()) if os.environ['GITHUB_EVENT_NAME'] == 'push' else {}
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('report_only=' + str(bool(request.get('report_only'))).lower() + '\n')
+          if request.get('report_run_id'):
+              directory = Path('previous-signed-report')
+              subprocess.run(['gh', 'run', 'download', str(int(request['report_run_id'])), '--repo', os.environ['GITHUB_REPOSITORY'], '--name', 'aircall-signed-runtime-api-36', '--dir', str(directory)], check=True)
+              for name in ('checks.json', 'baseline-crashes.txt', 'restore-0-activity.txt'):
+                  file = directory / name
+                  if file.exists():
+                      print('\nEvidence:', name, flush=True)
+                      print(file.read_text(), flush=True)
+          PY
   production-runtime:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    needs: prior-report
+    if: needs.prior-report.outputs.report_only != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
