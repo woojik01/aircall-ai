@@ -1,7 +1,8 @@
-"""Download immutable signed artifacts and choose the closest older production draft."""
+"""Download immutable signed artifacts and choose the closest older production APK."""
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 from verify_apk import verify
@@ -30,22 +31,28 @@ def main():
     if current["commit"] != run["head_sha"]:
         raise ValueError("Artifact source commit does not match the signed run")
     candidates = []
-    pages = json.loads(gh("api", f"repos/{repository}/releases", "--paginate", "--slurp"))
-    for release in (item for page in pages for item in page):
-        if not any(a["name"] == "release-metadata.json" for a in release["assets"]):
+    previous_runs = json.loads(gh("api", f"repos/{repository}/actions/workflows/android-signed-build.yml/runs?branch=main&status=success&per_page=30"))["workflow_runs"]
+    for previous_run in previous_runs:
+        if previous_run["id"] == run_id:
             continue
-        directory = root / "history" / str(release["id"])
-        gh("release", "download", release["tag_name"], "--repo", repository,
-           "--pattern", "release-metadata.json", "--dir", str(directory))
+        artifacts = json.loads(gh("api", f"repos/{repository}/actions/runs/{previous_run['id']}/artifacts"))["artifacts"]
+        if not any(a["name"] == "aircall-signed-build" and not a["expired"] for a in artifacts):
+            continue
+        directory = root / "history" / str(previous_run["id"])
+        gh("run", "download", str(previous_run["id"]), "--repo", repository,
+           "--name", "aircall-signed-build", "--dir", str(directory))
         metadata = json.loads((directory / "release-metadata.json").read_text())
+        if metadata["commit"] != previous_run["head_sha"]:
+            raise ValueError("Baseline artifact source commit does not match its signing run")
         if metadata["package"] == current["package"] and metadata["versionCode"] < current["versionCode"]:
-            candidates.append((metadata["versionCode"], release, metadata))
+            candidates.append((metadata["versionCode"], directory, metadata))
     if not candidates:
         raise ValueError("No older production APK: in-place update cannot be tested")
-    _, baseline_release, baseline = max(candidates, key=lambda item: item[0])
+    _, baseline_source, baseline = max(candidates, key=lambda item: item[0])
     baseline_dir = root / "baseline"
-    gh("release", "download", baseline_release["tag_name"], "--repo", repository,
-       "--pattern", "*.apk", "--dir", str(baseline_dir))
+    baseline_dir.mkdir(parents=True, exist_ok=True)
+    for apk in baseline_source.glob("*.apk"):
+        shutil.copy2(apk, baseline_dir / apk.name)
     build_tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/35.0.0"
     certificate = os.environ["AIRCALL_RELEASE_CERT_SHA256"]
     for directory, metadata, production_exclusion in (
