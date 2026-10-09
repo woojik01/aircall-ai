@@ -81,6 +81,8 @@ jobs:
           echo '### 개인 키로 서명된 테스트 빌드' >> "$GITHUB_STEP_SUMMARY"
           echo "aircall-signed-build ZIP에서 aircall-$VERSION-$AIRCALL_VERSION_CODE.apk를 꺼내 설치하세요." >> "$GITHUB_STEP_SUMMARY"
           echo '스토어 제출 조건·정식 Google OAuth·실기 동작 검증은 별도입니다. 원스토어 제출은 ONE store Release를 사용하세요.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify debug diagnostics are excluded from actual production APK
+        run: python scripts/verify_debug_diagnostics.py --release-only app/build/outputs/apk/release/app-release.apk
       - name: Reserve signing identity and version in a private release draft
         run: gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "AirCall AI $RELEASE_TAG · Signed test build" --notes-file CHANGELOG.md
       - name: Upload verified signed APK/AAB
@@ -93,3 +95,4 @@ jobs:
       - name: Remove private signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/aircall-release.jks"
+

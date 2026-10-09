@@ -1,0 +1,69 @@
+name: Android Signed Runtime Test
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/signed-runtime-request.json]
+  workflow_run:
+    workflows: [Android Signed Build]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: '성공한 Android Signed Build 실행 ID'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: signed-runtime-${{ github.event.workflow_run.id || inputs.run_id || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  production-runtime:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [35, 36]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SIGNED_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+      AIRCALL_RELEASE_CERT_SHA256: ${{ vars.AIRCALL_RELEASE_CERT_SHA256 }}
+    steps:
+      # Tests live on main; the installed APK is the exact immutable signed artifact.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+      - name: Download and verify actual production APKs
+        run: python scripts/prepare_signed_runtime.py
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test production update, encrypted storage and restored screens
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: python scripts/verify_signed_runtime.py
+      - name: Upload production runtime results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aircall-signed-runtime-api-${{ matrix.api }}
+          path: signed-runtime/results/*
+          if-no-files-found: ignore
+          retention-days: 14

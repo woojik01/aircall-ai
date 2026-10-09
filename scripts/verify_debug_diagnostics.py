@@ -5,8 +5,8 @@ import zipfile
 MARKERS = (b"aircall_debug_crashes", b"debug-last-crash.txt", b"debug_crash_diagnostics", b"debug-main-launch.txt")
 
 
-def verify(debug_apk, release_apk):
-    for path, debug in ((debug_apk, True), (release_apk, False)):
+def verify_apks(apks):
+    for path, debug in apks:
         with zipfile.ZipFile(path) as apk:
             dex = b"".join(apk.read(name) for name in apk.namelist()
                            if name.startswith("classes") and name.endswith(".dex"))
@@ -23,5 +23,12 @@ def verify(debug_apk, release_apk):
         print(f"Verified {'debug diagnostics' if debug else 'production exclusion'}: {path}")
 
 
+def verify(debug_apk, release_apk):
+    verify_apks(((debug_apk, True), (release_apk, False)))
+
+
 if __name__ == "__main__":
-    verify(*sys.argv[1:])
+    if len(sys.argv) == 3 and sys.argv[1] == "--release-only":
+        verify_apks(((sys.argv[2], False),))
+    else:
+        verify(*sys.argv[1:])
