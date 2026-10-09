@@ -3,6 +3,7 @@ package com.woojik.aircallai.conversation
 import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.AIProviderException
 import com.woojik.aircallai.ai.provider.ChatMessage
+import com.woojik.aircallai.ai.provider.respondStreaming
 import com.woojik.aircallai.audio.AudioError
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.sync.Mutex
@@ -27,6 +28,8 @@ class ConversationEngine(
     val partialResponse: StateFlow<String> = _partialResponse.asStateFlow()
     private val _recognitionText = MutableStateFlow("")
     val recognitionText: StateFlow<String> = _recognitionText.asStateFlow()
+    private val _retryAllowed = MutableStateFlow(false)
+    val retryAllowed: StateFlow<Boolean> = _retryAllowed.asStateFlow()
     fun updateRecognition(text: String) { _recognitionText.value = text }
     val activeProvider: AIProvider get() = provider
 
@@ -60,12 +63,15 @@ class ConversationEngine(
     }
 
     suspend fun submitUserMessage(text: String, voiceMode: Boolean = false,
+        reuseFailedInput: Boolean = false,
         onPartial: (suspend (String) -> Unit)? = null): Boolean {
+        if (reuseFailedInput && (!_retryAllowed.value || _transcript.value.lastOrNull() != ChatMessage(ChatMessage.Role.USER, text))) return false
         if (text.isBlank() || !turnMutex.tryLock()) return false
         val turnRevision = revision.get()
         val active = provider
         val userMessage = ChatMessage(ChatMessage.Role.USER, text)
-        _transcript.update { it + userMessage }
+        if (!reuseFailedInput) _transcript.update { it + userMessage }
+        _retryAllowed.value = false
         onTranscriptChanged(_transcript.value)
         _state.value = ConversationState.Processing(userMessage)
         _partialResponse.value = ""
@@ -107,12 +113,14 @@ class ConversationEngine(
                 ConversationState.ErrorKind.AI_PROVIDER,
                 e.message ?: e.kind.userMessage,
             )
+            _retryAllowed.value = active.retrySafe
         } catch (t: Throwable) {
             if (revision.get() != turnRevision) return false
             _state.value = ConversationState.Error(
                 ConversationState.ErrorKind.AI_PROVIDER,
                 t.message ?: "AI 응답 생성 실패",
             )
+            _retryAllowed.value = active.retrySafe
         } finally {
             if (revision.get() == turnRevision) _partialResponse.value = ""
             turnMutex.unlock()
@@ -145,6 +153,7 @@ class ConversationEngine(
         _state.value = ConversationState.Idle
         _partialResponse.value = ""
         _recognitionText.value = ""
+        _retryAllowed.value = false
     }
 
     companion object {

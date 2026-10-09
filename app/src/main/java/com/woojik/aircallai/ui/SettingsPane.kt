@@ -30,6 +30,7 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
         SettingCategory("ai", "AI 및 모델", "로컬 · 클라우드, 모델 다운로드", onOpen)
         SettingCategory("accounts", "도구 및 계정", "GitHub · Google 로그인", onOpen)
         SettingCategory("memory", "기억할 정보", "직접 저장 · 수정 · 삭제", onOpen)
+        SettingCategory("data", "백업 및 가져오기", "암호화 백업 · JSON 내보내기", onOpen)
         SettingCategory("appearance", "화면 및 알림", "라이트 · 다크 · 시스템, 알림 설정", onOpen)
         SettingCategory("permissions", "작업 승인", "실행 전 확인 및 이전 승인 관리", onOpen)
         SettingCategory("privacy", "개인정보", "개인정보처리방침 · 데이터 삭제", onOpen)

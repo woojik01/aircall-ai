@@ -31,6 +31,7 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
     val sessionStatus by vm.sessionStatus.collectAsState()
     val providerReady by vm.providerReady.collectAsState()
     val partial by vm.engine.partialResponse.collectAsState()
+    val retryAllowed by vm.engine.retryAllowed.collectAsState()
     val listState = rememberLazyListState()
     var input by rememberSaveable(roomId) { mutableStateOf("") }
     var awaitingConsent by rememberSaveable(roomId) { mutableStateOf(false) }
@@ -89,6 +90,10 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text((state as ConversationState.Error).message, style = MaterialTheme.typography.bodyMedium)
+                    if (retryAllowed && !active) TextButton(onClick = { vm.retryText() }) { Text("다시 시도") }
+                    TextButton(onClick = onOpenAiSettings) { Text("AI 설정 확인") }
+                    if (!retryAllowed && (state as ConversationState.Error).kind == ConversationState.ErrorKind.AI_PROVIDER)
+                        Text("변경 작업을 시도했다면 외부 서비스에서 결과를 확인한 뒤 새 요청을 보내세요.", style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = { vm.engine.clearError() }) { Text("닫기") }
                 }
             }

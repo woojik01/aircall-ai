@@ -25,13 +25,18 @@ enum class ProviderType { LOCAL, CLOUD }
 interface AIProvider {
     val type: ProviderType
     val displayName: String
+    val retrySafe: Boolean get() = true
 
     /** Prerequisite check (model file/device support or credential); inference may still fail. */
     suspend fun isReady(): Boolean
 
     suspend fun respond(history: List<ChatMessage>): AIResponse
-    /** Cumulative text; adapters without streaming still produce one final update. */
-    suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse {
-        return respond(history).also { onText(it.message.content) }
-    }
 }
+
+/** Separate capability keeps delegated providers and non-streaming adapters compatible. */
+interface StreamingAIProvider : AIProvider {
+    suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse
+}
+suspend fun AIProvider.respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse =
+    if (this is StreamingAIProvider) this.respondStreaming(history, onText)
+    else respond(history).also { onText(it.message.content) }

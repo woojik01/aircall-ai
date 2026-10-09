@@ -22,7 +22,7 @@ class StreamingResponseTest {
 
     @Test fun firstSentenceSpeaksBeforeGenerationFinishesWithoutDuplicatePlayback() = runTest {
         val gate = CompletableDeferred<Unit>()
-        val provider = object : AIProvider by NoopAIProvider() {
+        val provider = object : StreamingAIProvider, AIProvider by NoopAIProvider() {
             override suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse {
                 onText("첫 문장.")
                 gate.await()

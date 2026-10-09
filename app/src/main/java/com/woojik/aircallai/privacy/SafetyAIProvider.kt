@@ -3,7 +3,7 @@ package com.woojik.aircallai.privacy
 import com.woojik.aircallai.ai.provider.*
 
 /** Baseline safeguards, applied inside the tool bridge before a generated tool call can run. */
-class SafetyAIProvider(private val base: AIProvider) : AIProvider {
+class SafetyAIProvider(private val base: AIProvider) : StreamingAIProvider {
     override val type = base.type
     override val displayName = base.displayName
     override suspend fun isReady() = base.isReady()

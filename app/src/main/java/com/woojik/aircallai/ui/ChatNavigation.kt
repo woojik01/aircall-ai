@@ -190,6 +190,7 @@ fun AirCallUi(
                                 "models" -> "로컬 모델"
                                 "privacy" -> "개인정보"
                                 "about" -> "앱 정보"
+                                "data" -> "백업 및 가져오기"
                                 "settings/{category}" -> when (entry?.arguments?.getString("category")) {
                                     "ai" -> "AI 및 모델"; "accounts" -> "도구 및 계정"
                                     "permissions" -> "작업 승인"; "memory" -> "기억할 정보"; else -> "화면 및 알림"
@@ -225,7 +226,7 @@ fun AirCallUi(
                                 onStartSession = { startVoice() }) }
                             composable("settings") { SettingsCategories { category ->
                                 nav.navigate(when (category) {
-                                    "privacy", "about" -> category
+                                    "privacy", "about", "data" -> category
                                     else -> "settings/$category"
                                 })
                             } }
@@ -233,6 +234,12 @@ fun AirCallUi(
                                 onOpenAiSettings = { nav.navigate("settings/ai") },
                                 onOpenPrivacy = { nav.navigate("privacy") },
                             ) }
+                            composable("data") { DataTransferScreen(graph,
+                                onBeforeTransfer = { vm.prepareForRoomChange(); graph.toolApproval.deny() },
+                                onImported = {
+                                    themeMode = graph.settings.themeMode()
+                                    vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
+                                }) }
                             composable("settings/{category}") { target ->
                                 SettingsDetail(target.arguments?.getString("category").orEmpty(), graph, vm,
                                     themeMode = themeMode, onThemeChanged = { themeMode = it },

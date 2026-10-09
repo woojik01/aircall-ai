@@ -4,6 +4,7 @@ import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.AIResponse
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.ai.provider.ProviderType
+import com.woojik.aircallai.ai.provider.respondStreaming
 
 /** Request-scoped tool discovery, validated execution and result-grounded replies. */
 class ToolBridgedAIProvider(
@@ -14,10 +15,12 @@ class ToolBridgedAIProvider(
     private val tools: List<Tool> = emptyList(),
     private val approvalRequester: ((ToolRequest) -> Unit)? = null,
     private val approvalHandler: (suspend (ToolRequest) -> ToolResult)? = null,
-) : AIProvider {
+) : com.woojik.aircallai.ai.provider.StreamingAIProvider {
 
     override val type: ProviderType = base.type
     override val displayName: String = base.displayName
+    @Volatile private var lastTurnRetrySafe = true
+    override val retrySafe: Boolean get() = lastTurnRetrySafe
 
     override suspend fun isReady(): Boolean = base.isReady()
 
@@ -26,6 +29,7 @@ class ToolBridgedAIProvider(
         respondWith(history, onText).also { onText(it.message.content) }
 
     private suspend fun respondWith(history: List<ChatMessage>, onText: (suspend (String) -> Unit)?): AIResponse {
+        lastTurnRetrySafe = true
         val requestHistory = discoverTools(history)
         val started = System.currentTimeMillis()
 
@@ -107,6 +111,7 @@ class ToolBridgedAIProvider(
                 ChatMessage(ChatMessage.Role.ASSISTANT, "같은 변경 작업의 반복 실행을 중단했습니다. 이미 실행된 작업은 결과 알림에서 확인해 주세요."),
                 base.type, System.currentTimeMillis() - started)
             val toolStart = System.currentTimeMillis()
+            if (risk != ToolRisk.READ) lastTurnRetrySafe = false
             var result = executor.execute(request)
             val blocked = result.message == BLOCKED_MESSAGE
             if (blocked && approvalHandler != null) result = approvalHandler.invoke(request)

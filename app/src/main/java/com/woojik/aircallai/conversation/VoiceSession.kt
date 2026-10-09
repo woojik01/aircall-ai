@@ -59,6 +59,7 @@ class VoiceSession(
         speechStopped = false
         var ttsStart = 0L
         var aiResponseEnd = 0L
+        var audioFailure: AudioError? = null
         val succeeded = coroutineScope {
             val sentences = Channel<String>(Channel.UNLIMITED)
             val buffer = SpokenSentenceBuffer()
@@ -68,7 +69,7 @@ class VoiceSession(
                         if (ttsStart == 0L) ttsStart = System.currentTimeMillis()
                         synthesizer.speak(sentence)
                     }
-                } catch (e: AudioError) { engine.reportAudioError(e); speechStopped = true }
+                } catch (e: AudioError) { audioFailure = e; speechStopped = true }
             }
             val success = try {
                 engine.submitUserMessage(text, voiceMode = true) { partial ->
@@ -82,6 +83,7 @@ class VoiceSession(
             success
         }
         if (!succeeded) return
+        audioFailure?.let { engine.reportAudioError(it) }
         val ttsEnd = System.currentTimeMillis()
         engine.markIdle()
 

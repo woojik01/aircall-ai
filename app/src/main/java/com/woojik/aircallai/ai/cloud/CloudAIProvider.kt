@@ -20,7 +20,7 @@ class CloudAIProvider(
     private val endpointAllowed: (Endpoint) -> Boolean = { true },
     private val streamingEnabled: () -> Boolean = { true },
     private val endpointProvider: () -> Endpoint,
-) : AIProvider {
+) : com.woojik.aircallai.ai.provider.StreamingAIProvider {
 
     /** 사용자가 설정한 클라우드 서비스 접속 정보. */
     data class Endpoint(val baseUrl: String, val model: String)

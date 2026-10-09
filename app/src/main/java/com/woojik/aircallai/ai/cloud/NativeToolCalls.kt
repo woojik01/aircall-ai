@@ -35,7 +35,9 @@ internal object NativeToolCalls {
         return MARKER + JSONObject().put("id", id).put("tool", parts[0]).put("action", parts[1]).put("arguments", args)
     }
     fun decode(text: String): JSONObject? = if (!text.startsWith(MARKER)) null else runCatching {
-        JSONObject(text.removePrefix(MARKER)).also {
+        val tokenizer = org.json.JSONTokener(text.removePrefix(MARKER))
+        (tokenizer.nextValue() as JSONObject).also {
+            require(tokenizer.nextClean() == '\u0000')
             require(it.keys().asSequence().toSet() == setOf("id", "tool", "action", "arguments"))
             require(definitions.any { definition -> definition.first == it.getString("tool") + "__" + it.getString("action") })
             val args = it.getJSONObject("arguments")

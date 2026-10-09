@@ -89,12 +89,13 @@ class ChatRoomRepository(private val store: ChatRoomStore, scope: CoroutineScope
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
     private val loading = Mutex()
+    private val disk = Mutex()
     private val writes = Channel<List<ChatRoom>>(Channel.CONFLATED)
 
     init {
         scope.launch(Dispatchers.IO) {
             for (snapshot in writes) {
-                try { store.write(snapshot); _error.value = null }
+                try { disk.withLock { store.write(_rooms.value.filter { it.hasConversation }) }; _error.value = null }
                 catch (_: Exception) { _error.value = "채팅 저장에 실패했습니다. 저장 공간을 확인해 주세요." }
             }
         }
@@ -147,6 +148,21 @@ class ChatRoomRepository(private val store: ChatRoomStore, scope: CoroutineScope
     fun delete(id: String) {
         if (_activeId.value == id) _activeId.value = null
         publish(_rooms.value.filterNot { it.id == id })
+    }
+
+    /** Import as separate rooms; identical repeated imports are idempotent. Publish after durable write. */
+    suspend fun importRooms(imported: List<ChatRoom>): Int = disk.withLock {
+        check(_ready.value)
+        val existing = _rooms.value
+        val transformed = imported.filter { it.hasConversation }.map { room ->
+            val identity = room.id + "\n" + room.messages.joinToString("\n") { "${it.role}:${it.content}" }
+            room.copy(id = UUID.nameUUIDFromBytes(identity.toByteArray(Charsets.UTF_8)).toString())
+        }.distinctBy { it.id }.filter { room -> existing.none { it.id == room.id || it.messages == room.messages && it.title == room.title } }
+        val merged = transformed + existing
+        withContext(Dispatchers.IO) { store.write(merged.filter { it.hasConversation }) }
+        _rooms.value = merged
+        _error.value = null
+        transformed.size
     }
 
     private fun publish(rooms: List<ChatRoom>) {
