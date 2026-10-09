@@ -33,9 +33,6 @@ import com.woojik.aircallai.tools.ToolApprovalCoordinator
 import com.woojik.aircallai.tools.ToolBridgedAIProvider
 import com.woojik.aircallai.tools.ToolExecutionLogger
 import com.woojik.aircallai.tools.ToolExecutor
-import com.woojik.aircallai.tools.AndroidCalendarAdapter
-import com.woojik.aircallai.tools.CalendarAdapter
-import com.woojik.aircallai.tools.CalendarTool
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +43,7 @@ import kotlinx.coroutines.SupervisorJob
  * PRD-05: 대화 엔진과 세션 상태 통로가 여기서 만들어지며
  * UI(Activity)와 Foreground Service가 동일한 인스턴스를 공유한다.
  * 로컬 기능 증분: 로컬 모델은 LiteRT-LM 어댑터 + 다운로드 갤러리로 구성한다.
- * PRD-06: GitHub/Notes/Calendar/Gmail Tool과 승인 계층을 그래프에 연결한다.
+ * PRD-06: GitHub/Notes/Gmail Tool과 승인 계층을 그래프에 연결한다.
  * WRITE 승인 상태는 일반 설정에 영속화되어 앱 재시작 후에도 유지된다.
  * Tool-AI 연결: 모든 provider를 ToolBridgedAIProvider로 감싸 Tool 지시어를 처리한다.
  * PRD-09: GitHub(기기 인증)/Google(PKCE) OAuth 계층과 연결 저장소를 구성한다.
@@ -71,13 +68,12 @@ class AppGraph(context: Context) {
     val githubApi = GitHubApiClient(credentials)
     val gmailApi = GmailApiClient(credentials)
     val notesStore: NotesStore = FileNotesStore(File(context.filesDir, "tools/notes.txt"))
-    val calendarAdapter: CalendarAdapter = com.woojik.aircallai.tools.GoogleCalendarAdapter(credentials)
     val toolPermissions = PersistedToolPermissionStore(settingsStore)
     val toolLogger = ToolExecutionLogger()
     val toolTracker = com.woojik.aircallai.tools.ToolExecutionTracker()
     private val toolNotifier = com.woojik.aircallai.tools.ToolResultNotifier(context.applicationContext)
     private val availableTools = listOf(
-        GitHubTool(githubApi), NotesTool(notesStore), CalendarTool(calendarAdapter), GmailTool(gmailApi),
+        GitHubTool(githubApi), NotesTool(notesStore), GmailTool(gmailApi),
     )
     val toolExecutor = ToolExecutor(
         availableTools,
@@ -112,8 +108,6 @@ class AppGraph(context: Context) {
             "notes.add_note text=<내용> — 메모를 기기에 저장한다 (승인 필요)\n" +
             "notes.search_notes query=<검색어> — 메모를 검색한다\n" +
             "notes.list_notes [limit=<개수>] — 최근 메모를 나열한다\n" +
-            "calendar.read_upcoming [limit=<개수>] — 다가오는 일정을 조회한다\n" +
-            "calendar.create_event title=<제목> start=\"YYYY-MM-DD HH:MM\" [duration_minutes=<분>] — 일정을 등록한다 (승인 필요)\n" +
             "gmail.send_email to=<주소> subject=<제목> body=<내용> — 이메일을 보낸다 (승인 필요)"
 
     val localProvider: AIProvider = ToolBridgedAIProvider(
@@ -163,4 +157,3 @@ class AppGraph(context: Context) {
     )
     val sessionRepository = SessionRepository(engine, sessionController)
 }
-

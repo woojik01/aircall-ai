@@ -36,8 +36,8 @@ class GoogleOAuthClient : OAuthProvider {
         const val SCOPE_GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify"
         const val SCOPE_CALENDAR_EVENTS = "https://www.googleapis.com/auth/calendar.events"
         const val SCOPE_GMAIL_SEND = "https://www.googleapis.com/auth/gmail.send"
-        // The app sends mail and reads/writes calendar events; it does not read mailboxes.
-        val REQUIRED_SCOPES = listOf(SCOPE_GMAIL_SEND, SCOPE_CALENDAR_EVENTS)
+        // Google integration is Gmail sending only; Calendar permissions are not requested.
+        val REQUIRED_SCOPES = listOf(SCOPE_GMAIL_SEND)
 
         // 기존 코드/외부 호출과의 호환을 위해 유지하되 Authorization URL에는 사용하지 않는다.
         @Deprecated("Android에서는 AuthorizationClient를 사용합니다.")
