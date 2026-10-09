@@ -24,7 +24,7 @@ class PlayPrivacyTest {
     }
 
     @Test fun gmailAuthorizationDoesNotRequestMailboxAccess() {
-        assertEquals(listOf(GoogleOAuthClient.SCOPE_GMAIL_SEND, GoogleOAuthClient.SCOPE_CALENDAR_EVENTS), GoogleOAuthClient.REQUIRED_SCOPES)
+        assertEquals(listOf(GoogleOAuthClient.SCOPE_GMAIL_SEND), GoogleOAuthClient.REQUIRED_SCOPES)
         assertFalse(GoogleOAuthClient.REQUIRED_SCOPES.contains(GoogleOAuthClient.SCOPE_GMAIL_MODIFY))
     }
 }
