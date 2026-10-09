@@ -64,6 +64,7 @@ fun AirCallUi(
     val ready by graph.chatRooms.ready.collectAsState()
     val storageError by graph.chatRooms.error.collectAsState()
     val taskEvents by graph.toolTracker.events.collectAsState()
+    val pending by graph.toolApproval.pending.collectAsState()
     LaunchedEffect(Unit) { requestTaskNotifications() }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "chat"
@@ -207,12 +208,7 @@ fun AirCallUi(
                     Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         storageError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
-                        taskEvents.lastOrNull { it.roomId == activeId }?.let { task ->
-                            Text(task.summary, color = if (task.status == com.woojik.aircallai.tools.ToolExecutionStatus.FAILED)
-                                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                        }
+                        ToolTaskCard(taskEvents.lastOrNull { it.roomId == activeId }, pending)
                         if (!ready) {
                             if (storageError == null) LinearProgressIndicator(Modifier.fillMaxWidth())
                             else TextButton(onClick = { scope.launch {
@@ -284,8 +280,8 @@ fun AirCallUi(
                     } }) { Text("삭제") } },
                     dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } })
             }
-            val pending by graph.toolApproval.pending.collectAsState()
-            pending?.let { ToolApprovalDialog(it, onApprove = { graph.toolApproval.approve() }, onDeny = { graph.toolApproval.deny() }) }
+            pending?.let { original -> ToolApprovalDialog(original,
+                onApprove = { graph.toolApproval.approve(it, expected = original) }, onDeny = { graph.toolApproval.deny() }) }
             if (pendingText != null || pendingVoice) {
                 val voice = pendingVoice
                 AlertDialog(onDismissRequest = { pendingText = null; pendingVoice = false; pendingRoomId = null },

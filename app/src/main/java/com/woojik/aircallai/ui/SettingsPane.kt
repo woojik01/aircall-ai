@@ -85,6 +85,7 @@ fun SettingsDetail(
     var testConsent by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var streaming by remember { mutableStateOf(graph.settings.cloudStreaming()) }
+    var nativeTools by remember { mutableStateOf(graph.settings.nativeCloudTools()) }
     var memory by remember { mutableStateOf("") }
     var memoryLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(category) {
@@ -143,6 +144,11 @@ fun SettingsDetail(
                         Switch(checked = streaming, onCheckedChange = { streaming = it; graph.settings.setCloudStreaming(it) })
                     }
                     Text("지원하지 않는 API에서는 끄세요.", style = MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("구조화된 도구 호출", Modifier.weight(1f))
+                        Switch(checked = nativeTools, onCheckedChange = { nativeTools = it; graph.settings.setNativeCloudTools(it) })
+                    }
+                    Text("함수 호출을 지원하는 API·모델에서 켜세요. 변경 작업은 계속 승인이 필요합니다.", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text("API 키") },
                         visualTransformation = PasswordVisualTransformation(), singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))

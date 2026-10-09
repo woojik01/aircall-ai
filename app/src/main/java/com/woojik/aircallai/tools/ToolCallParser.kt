@@ -6,9 +6,18 @@ object ToolCallParser {
     const val MARKER = "TOOL:"
     private val identifier = Regex("[a-zA-Z_][a-zA-Z0-9_]*")
 
-    fun hasDirective(response: String): Boolean = response.lineSequence().any { it.trim().startsWith(MARKER) }
+    fun hasDirective(response: String): Boolean = response.lineSequence().any {
+        it.trim().startsWith(MARKER) || it.trim().startsWith(com.woojik.aircallai.ai.cloud.NativeToolCalls.MARKER)
+    }
 
     fun parseFirst(response: String): ToolCall? {
+        if (response.trim().startsWith(com.woojik.aircallai.ai.cloud.NativeToolCalls.MARKER)) {
+            if (response.length > 65_536) return null
+            val json = com.woojik.aircallai.ai.cloud.NativeToolCalls.decode(response.trim()) ?: return null
+            val args = json.getJSONObject("arguments")
+            return ToolCall(json.getString("tool"), json.getString("action"),
+                args.keys().asSequence().associateWith { args.getString(it) })
+        }
         val lines = response.lineSequence().map { it.trim() }.filter { it.startsWith(MARKER) }.toList()
         if (lines.size != 1 || lines.single().length > 65_536) return null
         val body = lines.single().removePrefix(MARKER).trim()

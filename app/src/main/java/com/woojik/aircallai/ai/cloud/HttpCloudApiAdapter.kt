@@ -22,6 +22,7 @@ import org.json.JSONObject
  *   시스템 프롬프트로 함께 보낸다 (이모지/특수문자는 TTS에서 소리내지 못하므로 금지).
  */
 class HttpCloudApiAdapter(
+    private val nativeToolsEnabled: () -> Boolean = { false },
     private val connect: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
 ) : CloudApiAdapter {
 
@@ -52,7 +53,7 @@ class HttpCloudApiAdapter(
                 if (conn.contentType?.contains("application/json") == true) {
                     return@withContext parseAssistantText(reader.readText()).also { onText(it) }
                 }
-                readChatStream(reader, onText)
+                readChatStream(reader, allowNative = nativeToolsEnabled(), onText = onText)
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: AIProviderException) { throw e
@@ -105,7 +106,16 @@ class HttpCloudApiAdapter(
         )
         val bounded = if (history.lastOrNull()?.role == ChatMessage.Role.USER)
             com.woojik.aircallai.ai.local.localInferenceHistory(history, 48_000, summarize = true) else history
+        var pendingToolId: String? = null
         bounded.forEach { m ->
+            val envelope = if (m.role == ChatMessage.Role.ASSISTANT && nativeToolsEnabled()) NativeToolCalls.decode(m.content) else null
+            if (envelope != null) {
+                messages.put(NativeToolCalls.message(envelope))
+                pendingToolId = envelope.getString("id")
+            } else if (pendingToolId != null && m.role == ChatMessage.Role.USER) {
+                messages.put(JSONObject().put("role", "tool").put("tool_call_id", pendingToolId).put("content", m.content))
+                pendingToolId = null
+            } else {
             messages.put(
                 JSONObject()
                     .put("role", when (m.role) {
@@ -115,17 +125,26 @@ class HttpCloudApiAdapter(
                     })
                     .put("content", m.content)
             )
+            }
         }
-        return JSONObject().put("model", model).put("messages", messages).toString()
+        return JSONObject().put("model", model).put("messages", messages).also {
+            if (nativeToolsEnabled()) it.put("tools", NativeToolCalls.schema()).put("parallel_tool_calls", false)
+        }.toString()
     }
 
     private fun parseAssistantText(body: String): String {
         return try {
-            val text = JSONObject(body)
+            val message = JSONObject(body)
                 .getJSONArray("choices")
                 .getJSONObject(0)
                 .getJSONObject("message")
-                .getString("content")
+            val calls = message.optJSONArray("tool_calls")
+            val text = if (calls != null && calls.length() > 0) {
+                require(nativeToolsEnabled() && calls.length() == 1)
+                val call = calls.getJSONObject(0)
+                val function = call.getJSONObject("function")
+                NativeToolCalls.envelope(call.getString("id"), function.getString("name"), function.getString("arguments"))
+            } else message.getString("content")
             SecureLog.d(TAG, "cloud response parsed")
             text
         } catch (t: Throwable) {
@@ -150,10 +169,14 @@ class HttpCloudApiAdapter(
 }
 
 /** SSE events can contain multiple data lines and empty usage-only choices. */
-internal suspend fun readChatStream(reader: java.io.BufferedReader, onText: suspend (String) -> Unit): String {
+internal suspend fun readChatStream(reader: java.io.BufferedReader, allowNative: Boolean = false,
+    onText: suspend (String) -> Unit): String {
     val text = StringBuilder()
     val event = StringBuilder()
     var done = false
+    var callId = ""
+    var functionName = ""
+    val arguments = StringBuilder()
     suspend fun consume() {
         val data = event.toString().trim()
         event.setLength(0)
@@ -162,7 +185,21 @@ internal suspend fun readChatStream(reader: java.io.BufferedReader, onText: susp
         val json = JSONObject(data)
         if (json.has("error")) throw AIProviderException(ProviderErrorKind.API_ERROR)
         val choice = json.optJSONArray("choices")?.optJSONObject(0) ?: return
-        val delta = choice.optJSONObject("delta")?.optString("content").orEmpty()
+        val payload = choice.optJSONObject("delta")
+        payload?.optJSONArray("tool_calls")?.let { calls ->
+            require(calls.length() <= 1)
+            if (calls.length() == 1) {
+                val call = calls.getJSONObject(0)
+                require(call.optInt("index", 0) == 0)
+                callId += call.optString("id", "")
+                call.optJSONObject("function")?.let {
+                    functionName += it.optString("name", "")
+                    arguments.append(it.optString("arguments", ""))
+                    require(arguments.length <= 65_536)
+                }
+            }
+        }
+        val delta = payload?.optString("content").orEmpty()
         if (delta.isNotEmpty() && delta != "null") {
             text.append(delta)
             if (text.length > 1_000_000) throw AIProviderException(ProviderErrorKind.API_ERROR)
@@ -180,6 +217,11 @@ internal suspend fun readChatStream(reader: java.io.BufferedReader, onText: susp
         }
     }
     if (event.isNotEmpty()) consume()
-    if (!done || text.isEmpty()) throw AIProviderException(ProviderErrorKind.NETWORK, "응답이 중단되었습니다")
+    if (!done) throw AIProviderException(ProviderErrorKind.NETWORK, "응답이 중단되었습니다")
+    if (functionName.isNotEmpty()) {
+        require(allowNative)
+        return NativeToolCalls.envelope(callId, functionName, arguments.toString())
+    }
+    if (text.isEmpty()) throw AIProviderException(ProviderErrorKind.API_ERROR)
     return text.toString()
 }

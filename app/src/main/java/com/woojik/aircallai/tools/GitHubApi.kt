@@ -107,7 +107,9 @@ open class GitHubApiClient(
             when (code) {
                 in 200..299 -> {
                     val resultBody = if (decodeContents) decodeContentsResponse(responseBody) else responseBody
-                    ToolResult(true, resultBody.take(MAX_RESPONSE_CHARS).ifBlank { "GitHub 요청이 완료되었습니다." })
+                    val resultUrl = runCatching { org.json.JSONObject(responseBody).optString("html_url") }.getOrNull()
+                        ?.takeIf { safeGitHubResultUrl(it) }
+                    ToolResult(true, resultBody.take(MAX_RESPONSE_CHARS).ifBlank { "GitHub 요청이 완료되었습니다." }, resultUrl)
                 }
                 401 -> ToolResult(false, "GitHub 토큰이 유효하지 않습니다. 계정을 다시 연결해 주세요.")
                 403 -> ToolResult(false, githubError("GitHub 접근이 거부되었습니다. 저장소 권한 또는 API 제한을 확인해 주세요.", responseBody))

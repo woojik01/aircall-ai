@@ -121,7 +121,7 @@ class AppGraph(context: Context) {
     val cloudProvider: AIProvider = ToolBridgedAIProvider(
         base = com.woojik.aircallai.privacy.SafetyAIProvider(CloudAIProvider(
             credentials = credentials,
-            apiAdapter = HttpCloudApiAdapter(),
+            apiAdapter = HttpCloudApiAdapter(nativeToolsEnabled = { settings.nativeCloudTools() }),
             streamingEnabled = { settings.cloudStreaming() },
             endpointAllowed = { settings.hasCloudDisclosure(it.baseUrl) },
             endpointProvider = {

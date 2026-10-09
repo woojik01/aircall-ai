@@ -49,8 +49,12 @@ class ToolApprovalCoordinator(
     }
 
     /** 사용자 승인: 표시된 요청만 실행하며 다음 작업에는 다시 승인이 필요하다. */
-    fun approve() {
-        val request = _pending.value ?: return
+    fun approve(reviewed: ToolRequest? = null, expected: ToolRequest? = null) {
+        val pending = _pending.value ?: return
+        if (expected != null && expected != pending) return
+        if (reviewed != null && (reviewed.toolName != pending.toolName || reviewed.action != pending.action ||
+                reviewed.arguments.keys != pending.arguments.keys)) return
+        val request = reviewed?.copy(arguments = reviewed.arguments.toMap()) ?: pending
         val completion = waiting
         // Consume synchronously: a second tap cannot send a second email or create a second issue.
         _pending.value = null

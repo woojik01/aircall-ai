@@ -14,6 +14,7 @@ data class ToolExecutionEvent(
     val action: String,
     val roomId: String? = null,
     val status: ToolExecutionStatus = ToolExecutionStatus.RUNNING,
+    val resultUrl: String? = null,
 ) {
     val label: String get() = ToolLabels.action(toolName, action)
     val summary: String get() = when (status) {

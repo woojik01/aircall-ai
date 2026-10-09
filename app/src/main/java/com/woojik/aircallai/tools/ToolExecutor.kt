@@ -27,10 +27,17 @@ class ToolExecutor(
             throw e
         }
         catch (_: Exception) { ToolResult(false, "도구 실행에 실패했습니다") }
-        emit(event.copy(status = if (result.success) ToolExecutionStatus.SUCCEEDED else ToolExecutionStatus.FAILED))
+        emit(event.copy(status = if (result.success) ToolExecutionStatus.SUCCEEDED else ToolExecutionStatus.FAILED,
+            resultUrl = result.url?.takeIf { safeGitHubResultUrl(it) }))
         return result
     }
 
     // A disabled notification or failed UI observer must never retry a completed write.
     private fun emit(event: ToolExecutionEvent) { runCatching { onEvent(event) } }
 }
+
+internal fun safeGitHubResultUrl(url: String): Boolean = runCatching {
+    val uri = java.net.URI(url)
+    uri.scheme == "https" && uri.host == "github.com" && uri.userInfo == null && uri.port == -1 &&
+        uri.query == null && uri.fragment == null && uri.path.startsWith("/")
+}.getOrDefault(false)
