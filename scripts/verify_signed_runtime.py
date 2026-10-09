@@ -98,6 +98,14 @@ def models_ui(legacy=False):
                    has(root, "로컬 모델" if legacy else "다운로드 후 적용해 주세요."), "models")
 
 
+def reopened_main_ui():
+    # MainActivity.onNewIntent deliberately opens a fresh chat for launcher intents.
+    # Process restoration can retain models or receive that new launcher intent.
+    return wait_ui(lambda root: has(root, "메시지 입력") or
+                   (has(root, "GPU 가속") and has(root, "다운로드 후 적용해 주세요.")),
+                   "interactive chat or models after process death")
+
+
 def read_fixture(relative):
     # All files belong to this freshly created emulator fixture, never a real account.
     return subprocess.check_output(["adb", "exec-out", "cat", DATA + "/" + relative], timeout=30)
@@ -285,9 +293,10 @@ def main():
         models_ui()
         old_pid = background_and_kill("restore-" + str(index))
         launch()
-        models_ui()
+        root = reopened_main_ui()
         assert adb("shell", "pidof", PACKAGE) != old_pid
-        record("Production models screen restored in a new process", iteration=index + 1)
+        record("Production main screen reopened in a new process", iteration=index + 1,
+               renderedScreen="models" if has(root, "GPU 가속") else "chat")
     adb("shell", "am", "force-stop", PACKAGE)
     seed_files(legacy=True)
     adb("shell", "mkdir", "-p", DATA + "/files/credentials/oauth.gmail.account.bin")
@@ -321,3 +330,9 @@ if __name__ == "__main__":
                               ("final-activities.txt", ("shell", "dumpsys", "activity", "activities"))):
             (RESULTS / name).write_text(adb(*command, check=False))
         print("Final emulator crash buffer:\n" + adb("logcat", "-d", "-b", "crash", check=False), flush=True)
+        if (RESULTS / "ui.xml").exists():
+            root = ET.parse(RESULTS / "ui.xml").getroot()
+            print("Final emulator UI controls: " + json.dumps([
+                {"text": node.get("text", ""), "description": node.get("content-desc", "")}
+                for node in nodes(root) if node.get("text") or node.get("content-desc")
+            ], ensure_ascii=False), flush=True)
