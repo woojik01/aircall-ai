@@ -3,7 +3,37 @@
 Android에서 로컬 모델 또는 클라우드 API로 텍스트·음성 대화를 제공하는 앱입니다.
 Google·GitHub에 로그인하지 않아도 대화와 기기 메모를 사용할 수 있습니다.
 
-[원스토어 우선 출시](docs/onestore/README.md) · [설치·업데이트·서명](docs/RELEASING.md) · [Google Play 제출 준비](docs/play/README.md) ·
+## 무료 APK 다운로드
+
+**[AirCall AI 0.4.1 (30007) 공개 시험판](https://github.com/woojik01/aircall-ai/releases/tag/v0.4.1-build.30007)** ·
+**[APK 바로 다운로드](https://github.com/woojik01/aircall-ai/releases/download/v0.4.1-build.30007/aircall-0.4.1-30007.apk)**
+
+Android 8.0 이상에서 사용할 수 있습니다. APK 다운로드와 앱 배포는 무료이며 스토어 계정이 필요하지 않습니다.
+로컬 모델은 다운로드 후 기기에서 실행합니다. 사용자가 연결하는 클라우드 API에는 제공자의 별도 요금이 있을 수 있습니다.
+실제 기기의 음성·모델·로그인 동작은 별도 확인이 필요한 **공개 시험판**입니다.
+
+1. `aircall-0.4.1-30007.apk`를 다운로드합니다. AAB와 소스 ZIP은 직접 설치하는 파일이 아닙니다.
+2. Android 설치 안내에 따라 사용한 브라우저 또는 파일 관리자의 앱 설치를 허용하고 APK를 엽니다.
+3. 설정 → AI 및 모델에서 기기에 맞는 로컬 모델을 내려받아 적용합니다.
+4. 업데이트는 [Releases](https://github.com/woojik01/aircall-ai/releases)에서 같은 서명의 더 높은 versionCode APK를 받습니다.
+   현재 앱 내 업데이트 안내는 원스토어를 가리킬 수 있습니다.
+
+**서명 주의:** GitHub APK의 개인 서명과 원스토어가 적용한 출시 서명이 다르므로 서로 덮어쓰는 업데이트가 안 될 수 있습니다.
+설치 충돌이 발생하면 기존 앱을 바로 삭제하지 마세요. 삭제하면 대화·메모·설정이 사라질 수 있습니다.
+개발용 앱(`com.woojik.aircallai`)과 공개 시험판(`com.woojik.aircallai.release`) 사이의 자동 데이터 이전도 지원하지 않습니다.
+
+2026-10-09 공개 APK를 실제 다운로드하여 크기와 SHA-256을 확인했습니다.
+50,274,501바이트이며 아래 값은 릴리스의 `SHA256SUMS.txt` 및 GitHub 자산 지문과 일치합니다.
+
+```text
+4e4acca2036cb998abe78979c44f4eb29d02748335886f7e466ead8c5908108c  aircall-0.4.1-30007.apk
+```
+
+GitHub 직접 배포는 Google 개발자 인증 완료를 의미하지 않습니다. 향후 정책이 적용되는 지역·시점에는
+미인증 앱 설치와 업데이트에 사용자의 고급 설치 절차가 필요할 수 있습니다.
+[Google 공식 안내](https://developer.android.com/developer-verification/guides/faq)를 확인하세요.
+
+[원스토어 제출](docs/onestore/README.md) · [설치·업데이트·서명](docs/RELEASING.md) · [Google Play 제출 준비](docs/play/README.md) ·
 [변경 기록](CHANGELOG.md) · [보안 안내](SECURITY.md) · [개발 명세](docs/prd/README.md)
 
 0.4.1은 원스토어용 단일 서명 APK·제출 문서 생성 경로와 앱 정보·사용 안내를 추가합니다.
@@ -17,7 +47,7 @@ Actions의 **ONE store Release**는 개인 서명키·실제 공개 정책·발�
 - 사용자가 설정한 HTTPS 주소의 OpenAI 호환 클라우드 API 연결
 - Android 음성 인식·음성 출력, 통화 알림과 선택적 오버레이
 - GitHub 저장소·파일 조회, 이슈·PR 생성
-- Google 로그인으로 Gmail 발송 및 기본 캘린더 일정 조회·등록
+- Google 권한 연결로 Gmail 발송; 캘린더 기능과 캘린더 권한 요청은 비활성화
 - 로그인 없이 기기에 메모 저장·검색
 - 작업 결과 알림, 서비스 문의 이메일, 개인정보 안내와 전체 기기 데이터 삭제
 - 앱 정보·첫 AI 설정 안내, 원스토어 상품 페이지를 통한 업데이트 확인
@@ -25,7 +55,7 @@ Actions의 **ONE store Release**는 개인 서명키·실제 공개 정책·발�
 앱 버전은 [version.properties](version.properties)를 기준으로 합니다.
 개발 명세는 목표 사양이며 구현 완료·실기 검증·출시 승인 여부를 뜻하지 않습니다.
 
-## 설치와 업데이트
+## 개발용 APK와 서명 빌드
 
 GitHub Actions의 **aircall-debug-apk**에서 ZIP을 풀고 **aircall-dev.apk**를 설치하세요.
 **aircall-upgrade-test-apk**는 업데이트 검사용이며 일반 설치 파일이 아닙니다.
@@ -58,14 +88,15 @@ API 주소에는 사용자명·비밀번호·URL 프래그먼트를 넣을 수 �
 
 설정 → 도구 및 계정에서 **GitHub로 로그인** 또는 **Google로 로그인**을 선택하세요.
 GitHub는 기기 인증을, Google은 Android AuthorizationClient를 사용합니다.
-Google 연결은 Gmail 발송과 캘린더 일정 권한을 요청합니다. 만료 시 다시 연결해야 할 수 있습니다.
+Google 연결은 Gmail 발송 권한만 요청합니다. 캘린더 권한은 요청하지 않으며 일정 도구도 실행하지 않습니다.
+만료 시 다시 연결해야 할 수 있습니다.
 
-조회 작업은 기본 허용합니다. 메일 발송, 메모 저장, 일정 등록, 이슈·PR 생성 등 변경 작업은
+조회 작업은 기본 허용합니다. 메일 발송, 메모 저장, 이슈·PR 생성 등 변경 작업은
 **매번 표시된 내용을 확인하고 승인해야** 실행합니다. 승인은 다음 요청에 재사용하지 않습니다.
 이전 버전에 저장된 지속 승인은 자동 실행에 사용하지 않으며 설정 → 작업 승인에서 삭제할 수 있습니다.
 작업 결과 알림에는 도구 종류와 실행 상태만 표시합니다.
 
-외부 도구 결과는 AI 답변 생성에 사용됩니다. 클라우드 모드에서는 조회한 파일·일정·메모 등
+외부 도구 결과는 AI 답변 생성에 사용됩니다. 클라우드 모드에서는 조회한 파일·메모 등
 결과에 포함된 정보도 선택한 AI 제공자에게 전달될 수 있습니다.
 
 ## 개발자 OAuth 설정
@@ -73,7 +104,7 @@ Google 연결은 Gmail 발송과 캘린더 일정 권한을 요청합니다. 만
 OAuth Client ID는 공개 식별자이며 비밀키가 아닙니다. 클라이언트 시크릿은 앱에 넣지 않습니다.
 
 - GitHub OAuth 앱에서 기기 인증 흐름을 활성화하고 `GITHUB_OAUTH_CLIENT_ID`를 설정합니다.
-- Google Cloud에서 Gmail·Calendar API와 Android OAuth 클라이언트를 준비합니다.
+- Google Cloud에서 Gmail API와 Android OAuth 클라이언트를 준비합니다. 캘린더 API는 현재 기능에 필요하지 않습니다.
   개발용 패키지는 `com.woojik.aircallai`, 정식 패키지는 `com.woojik.aircallai.release`입니다.
   각 패키지와 실제 서명 인증서에 맞게 등록합니다. Google Play 앱 서명은 업로드 키와 다를 수 있습니다.
 - 일반 빌드는 `GOOGLE_OAUTH_CLIENT_ID`, 정식 릴리스 워크플로는
