@@ -34,6 +34,8 @@ class SettingsRepository(
     // Store only the acknowledgement, not birthdate or identity documents.
     fun hasMinimumAgeAcknowledgement(): Boolean = store.getString("minimum_age_14_v1") == "accepted"
     fun acceptMinimumAgeAcknowledgement() = store.putString("minimum_age_14_v1", "accepted")
+    fun cloudStreaming(): Boolean = store.getString("cloud_streaming") != "false"
+    fun setCloudStreaming(enabled: Boolean) = store.putString("cloud_streaming", enabled.toString())
 
     fun themeMode(): String = store.getString(KEY_THEME_MODE)
         ?.takeIf { it in setOf(THEME_LIGHT, THEME_DARK, THEME_SYSTEM) } ?: THEME_SYSTEM
