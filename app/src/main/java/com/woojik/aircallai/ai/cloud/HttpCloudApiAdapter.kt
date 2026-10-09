@@ -63,7 +63,8 @@ class HttpCloudApiAdapter(
         messages.put(
             JSONObject()
                 .put("role", "system")
-                .put("content", SYSTEM_PERSONA)
+                .put("content", if (com.woojik.aircallai.ai.provider.ResponseStyle.isVoice(history)) SYSTEM_PERSONA
+                    else com.woojik.aircallai.ai.provider.ResponseStyle.TEXT_PROMPT)
         )
         history.forEach { m ->
             messages.put(

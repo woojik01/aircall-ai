@@ -73,7 +73,9 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                             Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
                                 Text(if (user) "나" else "AirCall", style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
-                                androidx.compose.foundation.text.selection.SelectionContainer { Text(message.content, style = MaterialTheme.typography.bodyLarge) }
+                                if (user) androidx.compose.foundation.text.selection.SelectionContainer {
+                                    Text(message.content, style = MaterialTheme.typography.bodyLarge)
+                                } else ChatMarkdown(message.content)
                             }
                         }
                     }
