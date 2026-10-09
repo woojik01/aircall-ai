@@ -29,6 +29,7 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingCategory("ai", "AI 및 모델", "로컬 · 클라우드, 모델 다운로드", onOpen)
         SettingCategory("accounts", "도구 및 계정", "GitHub · Google 로그인", onOpen)
+        SettingCategory("memory", "기억할 정보", "직접 저장 · 수정 · 삭제", onOpen)
         SettingCategory("appearance", "화면 및 알림", "라이트 · 다크 · 시스템, 알림 설정", onOpen)
         SettingCategory("permissions", "작업 승인", "실행 전 확인 및 이전 승인 관리", onOpen)
         SettingCategory("privacy", "개인정보", "개인정보처리방침 · 데이터 삭제", onOpen)
@@ -84,6 +85,14 @@ fun SettingsDetail(
     var testConsent by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var streaming by remember { mutableStateOf(graph.settings.cloudStreaming()) }
+    var memory by remember { mutableStateOf("") }
+    var memoryLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(category) {
+        if (category == "memory") {
+            memory = graph.credentials.load("personal_memory")?.decodeToString().orEmpty()
+            memoryLoaded = true
+        }
+    }
     LaunchedEffect(status) {
         if (status != null) { delay(6_000); status = null }
     }
@@ -93,6 +102,18 @@ fun SettingsDetail(
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         when (category) {
+            "memory" -> SettingsSection("AI가 기억할 정보") {
+                Text("이름·선호하는 설명 방식 등 대화에 필요한 내용을 직접 관리하세요. 기기에 암호화 저장됩니다. 클라우드 모드에서는 답변 생성을 위해 선택한 AI 서버에 전송됩니다.")
+                OutlinedTextField(memory, { memory = it.take(150) }, label = { Text("기억할 정보 (최대 150자)") },
+                    modifier = Modifier.fillMaxWidth(), minLines = 3, enabled = memoryLoaded)
+                Button(onClick = { scope.launch {
+                    graph.credentials.save("personal_memory", memory.trim().toByteArray(Charsets.UTF_8))
+                    status = "기억할 정보를 저장했습니다. 다음 대화부터 적용됩니다."
+                } }, enabled = memoryLoaded) { Text("저장") }
+                TextButton(onClick = { scope.launch {
+                    graph.credentials.delete("personal_memory"); memory = ""; status = "기억할 정보를 삭제했습니다."
+                } }, enabled = memoryLoaded) { Text("기억 삭제") }
+            }
             "ai" -> {
                 SettingsSection("처음 시작하기") {
                     Text("기기에서 실행: 모델을 다운로드하고 적용하면 API 키 없이 대화할 수 있어요.\n클라우드 API: 제공자의 키·주소·모델을 저장한 뒤 연결을 테스트하세요. 제공자 요금이 발생할 수 있어요.")

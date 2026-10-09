@@ -146,7 +146,8 @@ class AppGraph(context: Context) {
             File(context.filesDir, "chats/rooms.enc"), crypto,
         ), appScope,
     )
-    val engine = ConversationEngine(providerRouter.current(), chatRooms::updateMessages)
+    val engine = ConversationEngine(providerRouter.current(), chatRooms::updateMessages,
+        memoryProvider = { credentials.load("personal_memory")?.decodeToString().orEmpty() })
 
     /**
      * Android 음성 API(SpeechRecognizer/TTS)는 메인 스레드에서 호출한다.

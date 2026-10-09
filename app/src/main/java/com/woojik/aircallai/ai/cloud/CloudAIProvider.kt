@@ -18,8 +18,8 @@ class CloudAIProvider(
     private val credentials: CredentialManager,
     private val apiAdapter: CloudApiAdapter,
     private val endpointAllowed: (Endpoint) -> Boolean = { true },
-    private val endpointProvider: () -> Endpoint,
     private val streamingEnabled: () -> Boolean = { true },
+    private val endpointProvider: () -> Endpoint,
 ) : AIProvider {
 
     /** 사용자가 설정한 클라우드 서비스 접속 정보. */

@@ -67,7 +67,7 @@ class LiteRtModelAdapter(
     override suspend fun generate(history: List<ChatMessage>): String {
         val model = selectedModel() ?: throw AIProviderException(ProviderErrorKind.MODEL_NOT_INSTALLED)
         requireAvailable(model)
-        val bounded = localInferenceHistory(history)
+        val bounded = localInferenceHistory(history, model.inputByteBudget, summarize = true)
         return localErrors(ProviderErrorKind.INFERENCE_FAILED) {
             runtime.withModel(modelFile(model), settings.localUseGpu().toString()) { backend ->
                 backend.generate(bounded).ifBlank {

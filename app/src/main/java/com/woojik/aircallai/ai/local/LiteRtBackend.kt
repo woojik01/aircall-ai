@@ -48,7 +48,7 @@ internal class LiteRtBackend(
             backend = if (useGpu) Backend.GPU() else Backend.CPU(
                 threadCount = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
             ),
-            maxNumTokens = 4096,
+            maxNumTokens = LocalModelRegistry.byFileName(file.name)?.contextTokens ?: 4096,
             cacheDir = File(cacheDir, "litert-0.17.1/" + if (useGpu) "gpu" else "cpu")
                 .apply { mkdirs() }.absolutePath,
         ),

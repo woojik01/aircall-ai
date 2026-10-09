@@ -191,7 +191,7 @@ fun AirCallUi(
                                 "about" -> "앱 정보"
                                 "settings/{category}" -> when (entry?.arguments?.getString("category")) {
                                     "ai" -> "AI 및 모델"; "accounts" -> "도구 및 계정"
-                                    "permissions" -> "작업 승인"; else -> "화면 및 알림"
+                                    "permissions" -> "작업 승인"; "memory" -> "기억할 정보"; else -> "화면 및 알림"
                                 }
                                 else -> "설정"
                             }, modifier = Modifier.weight(1f).padding(end = 12.dp),

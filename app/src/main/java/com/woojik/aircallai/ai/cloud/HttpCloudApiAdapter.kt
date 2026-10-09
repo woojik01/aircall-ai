@@ -103,7 +103,9 @@ class HttpCloudApiAdapter(
                 .put("content", if (com.woojik.aircallai.ai.provider.ResponseStyle.isVoice(history)) SYSTEM_PERSONA
                     else com.woojik.aircallai.ai.provider.ResponseStyle.TEXT_PROMPT)
         )
-        history.forEach { m ->
+        val bounded = if (history.lastOrNull()?.role == ChatMessage.Role.USER)
+            com.woojik.aircallai.ai.local.localInferenceHistory(history, 48_000, summarize = true) else history
+        bounded.forEach { m ->
             messages.put(
                 JSONObject()
                     .put("role", when (m.role) {
