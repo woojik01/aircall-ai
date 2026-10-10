@@ -62,7 +62,7 @@ fun PrivacyScreen(onBeforeClearData: () -> Unit = {}) {
     }
     if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false },
         title = { Text("앱 데이터를 모두 삭제할까요?") },
-        text = { Text("이 기기의 채팅·메모·키·연결 정보·설정·모델을 모두 삭제합니다. 복구할 수 없으며 앱이 종료됩니다. 외부 서비스의 데이터는 삭제되지 않습니다.") },
+        text = { Text("이 기기의 채팅·메모·기억할 정보·키·연결 정보·설정·모델을 모두 삭제하며 앱이 종료됩니다. 백업 없이 복구할 수 없습니다. 별도로 저장한 백업·JSON 파일은 저장 위치에서 직접 삭제해야 합니다. 외부 서비스의 데이터는 삭제되지 않습니다.") },
         confirmButton = { TextButton(onClick = {
             onBeforeClearData()
             context.stopService(Intent(context, com.woojik.aircallai.service.ModelDownloadService::class.java))

@@ -30,6 +30,8 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
     val transcript by vm.transcript.collectAsState()
     val sessionStatus by vm.sessionStatus.collectAsState()
     val providerReady by vm.providerReady.collectAsState()
+    val partial by vm.engine.partialResponse.collectAsState()
+    val retryAllowed by vm.engine.retryAllowed.collectAsState()
     val listState = rememberLazyListState()
     var input by rememberSaveable(roomId) { mutableStateOf("") }
     var awaitingConsent by rememberSaveable(roomId) { mutableStateOf(false) }
@@ -73,7 +75,9 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                             Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
                                 Text(if (user) "나" else "AirCall", style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
-                                androidx.compose.foundation.text.selection.SelectionContainer { Text(message.content, style = MaterialTheme.typography.bodyLarge) }
+                                if (user) androidx.compose.foundation.text.selection.SelectionContainer {
+                                    Text(message.content, style = MaterialTheme.typography.bodyLarge)
+                                } else ChatMarkdown(message.content)
                             }
                         }
                     }
@@ -86,11 +90,18 @@ fun ConversationScreen(vm: MainViewModel, roomId: String?, onOpenCall: () -> Uni
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()).padding(16.dp)) {
                     Text((state as ConversationState.Error).message, style = MaterialTheme.typography.bodyMedium)
+                    if (retryAllowed && !active) TextButton(onClick = { vm.retryText() }) { Text("다시 시도") }
+                    TextButton(onClick = onOpenAiSettings) { Text("AI 설정 확인") }
+                    if (!retryAllowed && (state as ConversationState.Error).kind == ConversationState.ErrorKind.AI_PROVIDER)
+                        Text("변경 작업을 시도했다면 외부 서비스에서 결과를 확인한 뒤 새 요청을 보내세요.", style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = { vm.engine.clearError() }) { Text("닫기") }
                 }
             }
         }
         if (state is ConversationState.Processing) {
+            if (partial.isNotBlank()) Surface(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(partial, Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(12.dp))
+            }
             Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Text("생각하고 있어요", Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium)

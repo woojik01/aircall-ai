@@ -9,12 +9,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.woojik.aircallai.tools.ToolRequest
 
 @Composable
-fun ToolApprovalDialog(request: ToolRequest, onApprove: () -> Unit, onDeny: () -> Unit) {
+fun ToolApprovalDialog(request: ToolRequest, onApprove: (ToolRequest) -> Unit, onDeny: () -> Unit) {
+    var arguments by remember(request) { mutableStateOf(request.arguments.toMap()) }
     AlertDialog(
         onDismissRequest = onDeny,
         title = { Text("도구 작업 승인") },
@@ -25,15 +27,16 @@ fun ToolApprovalDialog(request: ToolRequest, onApprove: () -> Unit, onDeny: () -
                     style = MaterialTheme.typography.bodyMedium)
                 Text(com.woojik.aircallai.tools.ToolLabels.action(request.toolName, request.action), style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider()
-                request.arguments.forEach { (key, value) ->
+                arguments.forEach { (key, value) ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(com.woojik.aircallai.tools.ToolLabels.argument(key), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        SelectionContainer { Text(value, style = MaterialTheme.typography.bodyLarge) }
+                        OutlinedTextField(value, { arguments = arguments + (key to it) },
+                            modifier = Modifier, minLines = if (key in setOf("body", "text")) 3 else 1)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onApprove) { Text("이번 작업 실행") } },
+        confirmButton = { TextButton(onClick = { onApprove(request.copy(arguments = arguments.toMap())) }) { Text("이 내용으로 실행") } },
         dismissButton = { TextButton(onClick = onDeny) { Text("취소") } },
     )
 }

@@ -18,8 +18,9 @@ class CloudAIProvider(
     private val credentials: CredentialManager,
     private val apiAdapter: CloudApiAdapter,
     private val endpointAllowed: (Endpoint) -> Boolean = { true },
+    private val streamingEnabled: () -> Boolean = { true },
     private val endpointProvider: () -> Endpoint,
-) : AIProvider {
+) : com.woojik.aircallai.ai.provider.StreamingAIProvider {
 
     /** 사용자가 설정한 클라우드 서비스 접속 정보. */
     data class Endpoint(val baseUrl: String, val model: String)
@@ -29,7 +30,11 @@ class CloudAIProvider(
 
     override suspend fun isReady(): Boolean = credentials.load(KEY_SERVICE) != null
 
-    override suspend fun respond(history: List<ChatMessage>): AIResponse {
+    override suspend fun respond(history: List<ChatMessage>): AIResponse = respondWith(history, null)
+    override suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse =
+        respondWith(history, onText)
+
+    private suspend fun respondWith(history: List<ChatMessage>, onText: (suspend (String) -> Unit)?): AIResponse {
         val started = System.currentTimeMillis()
         val apiKey = credentials.load(KEY_SERVICE)?.decodeToString()
             ?: throw AIProviderException(ProviderErrorKind.NO_KEY)
@@ -38,7 +43,8 @@ class CloudAIProvider(
         // Check the captured destination immediately before the adapter can transmit data.
         if (!endpointAllowed(endpoint)) throw AIProviderException(ProviderErrorKind.CONSENT_REQUIRED)
         val text = try {
-            apiAdapter.chat(apiKey, endpoint.baseUrl, endpoint.model, history)
+            if (onText != null && streamingEnabled()) apiAdapter.chatStreaming(apiKey, endpoint.baseUrl, endpoint.model, history, onText)
+            else apiAdapter.chat(apiKey, endpoint.baseUrl, endpoint.model, history).also { onText?.invoke(it) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: AIProviderException) {

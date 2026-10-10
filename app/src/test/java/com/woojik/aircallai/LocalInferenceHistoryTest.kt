@@ -30,4 +30,13 @@ class LocalInferenceHistoryTest {
     @Test fun failedPreviousTurnDoesNotCreateConsecutiveUserRoles() {
         assertEquals(listOf(user("다시")), localInferenceHistory(listOf(user("실패"), user("다시"))))
     }
+    @Test fun summarizedHistoryKeepsRecentPairsAndSourceLabelledEarlierDataWithinBudget() {
+        val history = listOf(user("내 이름은 민수야. " + "가".repeat(1200)), reply("나".repeat(1200)),
+            user("최근 질문"), reply("최근 답변"), user("내 이름이 뭐야?"))
+        val bounded = localInferenceHistory(history, 2800, summarize = true)
+        assertEquals(history.takeLast(3), bounded.takeLast(3))
+        assertTrue(bounded.first().content.contains("민수"))
+        assertEquals(ChatMessage.Role.USER, bounded.first().role)
+        assertTrue(bounded.sumOf { it.content.toByteArray().size + 64 } + 256 <= 2800)
+    }
 }

@@ -13,16 +13,24 @@ interface NotesStore {
     suspend fun append(text: String)
     suspend fun search(query: String): List<String>
     suspend fun recent(limit: Int): List<String>
+    suspend fun all(): List<String> = recent(50)
+    suspend fun mergeImported(lines: List<String>) { lines.forEach { append(it) } }
 }
 
 /** 파일 기반 구현. 한 줄이 하나의 메모(줄바꿈은 공백으로 정규화). */
 class FileNotesStore(private val file: File) : NotesStore {
+    private val lock = kotlinx.coroutines.sync.Mutex()
 
     override suspend fun append(text: String) = withContext(Dispatchers.IO) {
         val normalized = text.replace(NEWLINE, " ").trim()
         if (normalized.isEmpty()) return@withContext
-        file.parentFile?.mkdirs()
-        file.appendText(System.currentTimeMillis().toString() + " " + normalized + System.lineSeparator())
+        lock.lock()
+        try {
+            file.parentFile?.mkdirs()
+            val line = System.currentTimeMillis().toString() + " " + normalized + System.lineSeparator()
+            require(file.length() + line.toByteArray(Charsets.UTF_8).size <= 8 * 1024 * 1024)
+            file.appendText(line)
+        } finally { lock.unlock() }
     }
 
     override suspend fun search(query: String): List<String> = withContext(Dispatchers.IO) {
@@ -34,9 +42,29 @@ class FileNotesStore(private val file: File) : NotesStore {
     override suspend fun recent(limit: Int): List<String> = withContext(Dispatchers.IO) {
         readLines().takeLast(limit.coerceIn(1, MAX_LIST))
     }
+    override suspend fun all(): List<String> = withContext(Dispatchers.IO) { readLines() }
+    override suspend fun mergeImported(lines: List<String>): Unit = withContext(Dispatchers.IO) {
+        lock.lock()
+        try {
+            require(lines.none { it.contains('\n') || it.contains('\r') })
+            val merged = (readLines() + lines).distinct().joinToString("\n", postfix = "\n")
+            require(merged.toByteArray(Charsets.UTF_8).size <= 8 * 1024 * 1024)
+            file.parentFile?.mkdirs()
+            val temp = File(file.path + ".import")
+            try {
+                java.io.FileOutputStream(temp).use { it.write(merged.toByteArray(Charsets.UTF_8)); it.fd.sync() }
+                java.nio.file.Files.move(temp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+                Unit
+            } finally { temp.delete() }
+        } finally { lock.unlock() }
+    }
 
     private fun readLines(): List<String> =
-        if (file.exists()) file.readLines().filter { it.isNotBlank() } else emptyList()
+        if (file.exists()) {
+            require(file.length() <= 8 * 1024 * 1024)
+            file.readLines().filter { it.isNotBlank() }
+        } else emptyList()
 
     companion object {
         private val NEWLINE = Regex("[\\r\\n]+")

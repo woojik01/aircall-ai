@@ -12,6 +12,8 @@ data class LocalModelInfo(
     val minRamMb: Int,
     val description: String,
     val sha256: String,
+    val contextTokens: Int = 4096,
+    val inputByteBudget: Int = 2800,
 )
 
 object LocalModelRegistry {
@@ -38,6 +40,8 @@ object LocalModelRegistry {
             minRamMb = 8192,
             description = "더 큰 GPU 가속 및 CPU 전환을 지원하는 텍스트 모델. E2B보다 많은 저장 공간과 메모리가 필요합니다.",
             sha256 = "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
+            contextTokens = 8192,
+            inputByteBudget = 6000,
         ),
     )
 

@@ -4,6 +4,7 @@ import com.woojik.aircallai.ai.provider.AIProvider
 import com.woojik.aircallai.ai.provider.AIResponse
 import com.woojik.aircallai.ai.provider.ChatMessage
 import com.woojik.aircallai.ai.provider.ProviderType
+import com.woojik.aircallai.ai.provider.respondStreaming
 
 /** Request-scoped tool discovery, validated execution and result-grounded replies. */
 class ToolBridgedAIProvider(
@@ -14,14 +15,21 @@ class ToolBridgedAIProvider(
     private val tools: List<Tool> = emptyList(),
     private val approvalRequester: ((ToolRequest) -> Unit)? = null,
     private val approvalHandler: (suspend (ToolRequest) -> ToolResult)? = null,
-) : AIProvider {
+) : com.woojik.aircallai.ai.provider.StreamingAIProvider {
 
     override val type: ProviderType = base.type
     override val displayName: String = base.displayName
+    @Volatile private var lastTurnRetrySafe = true
+    override val retrySafe: Boolean get() = lastTurnRetrySafe
 
     override suspend fun isReady(): Boolean = base.isReady()
 
-    override suspend fun respond(history: List<ChatMessage>): AIResponse {
+    override suspend fun respond(history: List<ChatMessage>): AIResponse = respondWith(history, null)
+    override suspend fun respondStreaming(history: List<ChatMessage>, onText: suspend (String) -> Unit): AIResponse =
+        respondWith(history, onText).also { onText(it.message.content) }
+
+    private suspend fun respondWith(history: List<ChatMessage>, onText: (suspend (String) -> Unit)?): AIResponse {
+        lastTurnRetrySafe = true
         val requestHistory = discoverTools(history)
         val started = System.currentTimeMillis()
 
@@ -39,7 +47,13 @@ class ToolBridgedAIProvider(
         val writeRequests = mutableSetOf<ToolRequest>()
 
         while (round < MAX_TOOL_ROUNDS) {
-            val response = base.respond(modelHistory(current, originalUserMessage))
+            val response = if (onText != null && round == 0 && requestedTools.isEmpty()) {
+                base.respondStreaming(modelHistory(current, originalUserMessage)) { text ->
+                    // Hold directive prefixes and tool tasks until validated execution completes.
+                    val trimmed = text.trimStart().removePrefix("```").trimStart()
+                    if (trimmed.length >= 8 && !trimmed.startsWith("TOOL") && !ToolCallParser.hasDirective(text)) onText(text)
+                }
+            } else base.respond(modelHistory(current, originalUserMessage))
             val call = ToolCallParser.parseFirst(response.message.content)
 
             if (call == null) {
@@ -97,6 +111,7 @@ class ToolBridgedAIProvider(
                 ChatMessage(ChatMessage.Role.ASSISTANT, "같은 변경 작업의 반복 실행을 중단했습니다. 이미 실행된 작업은 결과 알림에서 확인해 주세요."),
                 base.type, System.currentTimeMillis() - started)
             val toolStart = System.currentTimeMillis()
+            if (risk != ToolRisk.READ) lastTurnRetrySafe = false
             var result = executor.execute(request)
             val blocked = result.message == BLOCKED_MESSAGE
             if (blocked && approvalHandler != null) result = approvalHandler.invoke(request)
@@ -216,13 +231,16 @@ class ToolBridgedAIProvider(
     private fun modelHistory(history: List<ChatMessage>, original: String): List<ChatMessage> {
         if (type != ProviderType.LOCAL) return history
         val requested = ToolIntent.toolsRequestedIn(original)
-        val signatures = toolsDescription.lineSequence().filter { line ->
+        val current = history.lastOrNull()?.content.orEmpty()
+        val signatures = if (requested.isEmpty() && current == original) {
+            if (Regex("기능|할 수|도구|무엇을|뭘").containsMatchIn(original))
+                toolsDescription.lineSequence().map { it.substringBefore(' ') }.joinToString("\n") else ""
+        } else toolsDescription.lineSequence().filter { line ->
             requested.isEmpty() || requested.any { line.startsWith("$it.") }
         }.map { line ->
             line.substringBefore(" — ").replace(Regex("<[^>]*>"), "VALUE")
         }.joinToString("\n")
         val system = history.filter { it.role == ChatMessage.Role.SYSTEM }
-        val current = history.lastOrNull()?.content.orEmpty()
         val input = "사용자 요청: $original\n도구 명세:\n$signatures"
         val fixedBytes = system.sumOf { it.content.toByteArray(Charsets.UTF_8).size + 64 } +
             input.toByteArray(Charsets.UTF_8).size + 64 + 256
@@ -234,11 +252,7 @@ class ToolBridgedAIProvider(
     }
 
     private fun utf8Prefix(text: String, limit: Int): String {
-        var used = 0
-        return text.takeWhile { character ->
-            used += character.toString().toByteArray(Charsets.UTF_8).size
-            used <= limit
-        }
+        return com.woojik.aircallai.ai.local.boundedUtf8(text, limit)
     }
 
     private fun catalogMessage(): String = """

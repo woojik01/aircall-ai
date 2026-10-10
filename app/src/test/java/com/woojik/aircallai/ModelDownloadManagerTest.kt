@@ -126,4 +126,34 @@ class ModelDownloadManagerTest {
         assertTrue(connection.disconnected)
         assertFalse(manager.isDownloaded(model))
     }
+
+    @Test fun resumesPartialAcrossManagerInstancesAndVerifiesWholeFile() = runBlocking {
+        temp.root.resolve(model.fileName + ".part").writeBytes(bytes.take(5).toByteArray())
+        val connection = object : Connection(bytes.drop(5).toByteArray()) {
+            override fun getResponseCode() = 206
+            override fun getHeaderField(name: String?): String? =
+                if (name == "Content-Range") "bytes 5-${bytes.size - 1}/${bytes.size}" else null
+        }
+        val manager = ModelDownloadManager(temp.root) { connection }
+        assertTrue(manager.download(model).isSuccess)
+        assertEquals("bytes=5-", connection.getRequestProperty("Range"))
+        assertArrayEquals(bytes, manager.targetFile(model).readBytes())
+    }
+
+    @Test fun ignoredRangeRestartsWithoutAppending() = runBlocking {
+        temp.root.resolve(model.fileName + ".part").writeBytes(bytes.take(5).toByteArray())
+        val manager = ModelDownloadManager(temp.root) { Connection(bytes) }
+        assertTrue(manager.download(model).isSuccess)
+        assertArrayEquals(bytes, manager.targetFile(model).readBytes())
+    }
+
+    @Test fun wrongRangeNeverPublishesModel() = runBlocking {
+        temp.root.resolve(model.fileName + ".part").writeBytes(bytes.take(5).toByteArray())
+        val manager = ModelDownloadManager(temp.root) { object : Connection(bytes.drop(5).toByteArray()) {
+            override fun getResponseCode() = 206
+            override fun getHeaderField(name: String?) = "bytes 4-${bytes.size - 1}/${bytes.size}"
+        } }
+        assertTrue(manager.download(model).isFailure)
+        assertFalse(manager.isDownloaded(model))
+    }
 }

@@ -15,7 +15,9 @@ import java.io.File
 /** The runtime applies the model's embedded chat template, preserving actual message roles. */
 internal fun localConversationConfig(history: List<ChatMessage>): ConversationConfig {
     require(history.isNotEmpty() && history.last().role == ChatMessage.Role.USER)
-    val instructions = listOf("You are AirCall AI, a helpful Korean voice assistant. Answer briefly.") +
+    val voice = com.woojik.aircallai.ai.provider.ResponseStyle.isVoice(history)
+    val instructions = listOf(if (voice) "You are AirCall AI, a helpful Korean voice assistant. Answer briefly."
+        else com.woojik.aircallai.ai.provider.ResponseStyle.TEXT_PROMPT) +
         history.filter { it.role == ChatMessage.Role.SYSTEM }.map { it.content }
     return ConversationConfig(
         systemInstruction = Contents.of(instructions.joinToString("\n")),
@@ -30,7 +32,7 @@ internal fun localConversationConfig(history: List<ChatMessage>): ConversationCo
         extraContext = mapOf("enable_thinking" to false),
         thinkingConfig = ThinkingConfig(enableThinking = false),
         samplerConfig = SamplerConfig(topK = 40, topP = 0.9, temperature = 0.7),
-        maxOutputToken = 256,
+        maxOutputToken = if (voice) 256 else 1024,
     )
 }
 
@@ -46,13 +48,15 @@ internal class LiteRtBackend(
             backend = if (useGpu) Backend.GPU() else Backend.CPU(
                 threadCount = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
             ),
-            maxNumTokens = 4096,
+            maxNumTokens = LocalModelRegistry.byFileName(file.name)?.contextTokens ?: 4096,
             cacheDir = File(cacheDir, "litert-0.17.1/" + if (useGpu) "gpu" else "cpu")
                 .apply { mkdirs() }.absolutePath,
         ),
     ).also { it.initialize() }
 
-    private val conversations = LocalConversationCache { history ->
+    private val conversations = LocalConversationCache(
+        maxCachedTokens = (LocalModelRegistry.byFileName(file.name)?.contextTokens ?: 4096) - 1024,
+    ) { history ->
         val conversation = engine.createConversation(localConversationConfig(history))
         object : LocalConversationSession {
             override fun send(text: String): String =

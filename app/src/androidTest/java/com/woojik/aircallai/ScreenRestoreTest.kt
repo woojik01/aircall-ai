@@ -40,6 +40,7 @@ class ScreenRestoreTest {
         app.registerActivityLifecycleCallbacks(callbacks)
         try {
             context.startActivity(Intent(context, MainActivity::class.java).setAction(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
                 .putExtra(MainActivity.EXTRA_SCREEN, "models").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             assertTrue(resumed.get().await(15, TimeUnit.SECONDS))
             assertModelsVisible()
@@ -80,7 +81,7 @@ class ScreenRestoreTest {
                     node.text?.toString()?.let { texts.add(it) }
                 repeat(node.childCount) { index -> node.getChild(index)?.let { nodes.add(it) } }
             }
-            if ("GPU 가속" in texts && "다운로드 후 적용해 주세요." in texts) return
+            if ("GPU 가속" in texts && texts.any { it.startsWith("1. 다운로드 → 2. 적용 → 3.") }) return
             Thread.sleep(100)
         }
         val diagnosticReady = CountDownLatch(1)

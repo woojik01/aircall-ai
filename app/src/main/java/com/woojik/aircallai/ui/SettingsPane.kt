@@ -29,6 +29,8 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingCategory("ai", "AI 및 모델", "로컬 · 클라우드, 모델 다운로드", onOpen)
         SettingCategory("accounts", "도구 및 계정", "GitHub · Google 로그인", onOpen)
+        SettingCategory("memory", "기억할 정보", "직접 저장 · 수정 · 삭제", onOpen)
+        SettingCategory("data", "백업 및 가져오기", "암호화 백업 · JSON 내보내기", onOpen)
         SettingCategory("appearance", "화면 및 알림", "라이트 · 다크 · 시스템, 알림 설정", onOpen)
         SettingCategory("permissions", "작업 승인", "실행 전 확인 및 이전 승인 관리", onOpen)
         SettingCategory("privacy", "개인정보", "개인정보처리방침 · 데이터 삭제", onOpen)
@@ -81,6 +83,18 @@ fun SettingsDetail(
     var endpoint by remember { mutableStateOf(graph.settings.cloudBaseUrl()) }
     var model by remember { mutableStateOf(graph.settings.cloudModel()) }
     var approvals by remember { mutableStateOf(graph.toolPermissions.approvedActions()) }
+    var testConsent by remember { mutableStateOf(false) }
+    var testing by remember { mutableStateOf(false) }
+    var streaming by remember { mutableStateOf(graph.settings.cloudStreaming()) }
+    var nativeTools by remember { mutableStateOf(graph.settings.nativeCloudTools()) }
+    var memory by remember { mutableStateOf("") }
+    var memoryLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(category) {
+        if (category == "memory") {
+            memory = graph.credentials.load("personal_memory")?.decodeToString().orEmpty()
+            memoryLoaded = true
+        }
+    }
     LaunchedEffect(status) {
         if (status != null) { delay(6_000); status = null }
     }
@@ -90,18 +104,34 @@ fun SettingsDetail(
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         when (category) {
+            "memory" -> SettingsSection("AI가 기억할 정보") {
+                Text("이름·선호하는 설명 방식 등 대화에 필요한 내용을 직접 관리하세요. 기기에 암호화 저장됩니다. 클라우드 모드에서는 답변 생성을 위해 선택한 AI 서버에 전송됩니다.")
+                OutlinedTextField(memory, { memory = it.take(150) }, label = { Text("기억할 정보 (최대 150자)") },
+                    modifier = Modifier.fillMaxWidth(), minLines = 3, enabled = memoryLoaded)
+                Button(onClick = { scope.launch {
+                    graph.credentials.save("personal_memory", memory.trim().toByteArray(Charsets.UTF_8))
+                    status = "기억할 정보를 저장했습니다. 다음 대화부터 적용됩니다."
+                } }, enabled = memoryLoaded) { Text("저장") }
+                TextButton(onClick = { scope.launch {
+                    graph.credentials.delete("personal_memory"); memory = ""; status = "기억할 정보를 삭제했습니다."
+                } }, enabled = memoryLoaded) { Text("기억 삭제") }
+            }
             "ai" -> {
+                SettingsSection("처음 시작하기") {
+                    Text("기기에서 실행: 모델을 다운로드하고 적용하면 API 키 없이 대화할 수 있어요.\n클라우드 API: 제공자의 키·주소·모델을 저장한 뒤 연결을 테스트하세요. 제공자 요금이 발생할 수 있어요.")
+                }
                 SettingsSection("응답 생성 방식") {
                     listOf(SettingsRepository.MODE_LOCAL to "이 기기에서 · 로컬", SettingsRepository.MODE_CLOUD to "클라우드 API").forEach { (value, label) ->
                         Row(Modifier.fillMaxWidth().selectable(selected = mode == value, role = Role.RadioButton,
                             onClick = {
                                 if (mode != value) {
-                                    vm.cancelText()
-                                    if (graph.sessionController.isRunning) {
-                                        vm.endSession(); status = "AI 설정 변경으로 통화를 종료했습니다. 다시 시작해 주세요."
+                                    scope.launch {
+                                        val hadCall = graph.sessionController.isRunning
+                                        vm.prepareForRoomChange()
+                                        if (hadCall) status = "AI 설정 변경으로 통화를 종료했습니다. 다시 시작해 주세요."
+                                        mode = value; graph.settings.setAiProviderMode(value)
+                                        vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
                                     }
-                                    mode = value; graph.settings.setAiProviderMode(value)
-                                    vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
                                 }
                             }).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(selected = mode == value, onClick = null)
@@ -111,6 +141,16 @@ fun SettingsDetail(
                     OutlinedButton(onClick = onOpenLocalModels, modifier = Modifier.fillMaxWidth()) { Text("로컬 모델 관리") }
                 }
                 SettingsSection("클라우드 연결") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("실시간 응답", Modifier.weight(1f))
+                        Switch(checked = streaming, onCheckedChange = { streaming = it; graph.settings.setCloudStreaming(it) })
+                    }
+                    Text("지원하지 않는 API에서는 끄세요.", style = MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("구조화된 도구 호출", Modifier.weight(1f))
+                        Switch(checked = nativeTools, onCheckedChange = { nativeTools = it; graph.settings.setNativeCloudTools(it) })
+                    }
+                    Text("함수 호출을 지원하는 API·모델에서 켜세요. 변경 작업은 계속 승인이 필요합니다.", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text("API 키") },
                         visualTransformation = PasswordVisualTransformation(), singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
@@ -137,6 +177,11 @@ fun SettingsDetail(
                         vm.refreshProviderReadiness()
                         status = if (endedCall) "연결 정보를 저장하고 통화를 종료했습니다. 다시 시작해 주세요." else "연결 정보를 저장했습니다."
                     }, modifier = Modifier.fillMaxWidth(), enabled = com.woojik.aircallai.privacy.HttpsEndpoint.isHttpsEndpoint(endpoint.trim()) && model.isNotBlank()) { Text("연결 정보 저장") }
+                    OutlinedButton(onClick = { testConsent = true }, enabled = !testing &&
+                        endpoint.trim() == graph.settings.cloudBaseUrl() && model.trim() == graph.settings.cloudModel()) {
+                        Text(if (testing) "연결 확인 중…" else "저장된 연결 테스트")
+                    }
+                    Text("설정을 바꿨다면 먼저 저장하세요. 테스트는 대화 기록을 보내지 않습니다.", style = MaterialTheme.typography.bodySmall)
                 }
             }
             "accounts" -> {
@@ -163,7 +208,7 @@ fun SettingsDetail(
                     TextButton(onClick = { disconnect("github") }, enabled = !connecting) { Text("연결 해제") }
                     }
                 }
-                AccountCard("Google · Gmail 및 캘린더", accounts["gmail"]?.let { graph.accountRepository.statusMessage(it) } ?: "연결 안 됨") {
+                AccountCard("Google · Gmail", accounts["gmail"]?.let { graph.accountRepository.statusMessage(it) } ?: "연결 안 됨") {
                     if (accounts["gmail"]?.status != ConnectionStatus.CONNECTED) {
                     Button(onClick = { status = connectGoogle() }, enabled = accounts["gmail"]?.status != ConnectionStatus.CONNECTING) {
                         Text(if (accounts["gmail"]?.status == ConnectionStatus.CONNECTING) "연결 중" else "Google로 로그인")
@@ -221,6 +266,27 @@ fun SettingsDetail(
         status?.let { Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer) { Text(it, Modifier.fillMaxWidth().padding(16.dp)) } }
     }
+    if (testConsent) AlertDialog(onDismissRequest = { testConsent = false },
+        title = { Text("클라우드 연결 테스트") },
+        text = { Text("저장된 API 키와 ‘연결 테스트’ 문장을 ${graph.settings.cloudBaseUrl()}로 전송합니다. 제공자 요금이 발생할 수 있습니다.") },
+        confirmButton = { TextButton(onClick = {
+            testConsent = false; testing = true
+            scope.launch {
+                try {
+                    val savedKey = graph.credentials.load(CloudAIProvider.KEY_SERVICE)?.decodeToString()
+                        ?: throw IllegalStateException("먼저 API 키를 저장해 주세요.")
+                    com.woojik.aircallai.ai.cloud.HttpCloudApiAdapter().chat(savedKey,
+                        graph.settings.cloudBaseUrl(), graph.settings.cloudModel(),
+                        listOf(com.woojik.aircallai.ai.provider.ChatMessage(
+                            com.woojik.aircallai.ai.provider.ChatMessage.Role.USER, "연결 테스트입니다. 확인이라고만 답하세요.")))
+                    status = "연결에 성공했습니다. 채팅으로 돌아가 대화를 시작하세요."
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                } catch (e: com.woojik.aircallai.ai.provider.AIProviderException) { status = e.kind.userMessage
+                } catch (_: Exception) { status = "연결하지 못했습니다. 저장된 키·주소·모델을 확인해 주세요."
+                } finally { testing = false }
+            }
+        }) { Text("전송하고 테스트") } },
+        dismissButton = { TextButton(onClick = { testConsent = false }) { Text("취소") } })
 }
 
 @Composable

@@ -52,14 +52,6 @@ class MainViewModel(
 
     init {
         refreshProviderReadiness()
-        scope.launch {
-            state.collectLatest { error ->
-                if (error is ConversationState.Error) {
-                    delay(6_000)
-                    if (state.value === error) engine.clearError()
-                }
-            }
-        }
     }
 
     /** 설정에서 모드/API 키가 바뀌면 다시 계산한다. */
@@ -106,12 +98,17 @@ class MainViewModel(
     }
 
     fun cancelText() { textJob?.cancel(); engine.clearError() }
+    fun retryText() {
+        if (!engine.retryAllowed.value || repository.controller.isRunning) return
+        val input = transcript.value.lastOrNull()?.takeIf { it.role == ChatMessage.Role.USER }?.content ?: return
+        textJob = scope.launch { if (engine.submitUserMessage(input, reuseFailedInput = true)) engine.markIdle() }
+    }
 
     suspend fun prepareForRoomChange() {
         textJob?.cancelAndJoin()
         if (repository.controller.isRunning) {
             repository.stopSpeaking()
-            repository.controller.end()
+            repository.controller.endAndJoin()
             stopSession()
         }
     }

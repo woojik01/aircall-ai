@@ -71,7 +71,7 @@ class ConversationService : Service() {
         ttsEngine = AndroidSpeechSynthesizerEngine(application)
         val mutedSynthesizer = MutedSynthesizer(ttsEngine) { repository.muted.value }
         session = VoiceSession(
-            recognizer = AndroidSpeechRecognizerEngine(application),
+            recognizer = AndroidSpeechRecognizerEngine(application, repository.engine::updateRecognition),
             synthesizer = mutedSynthesizer,
             engine = repository.engine,
         )
@@ -134,6 +134,7 @@ class ConversationService : Service() {
     /** 한 턴 = STT -> AI -> TTS. 재생 완료 후 잠깐 쉬어 불필요한 CPU 사용을 줄인다 (PRD-05). */
     private suspend fun turn() {
         session.runOneTurn()
+        if (repository.engine.state.value is ConversationState.Error) repository.controller.pause()
         delay(TURN_COOLDOWN_MS)
     }
 

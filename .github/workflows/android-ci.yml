@@ -187,6 +187,9 @@ jobs:
             adb shell am instrument -w -e class com.woojik.aircallai.ScreenRestoreTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/screen-restore.txt
             cat upgrade/screen-restore.txt
             grep -q 'OK (1 test)' upgrade/screen-restore.txt
+            adb shell am instrument -w -e class com.woojik.aircallai.PortableBackupTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/portable-backup.txt
+            cat upgrade/portable-backup.txt
+            grep -q 'OK (1 test)' upgrade/portable-backup.txt
             adb shell am instrument -w -e phase crash -e class com.woojik.aircallai.CrashDiagnosticsTest com.woojik.aircallai.test/androidx.test.runner.AndroidJUnitRunner > upgrade/diagnostic-crash.txt || true
             cat upgrade/diagnostic-crash.txt
             adb shell run-as com.woojik.aircallai cat no_backup/debug-last-crash.txt > upgrade/diagnostic-saved.txt

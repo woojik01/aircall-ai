@@ -68,6 +68,11 @@ fun LocalModelScreen(
     var applying by remember { mutableStateOf(false) }
     var hasLegacyFiles by remember { mutableStateOf(downloadManager.hasLegacyFiles()) }
     var status by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val totalRam = remember { android.app.ActivityManager.MemoryInfo().also {
+        context.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(it)
+    }.totalMem }
+    val recommendation = com.woojik.aircallai.ai.local.recommendedLocalModel(totalRam, downloadManager.availableSpace())
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -81,7 +86,10 @@ fun LocalModelScreen(
         ) {
             item {
                 Text(
-                    "다운로드 후 적용해 주세요.",
+                    "1. 다운로드 → 2. 적용 → 3. 채팅으로 돌아가 첫 대화\n" +
+                        "사용 가능한 저장 공간: ${formatSizeBytes(downloadManager.availableSpace())}\n" +
+                        (recommendation?.let { "첫 사용 추천: ${it.displayName}. 실제 속도는 기기에 따라 다릅니다." }
+                            ?: "기기 메모리·저장 공간을 확인해 주세요. 클라우드 API도 선택할 수 있습니다."),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -129,6 +137,8 @@ fun LocalModelScreen(
                     downloaded = downloadManager.isDownloaded(model),
                     selected = selectedId == model.id && downloadManager.isDownloaded(model),
                     busy = applying,
+                    compatible = totalRam >= model.minRamMb * 1024L * 1024L,
+                    partial = downloadManager.partialBytes(model),
                     // 모델별 상태만 이 카드에 전달한다.
                     downloadState = states[model.id] ?: ModelDownloadState.Idle,
                     onDownload = { onDownload(model) },
@@ -184,6 +194,8 @@ private fun ModelCard(
     downloaded: Boolean,
     selected: Boolean,
     busy: Boolean,
+    compatible: Boolean,
+    partial: Long,
     downloadState: ModelDownloadState,
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
@@ -218,6 +230,8 @@ private fun ModelCard(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
+            if (!compatible) Text("이 기기의 메모리가 최소 요구량보다 적습니다.", color = MaterialTheme.colorScheme.error)
+            if (partial > 0 && !downloaded) Text("저장된 다운로드: ${formatSizeBytes(partial)} · 이어받을 수 있어요")
 
             when (downloadState) {
                 is ModelDownloadState.Downloading -> {
@@ -252,14 +266,14 @@ private fun ModelCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (downloadState is ModelDownloadState.Downloading || downloadState is ModelDownloadState.Verifying) {
-                    OutlinedButton(onClick = onCancelDownload) { Text("다운로드 취소") }
+                    OutlinedButton(onClick = onCancelDownload) { Text("다운로드 일시중지") }
                 } else if (!downloaded) {
                     Button(
                         onClick = onDownload,
-                        enabled = !busy && downloadState !is ModelDownloadState.Downloading &&
+                        enabled = compatible && !busy && downloadState !is ModelDownloadState.Downloading &&
                             downloadState !is ModelDownloadState.Verifying,
                     ) {
-                        Text("다운로드")
+                        Text(if (partial > 0) "이어받기" else "다운로드")
                     }
                 } else {
                     if (selected) {

@@ -64,6 +64,7 @@ fun AirCallUi(
     val ready by graph.chatRooms.ready.collectAsState()
     val storageError by graph.chatRooms.error.collectAsState()
     val taskEvents by graph.toolTracker.events.collectAsState()
+    val pending by graph.toolApproval.pending.collectAsState()
     LaunchedEffect(Unit) { requestTaskNotifications() }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "chat"
@@ -189,9 +190,10 @@ fun AirCallUi(
                                 "models" -> "로컬 모델"
                                 "privacy" -> "개인정보"
                                 "about" -> "앱 정보"
+                                "data" -> "백업 및 가져오기"
                                 "settings/{category}" -> when (entry?.arguments?.getString("category")) {
                                     "ai" -> "AI 및 모델"; "accounts" -> "도구 및 계정"
-                                    "permissions" -> "작업 승인"; else -> "화면 및 알림"
+                                    "permissions" -> "작업 승인"; "memory" -> "기억할 정보"; else -> "화면 및 알림"
                                 }
                                 else -> "설정"
                             }, modifier = Modifier.weight(1f).padding(end = 12.dp),
@@ -207,12 +209,7 @@ fun AirCallUi(
                     Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         storageError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
-                        taskEvents.lastOrNull { it.roomId == activeId }?.let { task ->
-                            Text(task.summary, color = if (task.status == com.woojik.aircallai.tools.ToolExecutionStatus.FAILED)
-                                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                        }
+                        ToolTaskCard(taskEvents.lastOrNull { it.roomId == activeId }, pending)
                         if (!ready) {
                             if (storageError == null) LinearProgressIndicator(Modifier.fillMaxWidth())
                             else TextButton(onClick = { scope.launch {
@@ -229,7 +226,7 @@ fun AirCallUi(
                                 onStartSession = { startVoice() }) }
                             composable("settings") { SettingsCategories { category ->
                                 nav.navigate(when (category) {
-                                    "privacy", "about" -> category
+                                    "privacy", "about", "data" -> category
                                     else -> "settings/$category"
                                 })
                             } }
@@ -237,6 +234,12 @@ fun AirCallUi(
                                 onOpenAiSettings = { nav.navigate("settings/ai") },
                                 onOpenPrivacy = { nav.navigate("privacy") },
                             ) }
+                            composable("data") { DataTransferScreen(graph,
+                                onBeforeTransfer = { vm.prepareForRoomChange(); graph.toolApproval.deny() },
+                                onImported = {
+                                    themeMode = graph.settings.themeMode()
+                                    vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
+                                }) }
                             composable("settings/{category}") { target ->
                                 SettingsDetail(target.arguments?.getString("category").orEmpty(), graph, vm,
                                     themeMode = themeMode, onThemeChanged = { themeMode = it },
@@ -284,8 +287,8 @@ fun AirCallUi(
                     } }) { Text("삭제") } },
                     dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } })
             }
-            val pending by graph.toolApproval.pending.collectAsState()
-            pending?.let { ToolApprovalDialog(it, onApprove = { graph.toolApproval.approve() }, onDeny = { graph.toolApproval.deny() }) }
+            pending?.let { original -> ToolApprovalDialog(original,
+                onApprove = { graph.toolApproval.approve(it, expected = original) }, onDeny = { graph.toolApproval.deny() }) }
             if (pendingText != null || pendingVoice) {
                 val voice = pendingVoice
                 AlertDialog(onDismissRequest = { pendingText = null; pendingVoice = false; pendingRoomId = null },
@@ -293,7 +296,7 @@ fun AirCallUi(
                     text = { Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (voice) Text("음성 서비스 설정에 따라 음성·텍스트가 제공자에게 전송될 수 있습니다. 통화 중에는 화면이 꺼져도 마이크를 사용합니다. 알림에서 종료할 수 있습니다.")
-                        if (usesCloud) Text("대화 기록·도구 결과와 인증용 API 키를 아래 AI 서버로 전송합니다.\n${graph.settings.cloudBaseUrl()}")
+                        if (usesCloud) Text("대화 기록·기억할 정보·도구 결과와 인증용 API 키를 아래 AI 서버로 전송합니다.\n${graph.settings.cloudBaseUrl()}")
                     } },
                     confirmButton = { TextButton(onClick = {
                         // A notification/deep link can change rooms while this dialog is open.

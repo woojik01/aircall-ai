@@ -35,6 +35,9 @@ class ModelDownloadManager(
 
     fun targetFile(model: LocalModelInfo): File = File(modelsDir, model.fileName)
     fun isDownloaded(model: LocalModelInfo): Boolean = isInstalledModel(targetFile(model), model)
+    fun partialBytes(model: LocalModelInfo): Long = File(modelsDir, model.fileName + ".part")
+        .length().coerceIn(0, model.sizeBytes)
+    fun availableSpace(): Long = modelsDir.apply { mkdirs() }.usableSpace
 
     suspend fun download(model: LocalModelInfo): Result<File> = withContext(Dispatchers.IO) {
         synchronized(active) {
@@ -52,26 +55,50 @@ class ModelDownloadManager(
                 updateState(model.id, ModelDownloadState.Completed(model.fileName))
                 return@withContext Result.success(target)
             }
-            updateState(model.id, ModelDownloadState.Downloading(0, model.sizeBytes))
-            connection = openFollowingRedirects(model.downloadUrl)
+            if (temp.length() >= model.sizeBytes) temp.delete()
+            var offset = temp.length()
+            if (availableSpace() < model.sizeBytes - offset + 64 * 1024 * 1024L) {
+                throw IOException("모델 다운로드에 필요한 저장 공간이 부족합니다")
+            }
+            updateState(model.id, ModelDownloadState.Downloading(offset, model.sizeBytes))
+            connection = openFollowingRedirects(model.downloadUrl, offset)
             connections[model.id] = connection
             currentCoroutineContext().ensureActive()
             val code = connection.responseCode
-            if (code != HttpURLConnection.HTTP_OK) throw IOException(httpErrorMessage(code))
+            if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) throw IOException(httpErrorMessage(code))
+            if (code == HttpURLConnection.HTTP_PARTIAL) {
+                val expected = "bytes $offset-${model.sizeBytes - 1}/${model.sizeBytes}"
+                if (connection.getHeaderField("Content-Range") != expected) {
+                    temp.delete()
+                    throw IOException("모델 이어받기 응답 범위가 일치하지 않습니다")
+                }
+            } else offset = 0 // Server ignored Range: safely replace, never append a full response.
             val length = connection.contentLengthLong
-            if (length > 0 && length != model.sizeBytes) throw IOException("모델 파일 크기가 일치하지 않습니다")
+            if (length > 0 && length != model.sizeBytes - offset) throw IOException("모델 파일 크기가 일치하지 않습니다")
             val digest = MessageDigest.getInstance("SHA-256")
-            var downloaded = 0L
+            if (offset > 0) temp.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            var downloaded = offset
             var lastProgress = 0L
             connection.inputStream.use { input ->
-                temp.outputStream().use { output ->
+                java.io.FileOutputStream(temp, offset > 0).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         currentCoroutineContext().ensureActive()
                         val count = input.read(buffer)
                         if (count < 0) break
                         downloaded += count
-                        if (downloaded > model.sizeBytes) throw IOException("모델 파일 크기가 일치하지 않습니다")
+                        if (downloaded > model.sizeBytes) {
+                            temp.delete()
+                            throw IOException("모델 파일 크기가 일치하지 않습니다")
+                        }
                         output.write(buffer, 0, count)
                         digest.update(buffer, 0, count)
                         val now = System.nanoTime()
@@ -84,6 +111,7 @@ class ModelDownloadManager(
             }
             updateState(model.id, ModelDownloadState.Verifying)
             if (downloaded != model.sizeBytes || digest.digest().hex() != model.sha256) {
+                temp.delete()
                 throw IOException("모델 파일 검증에 실패했습니다. 다시 다운로드해 주세요")
             }
             currentCoroutineContext().ensureActive()
@@ -112,7 +140,7 @@ class ModelDownloadManager(
         } finally {
             connections.remove(model.id)
             connection?.disconnect()
-            temp.delete()
+            // Network interruption/cancellation retains the partial file for the next process.
             synchronized(active) { active.remove(model.id) }
         }
     }
@@ -121,7 +149,7 @@ class ModelDownloadManager(
         _states.update { it + (id to state) }
     }
 
-    private fun openFollowingRedirects(startUrl: String): HttpURLConnection {
+    private fun openFollowingRedirects(startUrl: String, offset: Long): HttpURLConnection {
         var url = URI(startUrl)
         repeat(6) { redirect ->
             if (url.scheme != "https") throw IOException("모델 다운로드에는 HTTPS가 필요합니다")
@@ -131,6 +159,8 @@ class ModelDownloadManager(
                 connection.readTimeout = 30_000
                 connection.instanceFollowRedirects = false
                 connection.setRequestProperty("User-Agent", "AirCallAI/0.2 (Android)")
+                connection.setRequestProperty("Accept-Encoding", "identity")
+                if (offset > 0) connection.setRequestProperty("Range", "bytes=$offset-")
                 val code = connection.responseCode
                 if (code !in 300..399) return connection
                 val location = connection.getHeaderField("Location")
@@ -166,6 +196,7 @@ class ModelDownloadManager(
         if (model.id in active) return@synchronized false
         val file = targetFile(model)
         val deleted = !file.exists() || file.delete()
+        File(modelsDir, model.fileName + ".part").delete()
         if (deleted) updateState(model.id, ModelDownloadState.Idle)
         deleted
     }

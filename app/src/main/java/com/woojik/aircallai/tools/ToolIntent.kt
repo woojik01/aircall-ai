@@ -27,6 +27,8 @@ object ToolIntent {
     /** 사용자 메시지에서 이번 턴에 필요할 가능성이 있는 도구 이름 집합. */
     fun toolsRequestedIn(userMessage: String): Set<String> {
         val lower = userMessage.lowercase()
+        if (Regex("사용법|개념|뜻|차이|원리|무엇|뭐야|방법").containsMatchIn(lower) &&
+            !Regex("해\\s*줘|해\\s*주세요|보내\\s*줘|만들어\\s*줘|저장해|조회해").containsMatchIn(lower)) return emptySet()
         return TOOL_KEYWORDS.filter { it.second.containsMatchIn(lower) }.map { it.first }.toSet()
     }
 

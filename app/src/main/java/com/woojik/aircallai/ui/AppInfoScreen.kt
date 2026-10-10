@@ -57,6 +57,12 @@ fun AppInfoScreen(onOpenAiSettings: () -> Unit, onOpenPrivacy: () -> Unit) {
                 StoreDistribution.oneStoreProductUrl(BuildConfig.AIRCALL_ONESTORE_PRODUCT_ID)?.let { url ->
                     TextButton(onClick = { openUrl(url) }) { Text("원스토어에서 업데이트 확인") }
                 }
+            } else if (BuildConfig.AIRCALL_DISTRIBUTION_CHANNEL == "play" && !BuildConfig.DEBUG) {
+                TextButton(onClick = { openUrl("https://play.google.com/store/apps/details?id=" + context.packageName) }) {
+                    Text("Google Play에서 업데이트 확인")
+                }
+            } else if (!BuildConfig.DEBUG) {
+                TextButton(onClick = { openUrl("https://github.com/woojik01/aircall-ai/releases") }) { Text("GitHub에서 업데이트 확인") }
             }
         }
         if (BuildConfig.AIRCALL_DEVELOPER_NAME.isNotBlank()) {
