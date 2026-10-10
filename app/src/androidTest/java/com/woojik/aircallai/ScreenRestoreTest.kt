@@ -40,6 +40,7 @@ class ScreenRestoreTest {
         app.registerActivityLifecycleCallbacks(callbacks)
         try {
             context.startActivity(Intent(context, MainActivity::class.java).setAction(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
                 .putExtra(MainActivity.EXTRA_SCREEN, "models").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             assertTrue(resumed.get().await(15, TimeUnit.SECONDS))
             assertModelsVisible()
