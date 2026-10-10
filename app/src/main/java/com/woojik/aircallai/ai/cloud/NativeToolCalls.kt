@@ -6,17 +6,14 @@ import org.json.JSONObject
 /** Provider-native calls use the same app validation and one-time approval as legacy calls. */
 internal object NativeToolCalls {
     const val MARKER = "TOOL_JSON:"
-    private val definitions = listOf(
-        Triple("tools__list", emptyList<String>(), emptyList<String>()),
-        Triple("github__read_repository", listOf("owner", "repo"), emptyList()),
-        Triple("github__read_file", listOf("owner", "repo", "path"), emptyList()),
-        Triple("github__create_issue", listOf("owner", "repo", "title"), listOf("body")),
-        Triple("github__create_pull_request", listOf("owner", "repo", "title", "head", "base"), listOf("body")),
-        Triple("notes__add_note", listOf("text"), emptyList()),
-        Triple("notes__search_notes", listOf("query"), emptyList()),
-        Triple("notes__list_notes", emptyList(), listOf("limit")),
-        Triple("gmail__send_email", listOf("to", "subject", "body"), emptyList()),
-    )
+    private val definitions = listOf(Triple("tools__list", emptyList<String>(), emptyList<String>())) +
+        com.woojik.aircallai.tools.AppToolCatalog.DESCRIPTION.lines().map { line ->
+            val signature = line.substringBefore(" — ")
+            val key = Regex("([a-zA-Z_][a-zA-Z0-9_]*)=")
+            val all = key.findAll(signature).map { it.groupValues[1] }.toList()
+            val required = key.findAll(signature.replace(Regex("\\[[^]]*]"), "")).map { it.groupValues[1] }.toList()
+            Triple(signature.substringBefore(' ').replace(".", "__"), required, all - required.toSet())
+        }
     fun schema(): JSONArray = JSONArray().also { tools ->
         definitions.forEach { (name, required, optional) ->
             val properties = JSONObject()

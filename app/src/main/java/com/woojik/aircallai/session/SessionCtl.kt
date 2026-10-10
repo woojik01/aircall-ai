@@ -102,6 +102,11 @@ class SessionController(private val scope: CoroutineScope) {
         turn = null
         _status.value = SessionStatus.Ended
     }
+    suspend fun endAndJoin() {
+        val previous = job
+        end()
+        previous?.join()
+    }
 
     companion object {
         private const val PAUSE_POLL_MS = 200L

@@ -125,12 +125,13 @@ fun SettingsDetail(
                         Row(Modifier.fillMaxWidth().selectable(selected = mode == value, role = Role.RadioButton,
                             onClick = {
                                 if (mode != value) {
-                                    vm.cancelText()
-                                    if (graph.sessionController.isRunning) {
-                                        vm.endSession(); status = "AI 설정 변경으로 통화를 종료했습니다. 다시 시작해 주세요."
+                                    scope.launch {
+                                        val hadCall = graph.sessionController.isRunning
+                                        vm.prepareForRoomChange()
+                                        if (hadCall) status = "AI 설정 변경으로 통화를 종료했습니다. 다시 시작해 주세요."
+                                        mode = value; graph.settings.setAiProviderMode(value)
+                                        vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
                                     }
-                                    mode = value; graph.settings.setAiProviderMode(value)
-                                    vm.engine.updateProvider(graph.providerRouter.current()); vm.refreshProviderReadiness()
                                 }
                             }).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(selected = mode == value, onClick = null)

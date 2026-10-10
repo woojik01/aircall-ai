@@ -23,12 +23,10 @@ class LocalSafetyPromptBudgetTest {
                 return AIResponse(ChatMessage(ChatMessage.Role.ASSISTANT, "안녕하세요"), type, 0)
             }
         }
-        val actions = listOf("github.read_repository", "github.read_file", "github.create_issue", "github.create_pull_request",
-            "notes.add_note", "notes.search_notes", "notes.list_notes", "calendar.read_upcoming", "calendar.create_event", "gmail.send_email")
         val bridge = ToolBridgedAIProvider(SafetyAIProvider(backend),
             ToolExecutor(emptyList(), InMemoryToolPermissionStore()), ToolExecutionLogger(),
-            actions.joinToString("\n") { "$it — 기능" })
-        assertTrue(ConversationEngine(bridge).submitUserMessage("안녕", voiceMode = true))
+            AppToolCatalog.DESCRIPTION)
+        assertTrue(ConversationEngine(bridge, memoryProvider = { "가".repeat(150) }).submitUserMessage("안녕", voiceMode = true))
         assertTrue(reachedBackend)
     }
 }

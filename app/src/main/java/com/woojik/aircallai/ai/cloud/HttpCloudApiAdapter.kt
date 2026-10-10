@@ -10,6 +10,9 @@ import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.CoroutineStart
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -31,6 +34,9 @@ class HttpCloudApiAdapter(
         if (!com.woojik.aircallai.privacy.HttpsEndpoint.isHttpsEndpoint(baseUrl))
             throw AIProviderException(ProviderErrorKind.API_ERROR)
         var connection: HttpURLConnection? = null
+        val cancellationWatcher = launch(start = CoroutineStart.UNDISPATCHED) {
+            try { awaitCancellation() } finally { connection?.disconnect() }
+        }
         try {
             val conn = connect(baseUrl).also { connection = it }
             conn.requestMethod = "POST"
@@ -57,9 +63,12 @@ class HttpCloudApiAdapter(
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: AIProviderException) { throw e
-        } catch (_: IOException) { throw AIProviderException(ProviderErrorKind.NETWORK)
+        } catch (_: IOException) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            throw AIProviderException(ProviderErrorKind.NETWORK)
         } catch (_: org.json.JSONException) { throw AIProviderException(ProviderErrorKind.API_ERROR)
-        } finally { connection?.disconnect() }
+        } catch (_: IllegalArgumentException) { throw AIProviderException(ProviderErrorKind.API_ERROR)
+        } finally { cancellationWatcher.cancel(); connection?.disconnect() }
     }
 
     override suspend fun chat(apiKey: String, baseUrl: String, model: String, history: List<ChatMessage>): String =
@@ -68,6 +77,9 @@ class HttpCloudApiAdapter(
                 throw AIProviderException(ProviderErrorKind.API_ERROR, "올바른 HTTPS API 주소를 설정해 주세요.")
             }
             var connection: HttpURLConnection? = null
+            val cancellationWatcher = launch(start = CoroutineStart.UNDISPATCHED) {
+                try { awaitCancellation() } finally { connection?.disconnect() }
+            }
             try {
                 val conn = connect(baseUrl)
                 connection = conn
@@ -90,8 +102,10 @@ class HttpCloudApiAdapter(
                     else -> throw AIProviderException(ProviderErrorKind.API_ERROR, "HTTP " + code)
                 }
             } catch (e: IOException) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 throw AIProviderException(ProviderErrorKind.NETWORK)
             } finally {
+                cancellationWatcher.cancel()
                 connection?.disconnect()
             }
         }
@@ -101,8 +115,9 @@ class HttpCloudApiAdapter(
         messages.put(
             JSONObject()
                 .put("role", "system")
-                .put("content", if (com.woojik.aircallai.ai.provider.ResponseStyle.isVoice(history)) SYSTEM_PERSONA
-                    else com.woojik.aircallai.ai.provider.ResponseStyle.TEXT_PROMPT)
+                .put("content", (if (com.woojik.aircallai.ai.provider.ResponseStyle.isVoice(history)) SYSTEM_PERSONA
+                    else com.woojik.aircallai.ai.provider.ResponseStyle.TEXT_PROMPT) +
+                    if (nativeToolsEnabled()) " Use registered function calls instead of TOOL text. Discover tools with tools__list first." else "")
         )
         val bounded = if (history.lastOrNull()?.role == ChatMessage.Role.USER)
             com.woojik.aircallai.ai.local.localInferenceHistory(history, 48_000, summarize = true) else history

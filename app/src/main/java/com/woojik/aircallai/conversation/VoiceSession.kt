@@ -112,7 +112,7 @@ internal class SpokenSentenceBuffer {
     private var text = ""
     private var emitted = 0
     fun update(next: String): List<String> {
-        if (!next.startsWith(text)) { text = next; emitted = next.length; return emptyList() }
+        if (!next.startsWith(text)) emitted = 0 // A validated replacement/refusal must also be spoken.
         text = next
         val result = mutableListOf<String>()
         var index = emitted

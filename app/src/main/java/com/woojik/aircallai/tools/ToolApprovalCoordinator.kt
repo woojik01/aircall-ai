@@ -63,7 +63,8 @@ class ToolApprovalCoordinator(
                 if (completion != null && !completion.isActive) return@launch
                 val result = executor.executeApproved(request)
                 _lastResult.value = result
-                completion?.complete(result)
+                completion?.complete(if (request != pending) result.copy(message = result.message +
+                    "\n승인창에서 최종 확인한 내용:\n" + request.arguments.entries.joinToString("\n") { "${it.key}: ${it.value}" }) else result)
             } catch (e: CancellationException) {
                 completion?.cancel(e)
                 throw e

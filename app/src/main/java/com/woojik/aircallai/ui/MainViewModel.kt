@@ -108,7 +108,7 @@ class MainViewModel(
         textJob?.cancelAndJoin()
         if (repository.controller.isRunning) {
             repository.stopSpeaking()
-            repository.controller.end()
+            repository.controller.endAndJoin()
             stopSession()
         }
     }

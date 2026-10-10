@@ -10,6 +10,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.async
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -89,6 +90,35 @@ class HttpCloudApiAdapterTest {
             HttpCloudApiAdapter { conn }.chat("key", "https://example.invalid", "m", emptyList())
             fail("expected network error")
         } catch (e: AIProviderException) { assertEquals(ProviderErrorKind.NETWORK, e.kind) }
+        assertTrue(conn.disconnected)
+    }
+
+    @Test fun cancellationDisconnectsBlockedSocketRead() = kotlinx.coroutines.runBlocking {
+        val started = java.util.concurrent.CountDownLatch(1)
+        val released = java.util.concurrent.CountDownLatch(1)
+        val conn = object : HttpURLConnection(URL("https://example.invalid")) {
+            var disconnected = false
+            override fun connect() {}
+            override fun usingProxy() = false
+            override fun disconnect() { disconnected = true; released.countDown() }
+            override fun getResponseCode() = 200
+            override fun getOutputStream() = ByteArrayOutputStream()
+            override fun getInputStream() = object : java.io.InputStream() {
+                override fun read(): Int {
+                    started.countDown()
+                    check(released.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    throw IOException("closed")
+                }
+            }
+        }
+        val worker = async {
+            HttpCloudApiAdapter { conn }.chatStreaming("key", "https://example.invalid", "m", emptyList()) {}
+        }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        }
+        worker.cancel()
+        kotlinx.coroutines.withTimeout(5_000) { worker.join() }
         assertTrue(conn.disconnected)
     }
 }

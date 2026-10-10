@@ -26,7 +26,12 @@ fun ChatMarkdown(content: String) {
                         Text(code, Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(12.dp),
                             fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
                     }
-                } else block.trim().lines().forEach { line ->
+                } else markdownSections(block).forEach { section ->
+                    if (section.size >= 2 && tableSeparator(section[1])) {
+                        MarkdownTable(section.filterNot(::tableSeparator).map { line ->
+                            line.trim().removePrefix("|").removeSuffix("|").split('|').map(String::trim)
+                        })
+                    } else section.forEach { line ->
                     if (line.isNotBlank()) {
                         val heading = line.takeWhile { it == '#' }.length.takeIf { it in 1..6 && line.getOrNull(it) == ' ' }
                         val table = line.trim().startsWith('|') && line.trim().endsWith('|')
@@ -38,8 +43,43 @@ fun ChatMarkdown(content: String) {
                                 fontFamily = if (table) FontFamily.Monospace else null)
                         }
                     }
+                    }
                 }
             }
+        }
+    }
+}
+
+private fun tableSeparator(line: String) = line.trim().matches(Regex("[| :\\-]+")) && line.contains('|') && line.contains('-')
+private fun markdownSections(block: String): List<List<String>> {
+    val result = mutableListOf<List<String>>()
+    val lines = block.trim().lines()
+    var index = 0
+    while (index < lines.size) {
+        val start = index++
+        if (lines[start].trim().startsWith('|')) {
+            while (index < lines.size && lines[index].trim().startsWith('|')) index++
+        }
+        result += lines.subList(start, index)
+    }
+    return result
+}
+
+@Composable
+private fun MarkdownTable(rows: List<List<String>>) {
+    val columns = rows.maxOfOrNull { it.size } ?: return
+    Column(Modifier.horizontalScroll(rememberScrollState())) {
+        rows.forEachIndexed { index, cells ->
+            Surface(color = if (index == 0) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface) {
+                Row {
+                    repeat(columns) { column ->
+                        Text(inlineMarkdown(cells.getOrElse(column) { "" }), Modifier.width(160.dp).padding(10.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (index == 0) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            }
+            HorizontalDivider()
         }
     }
 }

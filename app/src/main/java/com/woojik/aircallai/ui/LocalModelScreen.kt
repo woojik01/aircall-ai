@@ -266,7 +266,7 @@ private fun ModelCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (downloadState is ModelDownloadState.Downloading || downloadState is ModelDownloadState.Verifying) {
-                    OutlinedButton(onClick = onCancelDownload) { Text("다운로드 취소") }
+                    OutlinedButton(onClick = onCancelDownload) { Text("다운로드 일시중지") }
                 } else if (!downloaded) {
                     Button(
                         onClick = onDownload,

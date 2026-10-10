@@ -27,7 +27,9 @@ class FileNotesStore(private val file: File) : NotesStore {
         lock.lock()
         try {
             file.parentFile?.mkdirs()
-            file.appendText(System.currentTimeMillis().toString() + " " + normalized + System.lineSeparator())
+            val line = System.currentTimeMillis().toString() + " " + normalized + System.lineSeparator()
+            require(file.length() + line.toByteArray(Charsets.UTF_8).size <= 8 * 1024 * 1024)
+            file.appendText(line)
         } finally { lock.unlock() }
     }
 
@@ -41,7 +43,7 @@ class FileNotesStore(private val file: File) : NotesStore {
         readLines().takeLast(limit.coerceIn(1, MAX_LIST))
     }
     override suspend fun all(): List<String> = withContext(Dispatchers.IO) { readLines() }
-    override suspend fun mergeImported(lines: List<String>) = withContext(Dispatchers.IO) {
+    override suspend fun mergeImported(lines: List<String>): Unit = withContext(Dispatchers.IO) {
         lock.lock()
         try {
             require(lines.none { it.contains('\n') || it.contains('\r') })
@@ -53,6 +55,7 @@ class FileNotesStore(private val file: File) : NotesStore {
                 java.io.FileOutputStream(temp).use { it.write(merged.toByteArray(Charsets.UTF_8)); it.fd.sync() }
                 java.nio.file.Files.move(temp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING,
                     java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+                Unit
             } finally { temp.delete() }
         } finally { lock.unlock() }
     }

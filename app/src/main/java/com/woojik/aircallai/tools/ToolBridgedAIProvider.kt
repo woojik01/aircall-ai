@@ -231,13 +231,16 @@ class ToolBridgedAIProvider(
     private fun modelHistory(history: List<ChatMessage>, original: String): List<ChatMessage> {
         if (type != ProviderType.LOCAL) return history
         val requested = ToolIntent.toolsRequestedIn(original)
-        val signatures = toolsDescription.lineSequence().filter { line ->
+        val current = history.lastOrNull()?.content.orEmpty()
+        val signatures = if (requested.isEmpty() && current == original) {
+            if (Regex("기능|할 수|도구|무엇을|뭘").containsMatchIn(original))
+                toolsDescription.lineSequence().map { it.substringBefore(' ') }.joinToString("\n") else ""
+        } else toolsDescription.lineSequence().filter { line ->
             requested.isEmpty() || requested.any { line.startsWith("$it.") }
         }.map { line ->
             line.substringBefore(" — ").replace(Regex("<[^>]*>"), "VALUE")
         }.joinToString("\n")
         val system = history.filter { it.role == ChatMessage.Role.SYSTEM }
-        val current = history.lastOrNull()?.content.orEmpty()
         val input = "사용자 요청: $original\n도구 명세:\n$signatures"
         val fixedBytes = system.sumOf { it.content.toByteArray(Charsets.UTF_8).size + 64 } +
             input.toByteArray(Charsets.UTF_8).size + 64 + 256
@@ -249,11 +252,7 @@ class ToolBridgedAIProvider(
     }
 
     private fun utf8Prefix(text: String, limit: Int): String {
-        var used = 0
-        return text.takeWhile { character ->
-            used += character.toString().toByteArray(Charsets.UTF_8).size
-            used <= limit
-        }
+        return com.woojik.aircallai.ai.local.boundedUtf8(text, limit)
     }
 
     private fun catalogMessage(): String = """

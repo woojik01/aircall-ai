@@ -54,7 +54,9 @@ internal class LiteRtBackend(
         ),
     ).also { it.initialize() }
 
-    private val conversations = LocalConversationCache { history ->
+    private val conversations = LocalConversationCache(
+        maxCachedTokens = (LocalModelRegistry.byFileName(file.name)?.contextTokens ?: 4096) - 1024,
+    ) { history ->
         val conversation = engine.createConversation(localConversationConfig(history))
         object : LocalConversationSession {
             override fun send(text: String): String =

@@ -80,7 +80,7 @@ class ScreenRestoreTest {
                     node.text?.toString()?.let { texts.add(it) }
                 repeat(node.childCount) { index -> node.getChild(index)?.let { nodes.add(it) } }
             }
-            if ("GPU 가속" in texts && "다운로드 후 적용해 주세요." in texts) return
+            if ("GPU 가속" in texts && texts.any { it.startsWith("1. 다운로드 → 2. 적용 → 3.") }) return
             Thread.sleep(100)
         }
         val diagnosticReady = CountDownLatch(1)
