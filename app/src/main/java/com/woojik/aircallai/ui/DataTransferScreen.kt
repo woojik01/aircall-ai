@@ -39,7 +39,8 @@ fun DataTransferScreen(graph: AppGraph, onBeforeTransfer: suspend () -> Unit, on
                     context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes); it.flush() }
                         ?: error("output unavailable")
                 }
-                status = "파일을 저장했습니다. 비밀번호는 파일과 따로 보관하세요."
+                status = if (encryptedExport) "파일을 저장했습니다. 비밀번호는 파일과 따로 보관하세요."
+                    else "JSON 파일을 저장했습니다. 대화·메모·기억할 정보가 암호화 없이 포함됩니다."
             } catch (e: CancellationException) { throw e
             } catch (_: Exception) { status = "저장하지 못했습니다. 저장 공간과 파일 위치를 확인해 주세요."
             } finally { secret.fill('\u0000'); password = ""; busy = false }

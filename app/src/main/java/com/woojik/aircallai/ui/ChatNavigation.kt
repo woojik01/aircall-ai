@@ -296,7 +296,7 @@ fun AirCallUi(
                     text = { Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (voice) Text("음성 서비스 설정에 따라 음성·텍스트가 제공자에게 전송될 수 있습니다. 통화 중에는 화면이 꺼져도 마이크를 사용합니다. 알림에서 종료할 수 있습니다.")
-                        if (usesCloud) Text("대화 기록·도구 결과와 인증용 API 키를 아래 AI 서버로 전송합니다.\n${graph.settings.cloudBaseUrl()}")
+                        if (usesCloud) Text("대화 기록·기억할 정보·도구 결과와 인증용 API 키를 아래 AI 서버로 전송합니다.\n${graph.settings.cloudBaseUrl()}")
                     } },
                     confirmButton = { TextButton(onClick = {
                         // A notification/deep link can change rooms while this dialog is open.
