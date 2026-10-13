@@ -151,7 +151,7 @@ class ToolBridgedAIProviderTest {
         assertEquals(ChatMessage.Role.SYSTEM, prompt.role)
         assertTrue(prompt.content.contains("github"))
         assertTrue(prompt.content.contains("TOOL: tools.list"))
-        assertTrue(fake.receivedHistories.single().last().content.contains("github.read_repository"))
+        assertTrue(fake.receivedHistories.single().last().content.contains("무슨 기능을 할 수 있어?"))
         assertTrue(prompt.content.contains("never deny tool access without trying"))
     }
 
