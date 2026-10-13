@@ -52,7 +52,7 @@ class MemoryToolTest {
                 com.woojik.aircallai.ai.provider.ChatMessage(assistant, "안녕하세요"),
                 com.woojik.aircallai.ai.provider.ChatMessage(user, "지금 질문"),
             )
-            val executor = ToolExecutor(listOf(MemoryTool(store) { messages }), InMemoryToolPermissionStore())
+            val executor = ToolExecutor(listOf(MemoryTool(store) { globalMemoryHistory(listOf(MemoryConversation("active", "채팅", messages)), "active") }), InMemoryToolPermissionStore())
             val saved = executor.executeApproved(ToolRequest("memory", "add", mapOf("text" to "노란색")))
             assertTrue(saved.success)
             val id = store.list().single().id

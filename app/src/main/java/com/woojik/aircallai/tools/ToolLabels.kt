@@ -3,6 +3,7 @@ package com.woojik.aircallai.tools
 /** Shared wording for approval dialogs, settings and execution notifications. */
 object ToolLabels {
     fun action(tool: String, action: String): String = when ("$tool.$action") {
+        "memory.history" -> "전체 대화 조회"
         "memory.list" -> "기억 조회"
         "memory.search" -> "기억 검색"
         "memory.add" -> "기억 저장"

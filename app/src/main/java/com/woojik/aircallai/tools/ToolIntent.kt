@@ -14,7 +14,7 @@ object ToolIntent {
 
     /** 도구 이름 → 요청 감지 키워드. */
     private val TOOL_KEYWORDS: List<Pair<String, Regex>> = listOf(
-        "memory" to Regex("기억해|기억하|기억.*(저장|삭제|수정|검색|목록)|remember|forget|memory"),
+        "memory" to Regex("기억해|기억하|기억.*(저장|삭제|수정|검색|목록)|\\b(?:remember|forget)\\b|\\b(?:save|delete|list|search|add|update|history)\\b.{0,30}\\bmemor(?:y|ies)\\b|\\bmemor(?:y|ies)\\b.{0,30}\\b(?:save|delete|list|search|add|update|history)\\b"),
         "gmail" to Regex("메일|이메일|지메일|gmail|발송|전송해"),
         "github" to Regex("깃허브|github|레포|리포|저장소|이슈|issue|풀리퀘|pull.?request|\\bpr\\b|readme"),
         "notes" to Regex("메모|기록해"),

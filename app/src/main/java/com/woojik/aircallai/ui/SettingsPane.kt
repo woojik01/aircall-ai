@@ -28,6 +28,7 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingCategory("ai", "AI 및 모델", "로컬 · 클라우드, 모델 다운로드", onOpen)
+        SettingCategory("memory", "기억", "모든 채팅방에서 공유하는 기억 관리", onOpen)
         SettingCategory("accounts", "도구 및 계정", "GitHub · Google 로그인", onOpen)
         SettingCategory("appearance", "화면 및 알림", "라이트 · 다크 · 시스템, 알림 설정", onOpen)
         SettingCategory("permissions", "작업 승인", "실행 전 확인 및 이전 승인 관리", onOpen)
@@ -39,7 +40,7 @@ fun SettingsCategories(onOpen: (String) -> Unit) {
 @Composable
 private fun SettingCategory(id: String, title: String, detail: String, onOpen: (String) -> Unit) {
     val symbol = when (id) {
-        "ai" -> UiSymbol.Model; "accounts" -> UiSymbol.Account; "appearance" -> UiSymbol.Theme
+        "ai", "memory" -> UiSymbol.Model; "accounts" -> UiSymbol.Account; "appearance" -> UiSymbol.Theme
         "permissions", "privacy" -> UiSymbol.Shield; else -> UiSymbol.Info
     }
     Surface(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = title) { onOpen(id) },
@@ -71,6 +72,10 @@ fun SettingsDetail(
     themeMode: String,
     onThemeChanged: (String) -> Unit,
 ) {
+    if (category == "memory") {
+        MemoryScreen(graph.memoryStore)
+        return
+    }
     val scope = rememberCoroutineScope()
     val accounts by graph.accountRepository.connections.collectAsState()
     var status by remember(category) { mutableStateOf<String?>(null) }
