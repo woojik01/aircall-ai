@@ -21,6 +21,8 @@ import com.woojik.aircallai.session.SessionController
 import com.woojik.aircallai.session.SessionRepository
 import com.woojik.aircallai.settings.SettingsRepository
 import com.woojik.aircallai.settings.SharedPrefsStore
+import com.woojik.aircallai.tools.FileMemoryStore
+import com.woojik.aircallai.tools.MemoryTool
 import com.woojik.aircallai.tools.FileNotesStore
 import com.woojik.aircallai.tools.GitHubApiClient
 import com.woojik.aircallai.tools.GitHubTool
@@ -68,12 +70,13 @@ class AppGraph(context: Context) {
     val githubApi = GitHubApiClient(credentials)
     val gmailApi = GmailApiClient(credentials)
     val notesStore: NotesStore = FileNotesStore(File(context.filesDir, "tools/notes.txt"))
+    val memoryStore = FileMemoryStore(File(context.filesDir, "tools/memory.enc"), crypto)
     val toolPermissions = PersistedToolPermissionStore(settingsStore)
     val toolLogger = ToolExecutionLogger()
     val toolTracker = com.woojik.aircallai.tools.ToolExecutionTracker()
     private val toolNotifier = com.woojik.aircallai.tools.ToolResultNotifier(context.applicationContext)
     private val availableTools = listOf(
-        GitHubTool(githubApi), NotesTool(notesStore), GmailTool(gmailApi),
+        GitHubTool(githubApi), NotesTool(notesStore), MemoryTool(memoryStore), GmailTool(gmailApi),
     )
     val toolExecutor = ToolExecutor(
         availableTools,
@@ -108,6 +111,10 @@ class AppGraph(context: Context) {
             "notes.add_note text=<내용> — 메모를 기기에 저장한다 (승인 필요)\n" +
             "notes.search_notes query=<검색어> — 메모를 검색한다\n" +
             "notes.list_notes [limit=<개수>] — 최근 메모를 나열한다\n" +
+            "memory.set assignment=<변수이름=변수값> — 기억 저장·갱신 (승인 필요)\n" +
+            "memory.get name=<변수이름> — 기억 값 조회\n" +
+            "memory.list [query=<검색어>] [limit=<개수>] — 기억 목록 검색\n" +
+            "memory.delete name=<변수이름> — 기억 삭제 (승인 필요)\n" +
             "gmail.send_email to=<주소> subject=<제목> body=<내용> — 이메일을 보낸다 (승인 필요)"
 
     val localProvider: AIProvider = ToolBridgedAIProvider(

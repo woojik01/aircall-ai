@@ -16,6 +16,7 @@ object ToolIntent {
     private val TOOL_KEYWORDS: List<Pair<String, Regex>> = listOf(
         "gmail" to Regex("메일|이메일|지메일|gmail|발송|전송해"),
         "github" to Regex("깃허브|github|레포|리포|저장소|이슈|issue|풀리퀘|pull.?request|\\bpr\\b|readme"),
+        "memory" to Regex("기억해|기억하|기억을.*(저장|삭제|조회)|기억.*(알려|찾아|지워)|remember|recall"),
         "notes" to Regex("메모|기록해"),
         "calendar" to Regex("캘린더|일정|약속|미팅"),
     )

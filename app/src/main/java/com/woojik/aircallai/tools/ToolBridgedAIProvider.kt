@@ -180,13 +180,14 @@ class ToolBridgedAIProvider(
     private fun toolOverview(): String {
         val names = (tools.map { it.name } + toolsDescription.lineSequence()
             .map { it.substringBefore(" ").substringBefore('.') }
-            .filter { it in setOf("github", "gmail", "calendar", "notes") }.toList()).distinct()
+            .filter { it in setOf("github", "gmail", "calendar", "notes", "memory") }.toList()).distinct()
         val overview = names.joinToString("\n") { name ->
             name + ": " + when (name) {
                 "github" -> "read repositories/files; create issues/PRs"
                 "gmail" -> "send email"
                 "calendar" -> "read/create events"
                 "notes" -> "add/search/list device notes"
+                "memory" -> "persist key=value memories; set/get/list/delete. Use memory.set assignment=\"key=value\" when asked to remember; get/list saved facts before answering. Same key updates its value. Never invent remembered facts."
                 else -> tools.firstOrNull { it.name == name }?.description.orEmpty()
             }
         }

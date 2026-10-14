@@ -3,6 +3,10 @@ package com.woojik.aircallai.tools
 /** Shared wording for approval dialogs, settings and execution notifications. */
 object ToolLabels {
     fun action(tool: String, action: String): String = when ("$tool.$action") {
+        "memory.set" -> "기억 저장·갱신"
+        "memory.get" -> "기억 조회"
+        "memory.list" -> "기억 목록 조회"
+        "memory.delete" -> "기억 삭제"
         "notes.add_note" -> "메모 저장"
         "notes.search_notes" -> "메모 검색"
         "notes.list_notes" -> "메모 조회"
@@ -17,6 +21,8 @@ object ToolLabels {
     }
 
     fun argument(key: String): String = when (key) {
+        "assignment" -> "변수이름=변수값"
+        "name" -> "변수 이름"
         "to" -> "받는 사람"
         "subject" -> "메일 제목"
         "body" -> "내용"
