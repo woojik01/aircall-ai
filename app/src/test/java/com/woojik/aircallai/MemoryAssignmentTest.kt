@@ -1,5 +1,6 @@
 package com.woojik.aircallai
 
+import com.woojik.aircallai.ai.provider.*
 import com.woojik.aircallai.core.security.CryptoEngine
 import com.woojik.aircallai.tools.*
 import java.io.File
@@ -59,6 +60,29 @@ class MemoryAssignmentTest {
             val store = MemoryStore(File(dir, "entries.enc"), crypto)
             (1..20).map { async { store.save("key=value$it") } }.awaitAll()
             assertEquals(1, store.list().size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun nativeVariableSaveReturnsActualValueForBothProviders() = runTest {
+        val dir = Files.createTempDirectory("memory-assignment").toFile()
+        try {
+            for (type in listOf(ProviderType.LOCAL, ProviderType.CLOUD)) {
+                val store = MemoryStore(File(dir, "$type.enc"), crypto)
+                val tool = MemoryTool(store)
+                val permissions = InMemoryToolPermissionStore().apply { setAllowed("memory", "set", true) }
+                val backend = object : AIProvider {
+                    override val type = type
+                    override val displayName = "test"
+                    override suspend fun isReady() = true
+                    override suspend fun respond(history: List<ChatMessage>): AIResponse = error("Native save must not call the model")
+                }
+                val bridge = ToolBridgedAIProvider(backend, ToolExecutor(listOf(tool), permissions),
+                    ToolExecutionLogger(), "memory.set assignment=VALUE — 변수 기억", tools = listOf(tool))
+                val reply = bridge.respond(listOf(ChatMessage(ChatMessage.Role.USER, "좋아하는색=파랑 기억해줘")))
+                assertTrue(reply.message.content.contains("좋아하는색=파랑"))
+                assertFalse(reply.message.content.contains("null"))
+                assertEquals("좋아하는색=파랑", store.list().single().text)
+            }
         } finally { dir.deleteRecursively() }
     }
 

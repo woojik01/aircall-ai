@@ -152,7 +152,7 @@ class ToolBridgedAIProvider(
             }
 
             if (planned?.action in setOf("add", "set") && requestedTools.all { it == "memory" }) {
-                return reply(if (result.success) "기억에 저장했어요.\n${request.arguments["text"]}"
+                return reply(if (result.success) "기억에 저장했어요.\n${request.arguments["assignment"] ?: request.arguments["text"]}"
                     else "기억을 저장하지 못했습니다. ${result.message}", started)
             }
 
