@@ -18,6 +18,8 @@ object MemoryRequests {
         }
         if (stableFact.matches(input) && !secret.containsMatchIn(input) && !questionOrAction.containsMatchIn(input))
             return ToolCallParser.ToolCall("memory", "add", mapOf("text" to input))
+        if (Regex("^(?:내|제)\\s*이름.*(?:뭐|무엇|기억|알고|말해|알려)").containsMatchIn(input))
+            return ToolCallParser.ToolCall("memory", "search", mapOf("query" to "이름", "limit" to "20"))
         if (history.containsMatchIn(input) && !Regex("삭제|지워|수정|변경").containsMatchIn(input)) {
             // Known topic words are only retrieval filters; no stored content is fabricated.
             val query = listOf("이름", "생일", "좋아하는", "학교", "게임").firstOrNull { input.contains(it) }
@@ -29,6 +31,6 @@ object MemoryRequests {
     }
 
     fun deniesAccess(text: String): Boolean = Regex(
-        "(?:기억|채팅|대화|기록).{0,40}(?:볼 수 없|접근할 수 없|조회할 수 없|읽을 수 없|조회하지 못|접근하지 못)",
+        "(?:기억|채팅|대화|기록).{0,40}(?:볼 수 없|접근할 수 없|조회할 수 없|읽을 수 없|확인할 수 없|조회하지 못|접근하지 못)|모르겠|알 수 없|기억하지 못",
     ).containsMatchIn(text)
 }

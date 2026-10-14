@@ -100,18 +100,25 @@ class MemoryActionFlowTest {
             }
         }
         val bridge = ToolBridgedAIProvider(SafetyAIProvider(backend), ToolExecutor(emptyList(), InMemoryToolPermissionStore()),
-            ToolExecutionLogger(), catalog)
-        assertTrue(ConversationEngine(bridge).submitUserMessage("안녕", voiceMode = true))
+            ToolExecutionLogger(), catalog,
+            memoryContext = { "12345678-1234-1234-1234-123456789012: 내 이름은 유닉이야" })
+        val engine = ConversationEngine(bridge)
+        assertTrue(engine.submitUserMessage("안녕", voiceMode = true))
+        engine.markIdle()
+        assertTrue(engine.submitUserMessage("내 이름이 뭐야?", voiceMode = true))
+        assertTrue(input.last().content.contains("유닉"))
+        assertTrue(input.any { it.role == ChatMessage.Role.USER && it.content.contains("안녕") })
         assertTrue(input.filter { it.role == ChatMessage.Role.SYSTEM }.any { it.content.contains("memory.add text=VALUE") && it.content.contains("memory.history") })
     }
 
     @Test fun ambiguousRequestsNeverGenerateWriteArguments() {
         assertNull(MemoryRequests.initialCall("이걸 기억해줘"))
         assertNull(MemoryRequests.initialCall("비밀번호는 secret. 기억해줘"))
-        assertNull(MemoryRequests.initialCall("내 이름을 기억하니?"))
-        assertNull(MemoryRequests.initialCall("내 이름은 뭐지?"))
+        assertEquals("search", MemoryRequests.initialCall("내 이름을 기억하니?")?.action)
+        assertEquals("search", MemoryRequests.initialCall("내 이름은 뭐지?")?.action)
         assertEquals("add", MemoryRequests.initialCall("내 이름은 유닉이야")?.action)
         assertEquals("add", MemoryRequests.initialCall("나는 스타레일을 좋아해")?.action)
         assertEquals("history", MemoryRequests.initialCall("채팅 기록 보여줘")?.action)
+        assertEquals("search", MemoryRequests.initialCall("내 이름이 뭐야?")?.action)
     }
 }
