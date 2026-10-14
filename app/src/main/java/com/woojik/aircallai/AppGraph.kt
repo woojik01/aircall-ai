@@ -68,12 +68,19 @@ class AppGraph(context: Context) {
     val githubApi = GitHubApiClient(credentials)
     val gmailApi = GmailApiClient(credentials)
     val notesStore: NotesStore = FileNotesStore(File(context.filesDir, "tools/notes.txt"))
+    val memoryStore = com.woojik.aircallai.tools.MemoryStore(File(context.filesDir, "memory/entries.enc"), crypto)
     val toolPermissions = PersistedToolPermissionStore(settingsStore)
     val toolLogger = ToolExecutionLogger()
     val toolTracker = com.woojik.aircallai.tools.ToolExecutionTracker()
     private val toolNotifier = com.woojik.aircallai.tools.ToolResultNotifier(context.applicationContext)
     private val availableTools = listOf(
         GitHubTool(githubApi), NotesTool(notesStore), GmailTool(gmailApi),
+        com.woojik.aircallai.tools.MemoryTool(memoryStore) {
+            com.woojik.aircallai.tools.globalMemoryHistory(
+                chatRooms.rooms.value.map { com.woojik.aircallai.tools.MemoryConversation(it.id, it.title, it.messages) },
+                chatRooms.activeId.value,
+            )
+        },
     )
     val toolExecutor = ToolExecutor(
         availableTools,
@@ -101,7 +108,13 @@ class AppGraph(context: Context) {
 
     /** Tool-AI 연결: AI 응답의 TOOL 지시어를 실행하고 결과를 반영한다. */
     private val toolCatalog =
-        "github.read_repository owner=<소유자> repo=<저장소> — GitHub 저장소 정보를 조회한다\n" +
+        "memory.history [query=<검색어>] [offset=<건너뛸 개수>] [limit=<개수>] — 모든 채팅방 이전 발화 조회\n" +
+            "memory.list [limit=<개수>] — 전역 기억 조회\n" +
+            "memory.search query=<검색어> [limit=<개수>] — 전역 기억 검색\n" +
+            "memory.add text=<내용> — 전역 기억 저장 (승인 필요)\n" +
+            "memory.update id=<기억 ID> text=<내용> — 전역 기억 수정 (승인 필요)\n" +
+            "memory.delete id=<기억 ID> — 전역 기억 삭제 (승인 필요)\n" +
+            "github.read_repository owner=<소유자> repo=<저장소> — GitHub 저장소 정보를 조회한다\n" +
             "github.read_file owner=<소유자> repo=<저장소> path=<파일 경로> — 저장소 파일 내용을 읽는다\n" +
             "github.create_issue owner=<소유자> repo=<저장소> title=<제목> [body=<내용>] — Issue를 만든다 (승인 필요)\n" +
             "github.create_pull_request owner=<소유자> repo=<저장소> title=<제목> head=<브랜치> base=<브랜치> [body=<내용>] — PR을 만든다 (승인 필요)\n" +
@@ -116,6 +129,7 @@ class AppGraph(context: Context) {
         logger = toolLogger,
         toolsDescription = toolCatalog,
         tools = availableTools,
+        memoryContext = { memoryStore.list(limit = 5).asReversed().joinToString("\n") { "${it.id}: ${it.text}" } },
         approvalHandler = { request -> toolApproval.awaitResult(request) },
     )
     val cloudProvider: AIProvider = ToolBridgedAIProvider(
@@ -134,6 +148,7 @@ class AppGraph(context: Context) {
         logger = toolLogger,
         toolsDescription = toolCatalog,
         tools = availableTools,
+        memoryContext = { memoryStore.list(limit = 5).asReversed().joinToString("\n") { "${it.id}: ${it.text}" } },
         approvalHandler = { request -> toolApproval.awaitResult(request) },
     )
 

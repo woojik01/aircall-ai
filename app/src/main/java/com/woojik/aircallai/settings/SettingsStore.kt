@@ -27,8 +27,8 @@ class SettingsRepository(
     private val defaultGoogleOAuthClientId: String = "",
 ) {
     // Do not migrate old installs to implicit consent. A new endpoint requires a new disclosure.
-    fun hasCloudDisclosure(endpoint: String = cloudBaseUrl()): Boolean = store.getString("privacy_cloud_v1") == endpoint
-    fun acceptCloudDisclosure() = store.putString("privacy_cloud_v1", cloudBaseUrl())
+    fun hasCloudDisclosure(endpoint: String = cloudBaseUrl()): Boolean = store.getString("privacy_cloud_global_memory_v2") == endpoint
+    fun acceptCloudDisclosure() = store.putString("privacy_cloud_global_memory_v2", cloudBaseUrl())
     fun hasSpeechDisclosure(): Boolean = store.getString("privacy_speech_v1") == "accepted"
     fun acceptSpeechDisclosure() = store.putString("privacy_speech_v1", "accepted")
     // Store only the acknowledgement, not birthdate or identity documents.
