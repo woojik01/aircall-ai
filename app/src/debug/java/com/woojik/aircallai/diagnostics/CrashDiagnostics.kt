@@ -181,7 +181,8 @@ object CrashDiagnostics {
         append("최근 메인 실행 (수명주기 기록이며 충돌 판정이 아닙니다):\n")
         append("저장 상태: ").append(traceStatus).append('\n')
         append(latestMainTrace ?: "메인 앱 실행 기록 없음\n").append('\n')
-        append("저장된 충돌 기록 (아래 time은 발생 시각):\n")
+        append("저장된 종료 기록 (아래 time은 발생 시각):\n")
+        DebugCrashReport.exitInterpretation(cachedReport)?.let { append(it).append("\n\n") }
         append(cachedReport ?: "저장된 종료 기록이 없습니다. 알림 테스트는 앱을 종료시키거나 종료 로그를 만들지 않습니다.")
     }
 
@@ -227,12 +228,17 @@ object CrashDiagnostics {
             val previousTime = cachedReport?.lineSequence()?.firstOrNull()?.substringAfter("time=", "")?.toLongOrNull()
             if (cachedReport?.contains("\nsystem-time=${exit.timestamp}\n") == true ||
                 (previousTime != null && previousTime > exit.timestamp + 10_000)) return
-            val javaReport = cachedReport?.takeIf { previousTime != null && kotlin.math.abs(exit.timestamp - previousTime) < 10_000 }
+            val javaReport = cachedReport?.takeIf {
+                exit.reason == ApplicationExitInfo.REASON_CRASH &&
+                    !it.contains("source=system-history") && previousTime != null &&
+                    kotlin.math.abs(exit.timestamp - previousTime) < 10_000
+            }
             val summary = exit.processStateSummary?.toString(Charsets.UTF_8)
                 ?.takeIf { it.matches(Regex("[a-z-]{1,64}")) } ?: "unavailable"
             val report = (javaReport ?: (header(exit.timestamp).replace("AirCall AI ", "collector-build=AirCall AI ") + "crashed-build=unknown; source=system-history\n")) +
                 "\nsystem-time=${exit.timestamp}\n" +
                 "\nAndroid exit=$reason; status=${exit.status}; stage=$summary\n" +
+                "process-importance=${exit.importance}; pid=${exit.pid}\n" +
                 "PSS=${exit.pss} KB; RSS=${exit.rss} KB (last sampled)\n" +
                 if (exit.reason == ApplicationExitInfo.REASON_ANR) anrFrames(exit) else ""
             saveReport(application, report)

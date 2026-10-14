@@ -64,6 +64,11 @@ class LiteRtModelAdapter(
         runtime.unload { settings.setLocalModelId(null); _runtimeStatus.value = "모델 대기 중" }
     }
 
+    /** Release native memory only; retain model selection, download and conversation history. */
+    suspend fun releaseCachedModel(shouldRelease: () -> Boolean = { true }) {
+        runtime.releaseCachedModel(shouldRelease)
+    }
+
     override suspend fun generate(history: List<ChatMessage>): String {
         val model = selectedModel() ?: throw AIProviderException(ProviderErrorKind.MODEL_NOT_INSTALLED)
         requireAvailable(model)
