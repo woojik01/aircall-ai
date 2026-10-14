@@ -78,7 +78,10 @@ class MemoryActionFlowTest {
             val logger = ToolExecutionLogger()
             val bridge = ToolBridgedAIProvider(SafetyAIProvider(backend), ToolExecutor(listOf(tool), InMemoryToolPermissionStore()),
                 logger, catalog, tools = listOf(tool))
-            assertTrue(ConversationEngine(bridge).submitUserMessage("다른 채팅에서 내 이름이 뭐라고 했어?", voiceMode = true))
+            val engine = ConversationEngine(bridge)
+            assertTrue(engine.submitUserMessage("다른 채팅에서 내 이름이 뭐라고 했어?", voiceMode = true))
+            assertTrue(engine.latestAssistantMessage()?.content.orEmpty().contains("유닉"))
+            assertFalse(engine.latestAssistantMessage()?.content.orEmpty().contains("접근할 수 없"))
             assertTrue(input.last().content.contains("유닉"))
             assertEquals("history", logger.entries.value.single().action)
             assertTrue(logger.entries.value.single().success)

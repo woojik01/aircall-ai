@@ -28,10 +28,9 @@ class ToolBridgedAIProvider(
 
         // 이번 턴 사용자 요청에서 필요한 도구 후보(휴리스틱)와 추적 상태.
         val originalUserMessage = history.lastOrNull { it.role == ChatMessage.Role.USER }?.content.orEmpty()
-        val requestedTools = ToolIntent.toolsRequestedIn(originalUserMessage)
-
         var nativeCall = if (tools.any { it.name == "memory" } &&
             !com.woojik.aircallai.privacy.ContentSafety.isExplicitlyProhibited(originalUserMessage)) MemoryRequests.initialCall(originalUserMessage) else null
+        val requestedTools = if (nativeCall != null) setOf("memory") else ToolIntent.toolsRequestedIn(originalUserMessage)
         var lastMemoryReadResult: String? = null
         var round = 0
         var verifyPass = 0
