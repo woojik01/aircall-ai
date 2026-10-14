@@ -20,6 +20,18 @@ import org.junit.runner.RunWith
 /** Verify the user's missing-notification path, then explicitly retry after permission is granted. */
 @RunWith(AndroidJUnit4::class)
 class DebugDiagnosticsAccessTest {
+    // notify() queues work in the system service. The callback confirms submission,
+    // while activeNotifications may still be empty until that queued work finishes.
+    private fun awaitNotification(manager: NotificationManager, id: Int) {
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            if (manager.activeNotifications.any { it.id == id }) return
+            Thread.sleep(100)
+        }
+        assertTrue("Notification $id must become active within 10 seconds",
+            manager.activeNotifications.any { it.id == id })
+    }
+
     @Test fun diagnosticScreenWorksWithoutNotificationsAndSavedLogCanBeReposted() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -44,11 +56,11 @@ class DebugDiagnosticsAccessTest {
             assertTrue(manager.activeNotifications.none { it.id == 9101 })
         } else {
             assertTrue(status.contains("종료 로그 알림 전송 완료"))
-            assertTrue(manager.activeNotifications.any { it.id == 9101 })
+            awaitNotification(manager, 9101)
         }
         val probe = snapshot { target, callback -> CrashDiagnostics.testNotification(target, callback) }
         assertTrue(probe.contains(if (blocked) "알림 권한 꺼짐" else "테스트 알림 전송 완료"))
-        if (!blocked) assertTrue(manager.activeNotifications.any { it.id == 9102 })
+        if (!blocked) awaitNotification(manager, 9102)
         assertEquals("Notification testing must preserve the actual crash log", previous, file.readText())
         val launchers = context.packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER).setPackage(context.packageName), 0)
