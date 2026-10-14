@@ -69,6 +69,10 @@ GitHub Actions의 **aircall-debug-apk**에서 ZIP을 풀고 **aircall-dev.apk**�
 **Android Signed Build** → **Run workflow**에서 서명된 APK/AAB를 만들 수 있습니다.
 성공한 실행의 **aircall-signed-build**에서 APK를 받으세요. 스토어 제출 준비는 별도로 완료해야 합니다.
 
+변수 기억은 `좋아하는색=파랑`처럼 저장할 수 있습니다. 같은 변수 이름은 기존 값을 갱신하며,
+기존 전역 기억과 함께 설정 → 기억에서 조회·수정·삭제합니다.
+AI 호출: `TOOL: memory.set assignment="좋아하는색=파랑"`, 조회: `TOOL: memory.get name="좋아하는색"`.
+
 ## AI 설정
 
 **로컬:** 설정 → AI 및 모델 → 로컬 모델 관리에서 다운로드 후 적용하세요.

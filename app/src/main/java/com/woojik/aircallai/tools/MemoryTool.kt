@@ -13,6 +13,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.woojik.aircallai.ai.provider.ChatMessage
 
+/** Split only the first =; Unicode names and equals signs inside values are supported. */
+object MemoryAssignment {
+    fun parse(text: String): Pair<String, String>? {
+        val separator = text.indexOf('=')
+        if (separator < 1) return null
+        val name = text.substring(0, separator).trim()
+        val value = text.substring(separator + 1).trim()
+        if (name.isBlank() || name.length > 80 || name.any { it.isISOControl() } || value.isBlank()) return null
+        return name to value
+    }
+}
+
 data class MemoryEntry(val id: String, val text: String)
 
 data class MemoryConversation(val id: String, val title: String, val messages: List<ChatMessage>)
@@ -48,13 +60,20 @@ class MemoryStore(private val file: File, private val crypto: CryptoEngine) {
         require(normalized.isNotBlank() && normalized.toByteArray(Charsets.UTF_8).size <= 2048) { "기억은 1~2048바이트여야 합니다" }
         mutex.withLock {
             val entries = read().toMutableList()
-            if (id == null) entries.firstOrNull { it.text == normalized }?.let { return@withLock it }
-            val entry = MemoryEntry(id ?: UUID.randomUUID().toString(), normalized)
-            if (id == null) {
+            val assignment = MemoryAssignment.parse(normalized)
+            val sameVariable = assignment?.let { variable ->
+                entries.firstOrNull { MemoryAssignment.parse(it.text)?.first == variable.first }
+            }
+            val targetId = id ?: sameVariable?.id
+            require(id == null || sameVariable == null || sameVariable.id == id) { "같은 변수 이름의 기억이 이미 있습니다" }
+            val savedText = assignment?.let { "${it.first}=${it.second}" } ?: normalized
+            if (targetId == null) entries.firstOrNull { it.text == savedText }?.let { return@withLock it }
+            val entry = MemoryEntry(targetId ?: UUID.randomUUID().toString(), savedText)
+            if (targetId == null) {
                 require(entries.size < 100) { "기억이 가득 찼습니다. 기존 기억을 정리하세요" }
                 entries.add(entry)
             } else {
-                val index = entries.indexOfFirst { it.id == id }
+                val index = entries.indexOfFirst { it.id == targetId }
                 require(index >= 0) { "해당 기억이 없습니다" }
                 check(expectedText == null || entries[index].text == expectedText) { "기억이 변경되었습니다. 다시 열어 주세요" }
                 entries.removeAt(index)
@@ -110,7 +129,7 @@ class MemoryTool(
     override val name = "memory"
     override val description = "모든 채팅방이 공유하는 전역 기억 및 이전 발화 조회"
     override fun riskFor(action: String) = when (action) {
-        "list", "search", "history" -> ToolRisk.READ
+        "get", "list", "search", "history" -> ToolRisk.READ
         "delete" -> ToolRisk.DESTRUCTIVE
         else -> ToolRisk.WRITE
     }
@@ -119,6 +138,17 @@ class MemoryTool(
         fun required(key: String) = request.arguments[key]?.takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("필수 인자: $key")
         return when (request.action) {
+            "set" -> {
+                val assignment = MemoryAssignment.parse(required("assignment"))
+                    ?: return ToolResult(false, "assignment는 변수이름=변수값 형식이어야 합니다 (이름 1~80자)")
+                val entry = store.save("${assignment.first}=${assignment.second}")
+                ToolResult(true, "${entry.id}: ${entry.text}")
+            }
+            "get" -> {
+                val name = required("name").trim()
+                val entry = store.list(limit = 100).firstOrNull { MemoryAssignment.parse(it.text)?.first == name }
+                ToolResult(true, entry?.text ?: "저장된 기억이 없습니다: $name")
+            }
             "history" -> {
                 val query = request.arguments["query"].orEmpty()
                 val offset = request.arguments["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
@@ -137,7 +167,12 @@ class MemoryTool(
                 ToolResult(true, "${entry.id}: ${entry.text}")
             }
             "delete" -> {
-                val removed = store.delete(required("id"))
+                val id = request.arguments["id"]?.takeIf { it.isNotBlank() }
+                val named = if (id == null) store.list(limit = 100).firstOrNull {
+                    MemoryAssignment.parse(it.text)?.first == required("name").trim()
+                } else null
+                val removed = if (id != null) store.delete(id)
+                    else if (named != null) store.delete(named.id, named.text) else false
                 ToolResult(removed, if (removed) "기억을 삭제했습니다" else "해당 기억이 없습니다")
             }
             else -> ToolResult(false, "지원하지 않는 기억 작업입니다")

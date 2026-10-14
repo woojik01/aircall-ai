@@ -111,9 +111,11 @@ class AppGraph(context: Context) {
         "memory.history [query=<검색어>] [offset=<건너뛸 개수>] [limit=<개수>] — 모든 채팅방 이전 발화 조회\n" +
             "memory.list [limit=<개수>] — 전역 기억 조회\n" +
             "memory.search query=<검색어> [limit=<개수>] — 전역 기억 검색\n" +
+            "memory.set assignment=<변수이름=변수값> — 변수 기억 저장·갱신 (승인 필요)\n" +
+            "memory.get name=<변수이름> — 변수 기억 조회\n" +
             "memory.add text=<내용> — 전역 기억 저장 (승인 필요)\n" +
             "memory.update id=<기억 ID> text=<내용> — 전역 기억 수정 (승인 필요)\n" +
-            "memory.delete id=<기억 ID> — 전역 기억 삭제 (승인 필요)\n" +
+            "memory.delete [id=<기억 ID>] [name=<변수이름>] — 전역 기억 삭제 (승인 필요)\n" +
             "github.read_repository owner=<소유자> repo=<저장소> — GitHub 저장소 정보를 조회한다\n" +
             "github.read_file owner=<소유자> repo=<저장소> path=<파일 경로> — 저장소 파일 내용을 읽는다\n" +
             "github.create_issue owner=<소유자> repo=<저장소> title=<제목> [body=<내용>] — Issue를 만든다 (승인 필요)\n" +

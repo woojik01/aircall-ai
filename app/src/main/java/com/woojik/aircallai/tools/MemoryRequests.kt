@@ -14,7 +14,9 @@ object MemoryRequests {
         val input = text.trim()
         val saved = (savePrefix.matchEntire(input) ?: saveSuffix.matchEntire(input))?.groupValues?.get(1)?.trim()
         if (saved != null && saved !in setOf("이걸", "그걸", "이것을", "그것을") && !secret.containsMatchIn(saved)) {
-            return ToolCallParser.ToolCall("memory", "add", mapOf("text" to saved))
+            return if (MemoryAssignment.parse(saved) != null)
+                ToolCallParser.ToolCall("memory", "set", mapOf("assignment" to saved))
+            else ToolCallParser.ToolCall("memory", "add", mapOf("text" to saved))
         }
         if (stableFact.matches(input) && !secret.containsMatchIn(input) && !questionOrAction.containsMatchIn(input))
             return ToolCallParser.ToolCall("memory", "add", mapOf("text" to input))
