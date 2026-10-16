@@ -51,6 +51,15 @@ class LocalInferenceRuntime(private val create: (File) -> LocalInferenceBackend)
         }
     }
 
+    /** Wait for in-flight native work, then recheck whether the cache is still disposable. */
+    suspend fun releaseCachedModel(shouldRelease: () -> Boolean = { true }): Boolean = withContext(dispatcher) {
+        mutex.withLock {
+            if (backend == null || !shouldRelease()) return@withLock false
+            closeCurrent()
+            true
+        }
+    }
+
     private fun closeCurrent() {
         val previous = backend
         backend = null

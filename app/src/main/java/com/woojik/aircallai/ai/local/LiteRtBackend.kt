@@ -50,7 +50,15 @@ internal class LiteRtBackend(
             cacheDir = File(cacheDir, "litert-0.17.1/" + if (useGpu) "gpu" else "cpu")
                 .apply { mkdirs() }.absolutePath,
         ),
-    ).also { it.initialize() }
+    ).also { candidate ->
+        try {
+            candidate.initialize()
+        } catch (failure: Throwable) {
+            // A failed initialize must not retain a partially allocated native engine.
+            try { candidate.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        }
+    }
 
     private val conversations = LocalConversationCache { history ->
         val conversation = engine.createConversation(localConversationConfig(history))

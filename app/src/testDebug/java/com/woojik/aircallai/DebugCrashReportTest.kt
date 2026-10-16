@@ -5,6 +5,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DebugCrashReportTest {
+    @Test fun existingLowMemoryReportIsExplainedAsSystemTermination() {
+        val report = "time=123\nAndroid exit=LOW_MEMORY; status=0; stage=screen-ready\n" +
+            "PSS=0 KB; RSS=165248 KB (last sampled)\n"
+        val explanation = requireNotNull(DebugCrashReport.exitInterpretation(report))
+        assertTrue(explanation.contains("Android가 프로세스를 종료"))
+        assertTrue(explanation.contains("마지막 측정값"))
+        assertTrue(explanation.contains("0은 측정값이 없을 수"))
+        assertFalse(explanation.startsWith("종료 분류: 앱 충돌"))
+    }
+
+    @Test fun crashAnrAndUnclassifiedReportsKeepDistinctInterpretations() {
+        assertEquals("종료 분류: 앱 충돌 (JAVA_CRASH)",
+            DebugCrashReport.exitInterpretation("Android exit=JAVA_CRASH; status=0"))
+        assertEquals("종료 분류: 앱 충돌 (NATIVE_CRASH)",
+            DebugCrashReport.exitInterpretation("Android exit=NATIVE_CRASH; status=0"))
+        assertEquals("종료 분류: 앱 응답 없음 (ANR)",
+            DebugCrashReport.exitInterpretation("Android exit=ANR; status=0"))
+        assertNull(DebugCrashReport.exitInterpretation(null))
+        assertNull(DebugCrashReport.exitInterpretation("java.lang.IllegalStateException\n"))
+        assertNull(DebugCrashReport.exitInterpretation("Android exit=UNKNOWN; status=0"))
+    }
+
     @Test fun capturesCauseFramesWithoutExceptionMessagesOrTokens() {
         val cause = IllegalArgumentException("secret-access-token")
         val failure = IllegalStateException("private-chat-text", cause)
